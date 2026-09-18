@@ -36,6 +36,17 @@ func run_and_quit() -> void:
 	_assert(has_golden, "il nemico dorato forzato non è comparso nella stanza 1")
 
 	_clear_five_rooms_to_boss()
+
+	print("--- Test icone potenziamenti attivi in HUD (solo durante la run) ---")
+	# 5 scelte di fine stanza + 1 bottino garantito dal nemico dorato forzato.
+	_assert(run.player.active_powerups.size() == 6, "attesi 6 potenziamenti raccolti, trovati %d" % run.player.active_powerups.size())
+	# La HUD aggiorna il vassoio in _process(): servono alcuni frame reali
+	# (non chiamate sincrone) perché il motore lo esegua davvero.
+	for i in range(4):
+		await get_tree().process_frame
+	_assert(run.hud.powerup_tray.get_child_count() == 2, "attese 2 icone distinte in HUD (bottino dorato + potenziamento ripetuto), trovate %d" % run.hud.powerup_tray.get_child_count())
+	print("Potenziamenti attivi mostrati in HUD: ", run.hud.powerup_tray.get_child_count())
+
 	_assert(run.room_number == 6, "numero stanza atteso 6, trovato %d" % run.room_number)
 	_assert(run.current_boss != null, "il boss non è stato generato")
 	_assert(not run.current_boss.is_special, "il boss della run 1 non dovrebbe essere speciale")

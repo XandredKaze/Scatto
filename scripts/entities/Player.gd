@@ -40,6 +40,7 @@ var dash_vector := Vector2.ZERO
 var hit_iframe_timer := 0.0
 var hit_enemies_this_dash: Array = []
 var alive := true
+var active_powerups: Array = []
 
 var arena_bounds: Rect2 = Rect2()
 var _dash_key_was_down := false
@@ -76,6 +77,7 @@ func reset_stats() -> void:
 	dash_timer = 0.0
 	hit_iframe_timer = 0.0
 	hit_enemies_this_dash.clear()
+	active_powerups.clear()
 	alive = true
 
 func dash_cooldown() -> float:
@@ -122,6 +124,7 @@ func heal(amount: float) -> void:
 func apply_powerup(id: String) -> void:
 	GameData.apply_powerup(id, self)
 	hp = clamp(hp, 0.0, max_hp)
+	active_powerups.append(id)
 
 func _physics_process(delta: float) -> void:
 	if not alive:

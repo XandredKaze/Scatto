@@ -19,8 +19,8 @@ func _ready() -> void:
 	add_child(bg)
 
 	var panel := VBoxContainer.new()
-	panel.position = Vector2(80, 60)
-	panel.custom_minimum_size = Vector2(800, 520)
+	panel.position = Vector2(140, 60)
+	panel.custom_minimum_size = Vector2(1000, 600)
 	panel.add_theme_constant_override("separation", 10)
 	add_child(panel)
 
@@ -30,11 +30,11 @@ func _ready() -> void:
 	panel.add_child(title)
 
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(800, 420)
+	scroll.custom_minimum_size = Vector2(1000, 490)
 	panel.add_child(scroll)
 
 	list_box = VBoxContainer.new()
-	list_box.custom_minimum_size = Vector2(780, 0)
+	list_box.custom_minimum_size = Vector2(980, 0)
 	list_box.add_theme_constant_override("separation", 6)
 	scroll.add_child(list_box)
 

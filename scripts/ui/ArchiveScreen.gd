@@ -19,8 +19,8 @@ func _ready() -> void:
 	add_child(bg)
 
 	var panel := VBoxContainer.new()
-	panel.position = Vector2(80, 60)
-	panel.custom_minimum_size = Vector2(800, 520)
+	panel.position = Vector2(140, 60)
+	panel.custom_minimum_size = Vector2(1000, 600)
 	panel.add_theme_constant_override("separation", 10)
 	add_child(panel)
 
@@ -30,11 +30,11 @@ func _ready() -> void:
 	panel.add_child(title)
 
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(800, 420)
+	scroll.custom_minimum_size = Vector2(1000, 490)
 	panel.add_child(scroll)
 
 	list_box = VBoxContainer.new()
-	list_box.custom_minimum_size = Vector2(780, 0)
+	list_box.custom_minimum_size = Vector2(980, 0)
 	list_box.add_theme_constant_override("separation", 6)
 	scroll.add_child(list_box)
 
@@ -59,11 +59,17 @@ func _build_row(entry: Dictionary, unlocked: bool) -> Control:
 	hbox.add_theme_constant_override("separation", 16)
 	row.add_child(hbox)
 
+	var icon := PowerupIcon.new()
+	icon.custom_minimum_size = Vector2(32, 32)
+	var icon_color: Color = GameData.rarity_color(entry.rarity) if unlocked else Color(0.35, 0.35, 0.4)
+	icon.set_icon(entry.get("icon", "circle"), icon_color)
+	hbox.add_child(icon)
+
 	var name_label := Label.new()
 	var rarity_tag := " [%s]" % String(entry.rarity).to_upper()
 	name_label.text = (entry.name + rarity_tag) if unlocked else ("??? " + rarity_tag)
-	name_label.custom_minimum_size = Vector2(260, 0)
-	name_label.modulate = _rarity_color(entry.rarity) if unlocked else Color(0.4, 0.4, 0.45)
+	name_label.custom_minimum_size = Vector2(250, 0)
+	name_label.modulate = GameData.rarity_color(entry.rarity) if unlocked else Color(0.4, 0.4, 0.45)
 	hbox.add_child(name_label)
 
 	var desc_label := Label.new()
@@ -85,12 +91,3 @@ func _row_style() -> StyleBoxFlat:
 	sb.content_margin_top = 8.0
 	sb.content_margin_bottom = 8.0
 	return sb
-
-func _rarity_color(rarity: String) -> Color:
-	match rarity:
-		"legendary":
-			return Color8(244, 196, 48)
-		"rare":
-			return Color8(122, 162, 247)
-		_:
-			return Color8(200, 200, 205)

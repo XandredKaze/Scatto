@@ -1,7 +1,7 @@
 class_name ArenaVisual
 extends Node2D
 
-var arena_size := Vector2(960, 540)
+var arena_size := Vector2(1280, 720)
 var wall_margin := 48.0
 var exit_active := false
 var exit_position := Vector2.ZERO

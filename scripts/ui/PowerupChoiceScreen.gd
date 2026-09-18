@@ -13,19 +13,19 @@ var title_label: Label
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 235)
+	bg.color = Color8(10, 11, 15, 255)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
 	var vbox := VBoxContainer.new()
-	vbox.position = Vector2(80, 150)
-	vbox.custom_minimum_size = Vector2(800, 340)
+	vbox.position = Vector2(140, 190)
+	vbox.custom_minimum_size = Vector2(1000, 340)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(vbox)
 
 	title_label = Label.new()
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.custom_minimum_size = Vector2(800, 0)
+	title_label.custom_minimum_size = Vector2(1000, 0)
 	title_label.add_theme_font_size_override("font_size", 24)
 	vbox.add_child(title_label)
 
@@ -53,6 +53,14 @@ func _build_card(entry: Dictionary) -> Control:
 	vbox.add_theme_constant_override("separation", 8)
 	panel.add_child(vbox)
 
+	var icon_wrap := CenterContainer.new()
+	icon_wrap.custom_minimum_size = Vector2(210, 44)
+	var icon := PowerupIcon.new()
+	icon.custom_minimum_size = Vector2(40, 40)
+	icon.set_icon(entry.get("icon", "circle"), GameData.rarity_color(entry.rarity))
+	icon_wrap.add_child(icon)
+	vbox.add_child(icon_wrap)
+
 	var name_label := Label.new()
 	name_label.text = entry.name
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -64,7 +72,7 @@ func _build_card(entry: Dictionary) -> Control:
 	rarity_label.text = String(entry.rarity).to_upper()
 	rarity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rarity_label.custom_minimum_size = Vector2(210, 0)
-	rarity_label.modulate = Color(0.7, 0.7, 0.75)
+	rarity_label.modulate = GameData.rarity_color(entry.rarity)
 	vbox.add_child(rarity_label)
 
 	var desc_label := Label.new()

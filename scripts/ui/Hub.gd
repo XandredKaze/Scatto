@@ -13,7 +13,7 @@ var stats_label: Label
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	custom_minimum_size = Vector2(960, 640)
+	custom_minimum_size = Vector2(1280, 720)
 
 	var bg := ColorRect.new()
 	bg.color = Color8(13, 14, 18)
@@ -21,7 +21,7 @@ func _ready() -> void:
 	add_child(bg)
 
 	var vbox := VBoxContainer.new()
-	vbox.position = Vector2(330, 130)
+	vbox.position = Vector2(490, 150)
 	vbox.custom_minimum_size = Vector2(300, 0)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 14)

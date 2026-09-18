@@ -18,6 +18,8 @@ var boss_name_label: Label
 var boss_bar: ProgressBar
 var banner_label: Label
 var banner_timer := 0.0
+var powerup_tray: HBoxContainer
+var _last_powerup_summary := ""
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -58,6 +60,16 @@ func _ready() -> void:
 	dash_pips = HBoxContainer.new()
 	dash_pips.add_theme_constant_override("separation", 6)
 	vbox.add_child(dash_pips)
+
+	var powerup_label := Label.new()
+	powerup_label.text = "Potenziamenti attivi"
+	powerup_label.modulate = Color(0.7, 0.7, 0.75)
+	vbox.add_child(powerup_label)
+
+	powerup_tray = HBoxContainer.new()
+	powerup_tray.mouse_filter = Control.MOUSE_FILTER_STOP
+	powerup_tray.add_theme_constant_override("separation", 8)
+	vbox.add_child(powerup_tray)
 
 	boss_panel = VBoxContainer.new()
 	boss_panel.hide()
@@ -109,6 +121,7 @@ func _process(delta: float) -> void:
 	streak_label.text = "Run consecutive senza Hub: %d" % run.streak_run_index
 
 	_sync_dash_pips(player.max_dash_charges, player.dash_charges)
+	_update_powerup_tray(player)
 
 	if run.current_boss != null and is_instance_valid(run.current_boss) and run.current_boss.alive:
 		boss_panel.show()
@@ -117,6 +130,48 @@ func _process(delta: float) -> void:
 		boss_bar.value = run.current_boss.hp
 	else:
 		boss_panel.hide()
+
+func _update_powerup_tray(player) -> void:
+	var counts := {}
+	var order: Array = []
+	for id in player.active_powerups:
+		if not counts.has(id):
+			order.append(id)
+		counts[id] = counts.get(id, 0) + 1
+
+	var summary := ""
+	for id in order:
+		summary += "%s:%d;" % [id, counts[id]]
+	if summary == _last_powerup_summary:
+		return
+	_last_powerup_summary = summary
+
+	for c in powerup_tray.get_children():
+		c.queue_free()
+	for id in order:
+		var entry: Dictionary = GameData.get_powerup(id)
+		if entry.is_empty():
+			continue
+		powerup_tray.add_child(_build_tray_icon(entry, counts[id]))
+
+func _build_tray_icon(entry: Dictionary, count: int) -> Control:
+	var wrap := Control.new()
+	wrap.custom_minimum_size = Vector2(30, 30)
+	wrap.tooltip_text = ("%s x%d\n%s" % [entry.name, count, entry.desc]) if count > 1 else ("%s\n%s" % [entry.name, entry.desc])
+
+	var icon := PowerupIcon.new()
+	icon.custom_minimum_size = Vector2(28, 28)
+	icon.set_icon(entry.get("icon", "circle"), GameData.rarity_color(entry.rarity))
+	wrap.add_child(icon)
+
+	if count > 1:
+		var badge := Label.new()
+		badge.text = str(count)
+		badge.add_theme_font_size_override("font_size", 12)
+		badge.position = Vector2(18, 16)
+		wrap.add_child(badge)
+
+	return wrap
 
 func _sync_dash_pips(max_charges: int, charges: int) -> void:
 	while dash_pips.get_child_count() < max_charges:

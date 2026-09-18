@@ -65,18 +65,27 @@ const BOSSES := {
 }
 
 const POWERUPS := [
-	{"id": "lama_rapida", "name": "Lama Rapida", "rarity": "common", "desc": "+6 danno da scatto."},
-	{"id": "passo_veloce", "name": "Passo Veloce", "rarity": "common", "desc": "+15% velocità di movimento."},
-	{"id": "scatto_lungo", "name": "Scatto Lungo", "rarity": "common", "desc": "+25% distanza dello scatto."},
-	{"id": "cuore_di_ferro", "name": "Cuore di Ferro", "rarity": "common", "desc": "+25 punti vita massimi."},
-	{"id": "scatto_fulmine", "name": "Scatto Fulmine", "rarity": "rare", "desc": "-20% tempo di recupero dello scatto."},
-	{"id": "scatto_fantasma", "name": "Scatto Fantasma", "rarity": "rare", "desc": "+0.15s di invulnerabilità dopo lo scatto."},
-	{"id": "doppio_scatto", "name": "Doppio Scatto", "rarity": "rare", "desc": "Aggiunge una carica di scatto."},
-	{"id": "contrattacco", "name": "Contrattacco", "rarity": "rare", "desc": "Un'uccisione con lo scatto restituisce subito una carica di scatto."},
-	{"id": "furia", "name": "Furia", "rarity": "rare", "desc": "Più sei ferito, più danno infligge il tuo scatto (fino a +50%)."},
-	{"id": "cuore_dorato", "name": "Cuore Dorato", "rarity": "legendary", "desc": "Bottino di uno Strisciante Dorato. +40 vita massima e +10 danno da scatto.", "dropped_only_by": "strisciante_dorato"},
-	{"id": "benedizione_del_custode", "name": "Benedizione del Custode", "rarity": "legendary", "desc": "Concessa dal Custode Corrotto. Lo scatto genera un'onda d'urto che danneggia i nemici vicini.", "dropped_only_by": "custode_corrotto"},
+	{"id": "lama_rapida", "name": "Lama Rapida", "rarity": "common", "icon": "sword", "desc": "+6 danno da scatto."},
+	{"id": "passo_veloce", "name": "Passo Veloce", "rarity": "common", "icon": "boot", "desc": "+15% velocità di movimento."},
+	{"id": "scatto_lungo", "name": "Scatto Lungo", "rarity": "common", "icon": "arrow", "desc": "+25% distanza dello scatto."},
+	{"id": "cuore_di_ferro", "name": "Cuore di Ferro", "rarity": "common", "icon": "heart", "desc": "+25 punti vita massimi."},
+	{"id": "scatto_fulmine", "name": "Scatto Fulmine", "rarity": "rare", "icon": "bolt", "desc": "-20% tempo di recupero dello scatto."},
+	{"id": "scatto_fantasma", "name": "Scatto Fantasma", "rarity": "rare", "icon": "ghost", "desc": "+0.15s di invulnerabilità dopo lo scatto."},
+	{"id": "doppio_scatto", "name": "Doppio Scatto", "rarity": "rare", "icon": "double", "desc": "Aggiunge una carica di scatto."},
+	{"id": "contrattacco", "name": "Contrattacco", "rarity": "rare", "icon": "cycle", "desc": "Un'uccisione con lo scatto restituisce subito una carica di scatto."},
+	{"id": "furia", "name": "Furia", "rarity": "rare", "icon": "flame", "desc": "Più sei ferito, più danno infligge il tuo scatto (fino a +50%)."},
+	{"id": "cuore_dorato", "name": "Cuore Dorato", "rarity": "legendary", "icon": "heart_gold", "desc": "Bottino di uno Strisciante Dorato. +40 vita massima e +10 danno da scatto.", "dropped_only_by": "strisciante_dorato"},
+	{"id": "benedizione_del_custode", "name": "Benedizione del Custode", "rarity": "legendary", "icon": "shield", "desc": "Concessa dal Custode Corrotto. Lo scatto genera un'onda d'urto che danneggia i nemici vicini.", "dropped_only_by": "custode_corrotto"},
 ]
+
+static func rarity_color(rarity: String) -> Color:
+	match rarity:
+		"legendary":
+			return Color8(244, 196, 48)
+		"rare":
+			return Color8(122, 162, 247)
+		_:
+			return Color8(200, 200, 205)
 
 static func build_golden_enemy_data(base_id: String) -> Dictionary:
 	var base: Dictionary = ENEMY_TYPES[base_id]

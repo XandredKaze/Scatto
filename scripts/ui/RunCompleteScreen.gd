@@ -19,7 +19,7 @@ func _ready() -> void:
 	add_child(bg)
 
 	var vbox := VBoxContainer.new()
-	vbox.position = Vector2(280, 190)
+	vbox.position = Vector2(440, 220)
 	vbox.custom_minimum_size = Vector2(400, 220)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 16)

@@ -12,7 +12,7 @@ extends Node2D
 
 signal return_to_hub_requested
 
-const ARENA_SIZE := Vector2(960, 540)
+const ARENA_SIZE := Vector2(1280, 720)
 const WALL_MARGIN := 48.0
 const EXIT_RADIUS := 28.0
 const SHOCKWAVE_RADIUS := 70.0
@@ -299,6 +299,7 @@ func _start_boss_room() -> void:
 	var boss := Boss.new()
 	boss.arena_bounds = arena_rect
 	boss.setup_from_data(data)
+	boss.global_position = Vector2(ARENA_SIZE.x / 2.0, WALL_MARGIN + 90.0)
 	boss.spawn_projectile.connect(_on_enemy_spawn_projectile)
 	boss_container.add_child(boss)
 	current_boss = boss
