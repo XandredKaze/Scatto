@@ -1,0 +1,54 @@
+class_name InputSetup
+extends RefCounted
+
+# Configura le azioni di input (movimento e scatto) a codice invece che
+# nel project.godot, cosí ogni azione è legata sia a tastiera che a
+# controller (stick sinistro/D-pad per il movimento, tasto A/Croce per
+# lo scatto) senza dover scrivere a mano il formato [input] del progetto.
+# Chiamata una sola volta all'avvio (Main._ready()).
+
+static func ensure_actions() -> void:
+	_ensure_move_axis("move_left", KEY_A, KEY_LEFT, JOY_AXIS_LEFT_X, -1.0, JOY_BUTTON_DPAD_LEFT)
+	_ensure_move_axis("move_right", KEY_D, KEY_RIGHT, JOY_AXIS_LEFT_X, 1.0, JOY_BUTTON_DPAD_RIGHT)
+	_ensure_move_axis("move_up", KEY_W, KEY_UP, JOY_AXIS_LEFT_Y, -1.0, JOY_BUTTON_DPAD_UP)
+	_ensure_move_axis("move_down", KEY_S, KEY_DOWN, JOY_AXIS_LEFT_Y, 1.0, JOY_BUTTON_DPAD_DOWN)
+	_ensure_dash()
+
+static func _ensure_move_axis(action: String, key1: Key, key2: Key, axis: JoyAxis, axis_value: float, dpad_button: JoyButton) -> void:
+	if InputMap.has_action(action):
+		return
+	InputMap.add_action(action, 0.25)
+
+	var k1 := InputEventKey.new()
+	k1.physical_keycode = key1
+	InputMap.action_add_event(action, k1)
+
+	var k2 := InputEventKey.new()
+	k2.physical_keycode = key2
+	InputMap.action_add_event(action, k2)
+
+	var motion := InputEventJoypadMotion.new()
+	motion.axis = axis
+	motion.axis_value = axis_value
+	InputMap.action_add_event(action, motion)
+
+	var dpad := InputEventJoypadButton.new()
+	dpad.button_index = dpad_button
+	InputMap.action_add_event(action, dpad)
+
+static func _ensure_dash() -> void:
+	if InputMap.has_action("dash"):
+		return
+	InputMap.add_action("dash")
+
+	var space := InputEventKey.new()
+	space.physical_keycode = KEY_SPACE
+	InputMap.action_add_event("dash", space)
+
+	var shift := InputEventKey.new()
+	shift.physical_keycode = KEY_SHIFT
+	InputMap.action_add_event("dash", shift)
+
+	var joy_btn := InputEventJoypadButton.new()
+	joy_btn.button_index = JOY_BUTTON_A
+	InputMap.action_add_event("dash", joy_btn)

@@ -4,6 +4,7 @@ var world: Node2D
 var current_screen: Node = null
 
 func _ready() -> void:
+	InputSetup.ensure_actions()
 	world = Node2D.new()
 	world.name = "World"
 	add_child(world)

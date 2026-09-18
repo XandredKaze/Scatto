@@ -4,9 +4,10 @@ Un roguelike top-down realizzato in **Godot 4.3** in cui l'unico attacco a dispo
 
 ## Come si gioca
 
-- **Movimento**: `WASD` o frecce direzionali.
-- **Scatto (unico attacco)**: `Spazio` o `Shift`. Durante lo scatto sei invulnerabile e infliggi danno a ogni nemico che attraversi (una sola volta a scatto).
+- **Movimento**: `WASD`/frecce direzionali, oppure lo stick sinistro o il D-pad di un controller.
+- **Scatto (unico attacco)**: `Spazio`/`Shift`, oppure il tasto A (Xbox) / Croce (PlayStation) del controller. Durante lo scatto sei invulnerabile e infliggi danno a ogni nemico che attraversi (una sola volta a scatto).
 - Fuori dallo scatto, il contatto con un nemico o un suo proiettile ti danneggia.
+- Il controller è riconosciuto automaticamente (nessuna configurazione richiesta) e può essere usato insieme alla tastiera in qualsiasi momento.
 
 ### Struttura di una run
 
@@ -42,6 +43,7 @@ project.godot
 scenes/Main.tscn              # unica scena "fisica": tutto il resto è costruito da codice
 scripts/
   Main.gd                     # coordina Hub <-> Run
+  core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice
   autoload/SaveManager.gd     # persistenza (archivio, bestiario, statistiche) su user://
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual

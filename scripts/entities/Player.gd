@@ -43,7 +43,6 @@ var alive := true
 var active_powerups: Array = []
 
 var arena_bounds: Rect2 = Rect2()
-var _dash_key_was_down := false
 
 func _ready() -> void:
 	collision_layer = 1
@@ -135,18 +134,16 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 func _read_input_and_move(delta: float) -> void:
-	var move := Vector2.ZERO
-	move.x = _axis(KEY_D, KEY_RIGHT) - _axis(KEY_A, KEY_LEFT)
-	move.y = _axis(KEY_S, KEY_DOWN) - _axis(KEY_W, KEY_UP)
+	# Input.get_vector legge sia tastiera (WASD/frecce) sia lo stick
+	# sinistro/D-pad di un controller, in modo unificato e con supporto
+	# analogico nativo.
+	var move := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if move.length() > 0.0:
-		move = move.normalized()
-		facing = move
+		facing = move.normalized()
 
-	var dash_down := Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_SHIFT)
-	if dash_down and not _dash_key_was_down and can_dash():
-		var dir: Vector2 = move if move != Vector2.ZERO else facing
+	if Input.is_action_just_pressed("dash") and can_dash():
+		var dir: Vector2 = move.normalized() if move != Vector2.ZERO else facing
 		start_dash(dir)
-	_dash_key_was_down = dash_down
 
 	if is_dashing:
 		var dist: float = DASH_SPEED * dash_distance_mult
@@ -158,9 +155,6 @@ func _read_input_and_move(delta: float) -> void:
 		position += move * BASE_SPEED * speed_mult * delta
 
 	_clamp_to_arena()
-
-func _axis(pos_key: int, alt_key: int) -> float:
-	return 1.0 if (Input.is_key_pressed(pos_key) or Input.is_key_pressed(alt_key)) else 0.0
 
 func _update_timers(delta: float) -> void:
 	if hit_iframe_timer > 0.0:

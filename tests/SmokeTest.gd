@@ -14,6 +14,7 @@ var run: Run
 func run_and_quit() -> void:
 	print("=== SCATTO SMOKE TEST ===")
 
+	await _test_gamepad_input()
 	await _test_real_dash_collision()
 	await _test_boss_attack_patterns()
 
@@ -116,6 +117,56 @@ func run_and_quit() -> void:
 
 	print("=== TUTTI I CONTROLLI SUPERATI ===")
 	get_tree().quit()
+
+func _test_gamepad_input() -> void:
+	print("--- Test input da controller (eventi joypad simulati) ---")
+	_assert(InputMap.has_action("move_right"), "l'azione move_right non è stata registrata")
+	_assert(InputMap.has_action("dash"), "l'azione dash non è stata registrata")
+
+	var p := Player.new()
+	p.arena_bounds = Rect2(Vector2(48, 48), Vector2(1184, 624))
+	add_child(p)
+	var start_pos: Vector2 = p.global_position
+
+	var stick := InputEventJoypadMotion.new()
+	stick.device = 0
+	stick.axis = JOY_AXIS_LEFT_X
+	stick.axis_value = 1.0
+	Input.parse_input_event(stick)
+
+	for i in range(6):
+		await get_tree().physics_frame
+
+	print("Posizione dopo stick a destra: ", p.global_position, " (partenza: ", start_pos, ")")
+	_assert(p.global_position.x > start_pos.x, "lo stick analogico del controller non ha mosso il giocatore")
+
+	var stick_release := InputEventJoypadMotion.new()
+	stick_release.device = 0
+	stick_release.axis = JOY_AXIS_LEFT_X
+	stick_release.axis_value = 0.0
+	Input.parse_input_event(stick_release)
+
+	var btn := InputEventJoypadButton.new()
+	btn.device = 0
+	btn.button_index = JOY_BUTTON_A
+	btn.pressed = true
+	Input.parse_input_event(btn)
+	# parse_input_event accoda l'evento al prossimo ciclo di input del
+	# motore: servono due frame reali prima che Player lo veda come
+	# "appena premuto" nel proprio _physics_process.
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_assert(p.is_dashing, "il tasto A del controller non ha attivato lo scatto")
+	print("Input da controller (stick + tasto A): OK")
+
+	var btn_release := InputEventJoypadButton.new()
+	btn_release.device = 0
+	btn_release.button_index = JOY_BUTTON_A
+	btn_release.pressed = false
+	Input.parse_input_event(btn_release)
+
+	p.queue_free()
+	await get_tree().physics_frame
 
 func _test_boss_attack_patterns() -> void:
 	print("--- Test pattern d'attacco del boss speciale (fisica reale, ~6s) ---")
