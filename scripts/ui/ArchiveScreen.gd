@@ -11,8 +11,10 @@ var list_box: VBoxContainer
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Sfondo completamente opaco: la schermata sottostante (Hub) non deve
+	# trasparire e mescolarsi con il testo dell'archivio.
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 235)
+	bg.color = Color8(10, 11, 15, 255)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
@@ -51,6 +53,8 @@ func refresh() -> void:
 
 func _build_row(entry: Dictionary, unlocked: bool) -> Control:
 	var row := PanelContainer.new()
+	row.add_theme_stylebox_override("panel", _row_style())
+
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 16)
 	row.add_child(hbox)
@@ -65,11 +69,22 @@ func _build_row(entry: Dictionary, unlocked: bool) -> Control:
 	var desc_label := Label.new()
 	desc_label.text = entry.desc if unlocked else "Non ancora scoperto."
 	desc_label.custom_minimum_size = Vector2(480, 0)
+	desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	desc_label.modulate = Color(0.85, 0.85, 0.88) if unlocked else Color(0.35, 0.35, 0.4)
 	hbox.add_child(desc_label)
 
 	return row
+
+func _row_style() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color8(24, 26, 33, 255)
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 14.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_top = 8.0
+	sb.content_margin_bottom = 8.0
+	return sb
 
 func _rarity_color(rarity: String) -> Color:
 	match rarity:

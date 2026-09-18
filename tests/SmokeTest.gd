@@ -82,6 +82,21 @@ func run_and_quit() -> void:
 	_assert(run.streak_run_index == 0, "la serie dovrebbe azzerarsi dopo la sconfitta")
 	print("Sconfitta e reset della serie: OK")
 
+	print("--- Test apertura Archivio e Bestiario (sfondo opaco) ---")
+	var archive := ArchiveScreen.new()
+	add_child(archive)
+	archive.refresh()
+	_assert(archive.list_box.get_child_count() == GameData.POWERUPS.size(), "l'archivio non elenca tutti i potenziamenti")
+	archive.queue_free()
+
+	var bestiary := BestiaryScreen.new()
+	add_child(bestiary)
+	bestiary.refresh()
+	_assert(bestiary.list_box.get_child_count() > 0, "il bestiario non elenca alcuna voce")
+	bestiary.queue_free()
+	await get_tree().physics_frame
+	print("Archivio e Bestiario: costruiti e popolati senza errori")
+
 	print("=== TUTTI I CONTROLLI SUPERATI ===")
 	get_tree().quit()
 
@@ -179,6 +194,13 @@ func _clear_five_rooms_to_boss() -> void:
 		run.player.global_position = run.exit_position
 		run._physics_process(0.016)
 		_assert(run.powerup_choice_screen.visible, "schermata scelta potenziamento non mostrata (stanza %d)" % i)
+		# Regressione: restare fermi nel portale non deve rigenerare la
+		# scelta del potenziamento ad ogni frame (il portale si disattiva
+		# subito dopo il primo trigger).
+		_assert(not run.room_cleared, "il portale non si è disattivato dopo il primo utilizzo (stanza %d)" % i)
+		for j in range(5):
+			run._physics_process(0.016)
+			_assert(not run.room_cleared, "il portale ha ri-generato la scelta mentre il giocatore restava fermo (stanza %d)" % i)
 		var choice: Dictionary = GameData.get_regular_powerup_pool()[0]
 		run._on_powerup_selected(choice.id)
 

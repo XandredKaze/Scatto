@@ -255,6 +255,10 @@ func _on_boss_defeated(boss) -> void:
 	run_complete_screen.show()
 
 func _on_room_exit() -> void:
+	# Disattiva subito il portale: restare fermi al suo interno non deve
+	# far comparire la scelta del potenziamento ad ogni frame.
+	room_cleared = false
+	arena_visual.set_exit_active(false)
 	var choices := _roll_powerup_choices(3)
 	powerup_choice_screen.show_choices(choices, room_number)
 	powerup_choice_screen.show()
