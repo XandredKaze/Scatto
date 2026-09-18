@@ -19,6 +19,7 @@ static func ensure_actions() -> void:
 	_ensure_move_axis("move_up", KEY_W, KEY_UP, JOY_AXIS_LEFT_Y, -1.0, JOY_BUTTON_DPAD_UP)
 	_ensure_move_axis("move_down", KEY_S, KEY_DOWN, JOY_AXIS_LEFT_Y, 1.0, JOY_BUTTON_DPAD_DOWN)
 	_ensure_dash()
+	_ensure_tame()
 	_ensure_joypad_button_on_action("ui_accept", JOY_BUTTON_A)
 	_ensure_joypad_button_on_action("ui_cancel", JOY_BUTTON_B)
 	_ensure_pause()
@@ -61,6 +62,19 @@ static func _ensure_dash() -> void:
 	var joy_btn := InputEventJoypadButton.new()
 	joy_btn.button_index = JOY_BUTTON_A
 	InputMap.action_add_event("dash", joy_btn)
+
+static func _ensure_tame() -> void:
+	if InputMap.has_action("tame"):
+		return
+	InputMap.add_action("tame")
+
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_E
+	InputMap.action_add_event("tame", key)
+
+	var joy_btn := InputEventJoypadButton.new()
+	joy_btn.button_index = JOY_BUTTON_X
+	InputMap.action_add_event("tame", joy_btn)
 
 static func _ensure_pause() -> void:
 	if InputMap.has_action("pause"):

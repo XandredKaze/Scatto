@@ -8,6 +8,7 @@ extends Area2D
 
 signal dash_hit(target: Node, damage: float)
 signal enemy_defeated(target: Node)
+signal tame_requested
 signal died
 
 const BASE_SPEED := 220.0
@@ -17,6 +18,7 @@ const DASH_DURATION := 0.16
 const BASE_DASH_COOLDOWN := 0.55
 const HIT_IFRAME := 0.8
 const KNOCKBACK := 20.0
+const TAME_COOLDOWN := 14.0
 
 var radius := 14.0
 var speed_mult := 1.0
@@ -39,6 +41,7 @@ var dash_timer := 0.0
 var dash_vector := Vector2.ZERO
 var hit_iframe_timer := 0.0
 var hit_enemies_this_dash: Array = []
+var tame_cooldown_timer := 0.0
 var alive := true
 var active_powerups: Array = []
 
@@ -86,6 +89,7 @@ func reset_stats() -> void:
 	dash_timer = 0.0
 	hit_iframe_timer = 0.0
 	hit_enemies_this_dash.clear()
+	tame_cooldown_timer = 0.0
 	active_powerups.clear()
 	alive = true
 
@@ -125,6 +129,7 @@ func restore_stats(snapshot: Dictionary) -> void:
 	dash_timer = 0.0
 	hit_iframe_timer = 0.0
 	hit_enemies_this_dash.clear()
+	tame_cooldown_timer = 0.0
 	alive = true
 
 func dash_cooldown() -> float:
@@ -142,6 +147,9 @@ func is_invulnerable() -> bool:
 
 func can_dash() -> bool:
 	return dash_charges > 0 and not is_dashing and alive
+
+func can_tame() -> bool:
+	return tame_cooldown_timer <= 0.0 and alive
 
 func start_dash(direction: Vector2) -> void:
 	is_dashing = true
@@ -193,6 +201,10 @@ func _read_input_and_move(delta: float) -> void:
 		var dir: Vector2 = move.normalized() if move != Vector2.ZERO else facing
 		start_dash(dir)
 
+	if Input.is_action_just_pressed("tame") and can_tame():
+		tame_cooldown_timer = TAME_COOLDOWN
+		tame_requested.emit()
+
 	var move_delta: Vector2
 	if is_dashing:
 		var dist: float = DASH_SPEED * dash_distance_mult
@@ -208,6 +220,8 @@ func _read_input_and_move(delta: float) -> void:
 func _update_timers(delta: float) -> void:
 	if hit_iframe_timer > 0.0:
 		hit_iframe_timer -= delta
+	if tame_cooldown_timer > 0.0:
+		tame_cooldown_timer -= delta
 	if dash_charges < max_dash_charges:
 		charge_regen_timer += delta
 		if charge_regen_timer >= dash_cooldown():
@@ -233,6 +247,8 @@ func _resolve_combat() -> void:
 		for area in overlaps:
 			if not area.is_in_group("combat_target"):
 				continue
+			if area is Enemy and area.is_ally:
+				continue
 			if not area.alive or hit_enemies_this_dash.has(area):
 				continue
 			hit_enemies_this_dash.append(area)
@@ -249,6 +265,8 @@ func _resolve_combat() -> void:
 	else:
 		for area in overlaps:
 			if area.is_in_group("combat_target"):
+				if area is Enemy and area.is_ally:
+					continue
 				if area.alive and area.can_deal_contact_damage():
 					if take_damage(area.damage):
 						area.trigger_contact()

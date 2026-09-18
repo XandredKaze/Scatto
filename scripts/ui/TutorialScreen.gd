@@ -64,6 +64,7 @@ func _steps() -> Array:
 		{"n": 3, "title": "Attenzione al contatto", "text": "Fuori dallo scatto, toccare un nemico (o un suo proiettile) ti danneggia: usa lo scatto anche per attraversare in sicurezza."},
 		{"n": 4, "title": "Ripulisci la stanza", "text": "Sconfiggi tutti i nemici della stanza, poi raggiungi il portale che si illumina per proseguire."},
 		{"n": 5, "title": "Scegli un potenziamento", "text": "Dopo ogni stanza scegli uno tra 3 potenziamenti casuali: ti rendono più forte per il resto della run."},
+		{"n": 6, "title": "Addomesticamento", "text": "Tasto E o tasto X/Quadrato del controller: rende alleato il nemico comune più vicino. Puoi avere al massimo 2 alleati contemporaneamente, riconoscibili dall'anello acqua che li circonda; restano al tuo fianco e combattono per te finché non muoiono o non concludi/riavvii la run. L'abilità ha un tempo di recupero prima di poter essere riusata."},
 	]
 
 func _build_section_title(text: String) -> Label:

@@ -28,6 +28,8 @@ func run_and_quit() -> void:
 	await _test_hud_debug_golden_button()
 	await _test_direction_indicator()
 	await _test_pause_menu()
+	await _test_ally_taming()
+	await _test_ally_combat()
 
 	SaveManager.reset_all()
 
@@ -304,6 +306,126 @@ func _test_pause_menu() -> void:
 	print("Menu di pausa: OK")
 	retry_run.queue_free()
 	await get_tree().process_frame
+
+func _test_ally_taming() -> void:
+	print("--- Test addomesticamento nemici comuni (alleati) ---")
+	var tame_run := Run.new()
+	add_child(tame_run)
+	tame_run.begin_new_streak()
+	await get_tree().process_frame
+
+	# Sostituisce i nemici generati casualmente con bersagli noti, tutti
+	# vicini al giocatore, per un test deterministico del limite massimo
+	# di alleati e dell'esclusione dei nemici dorati.
+	for e in tame_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	# Un nemico dorato isolato non deve mai poter essere addomesticato:
+	# testato con lui come unico bersaglio nel raggio, cosí un eventuale
+	# bug che lo rendesse comunque bersaglio non verrebbe mascherato da
+	# un bersaglio comune più vicino.
+	var golden := Enemy.new()
+	golden.maze = tame_run.current_maze
+	golden.setup_from_data(GameData.build_golden_enemy_data("strisciante"), true)
+	golden.global_position = tame_run.player.global_position
+	tame_run.enemy_container.add_child(golden)
+	tame_run._on_tame_requested()
+	_assert(not golden.is_ally, "un nemico dorato non dovrebbe poter essere addomesticato")
+	_assert(tame_run.allies.is_empty(), "il tentativo su un dorato isolato non dovrebbe creare alleati")
+	golden.queue_free()
+	await get_tree().process_frame
+
+	# Tre bersagli comuni via via più lontani dal giocatore: ogni
+	# addomesticamento deve scegliere sempre il più vicino non ancora
+	# alleato, cosí l'ordine di conversione è deterministico.
+	var targets: Array = []
+	for i in range(3):
+		var e := Enemy.new()
+		e.maze = tame_run.current_maze
+		e.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+		e.hp = e.max_hp * 0.5
+		e.global_position = tame_run.player.global_position + Vector2(20.0 * (i + 1), 0.0)
+		tame_run.enemy_container.add_child(e)
+		targets.append(e)
+
+	tame_run._on_tame_requested()
+	_assert(targets[0].is_ally, "il bersaglio più vicino dovrebbe diventare alleato per primo")
+	_assert(tame_run.allies.size() == 1, "dovrebbe esserci esattamente 1 alleato")
+	_assert(targets[0].hp == targets[0].max_hp, "l'alleato appena convertito dovrebbe essere guarito a vita piena")
+
+	tame_run._on_tame_requested()
+	_assert(targets[1].is_ally, "il secondo bersaglio più vicino dovrebbe diventare alleato")
+	_assert(tame_run.allies.size() == 2, "dovrebbero esserci esattamente 2 alleati")
+
+	tame_run._on_tame_requested()
+	_assert(not targets[2].is_ally, "il terzo tentativo dovrebbe fallire: limite massimo di 2 alleati già raggiunto")
+	_assert(tame_run.allies.size() == 2, "il numero di alleati non dovrebbe mai superare il massimo (2)")
+
+	# Un alleato ancora vivo non deve bloccare il rilevamento di stanza
+	# ripulita: solo il terzo bersaglio (mai addomesticato) va sconfitto.
+	targets[2].take_damage(99999.0)
+	tame_run._on_enemy_defeated(targets[2])
+	_assert(tame_run.room_cleared, "la stanza dovrebbe risultare ripulita ignorando gli alleati ancora vivi")
+
+	# Lo scatto del giocatore non deve mai danneggiare un proprio alleato.
+	var ally_hp_before: float = targets[0].hp
+	tame_run.player.global_position = targets[0].global_position
+	tame_run.player.start_dash(Vector2.RIGHT)
+	for i in range(6):
+		await get_tree().physics_frame
+	_assert(targets[0].hp == ally_hp_before, "lo scatto ha danneggiato un proprio alleato: non dovrebbe mai accadere")
+
+	# Gli alleati devono sopravvivere al passaggio di stanza (a differenza
+	# dei nemici ostili, cancellati e rigenerati ad ogni nuova stanza).
+	var surviving_allies: Array = tame_run.allies.duplicate()
+	tame_run._generate_room(2)
+	_assert(tame_run.allies.size() == 2, "gli alleati non dovrebbero sparire al cambio di stanza")
+	for a in surviving_allies:
+		_assert(is_instance_valid(a) and a.is_ally, "un alleato è stato erroneamente rimosso al cambio di stanza")
+		_assert(a.maze == tame_run.current_maze, "un alleato non è stato ricollegato al labirinto della nuova stanza")
+
+	print("Addomesticamento: OK (conversione, limite massimo, dorati esclusi, stanza ripulita, nessun fuoco amico, persistenza tra stanze)")
+	tame_run.queue_free()
+	await get_tree().process_frame
+
+func _test_ally_combat() -> void:
+	print("--- Test combattimento alleato <-> nemico ostile (fisica reale) ---")
+	var ally := Enemy.new()
+	ally.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	ally.is_ally = true
+	add_child(ally)
+	ally.collision_mask = 2 | 4 | 8
+	ally.global_position = Vector2(400, 300)
+
+	var hostile := Enemy.new()
+	hostile.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	add_child(hostile)
+	hostile.global_position = Vector2(415, 300)
+
+	# Enemy._physics_process richiede un nodo nel gruppo "player" anche
+	# quando (come qui) l'alleato non lo insegue affatto, perché il
+	# nemico ostile è già entro il raggio di ingaggio.
+	var p := Player.new()
+	add_child(p)
+	p.global_position = Vector2(0, 0)
+
+	var hostile_start_hp: float = hostile.hp
+	var ally_start_hp: float = ally.hp
+
+	for i in range(20):
+		await get_tree().physics_frame
+
+	print("HP nemico ostile dopo il combattimento: ", hostile.hp, " / ", hostile_start_hp)
+	_assert(hostile.hp < hostile_start_hp, "l'alleato non ha inflitto danno al nemico ostile")
+	print("HP alleato dopo il contrattacco del nemico ostile: ", ally.hp, " / ", ally_start_hp)
+	_assert(ally.hp < ally_start_hp, "il nemico ostile non ha inflitto danno all'alleato")
+
+	print("Combattimento alleato: OK")
+	ally.queue_free()
+	hostile.queue_free()
+	p.queue_free()
+	await get_tree().physics_frame
 
 func _kill_all_room_enemies_of(target_run: Run) -> void:
 	for e in target_run.enemy_container.get_children():

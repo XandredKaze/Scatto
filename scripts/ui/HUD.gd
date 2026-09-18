@@ -21,6 +21,8 @@ var banner_timer := 0.0
 var powerup_tray: HBoxContainer
 var _last_powerup_summary := ""
 var direction_indicator: DirectionIndicator
+var ally_label: Label
+var tame_pip: ColorRect
 
 const SCREEN_SIZE := Vector2(1280, 720)
 const INDICATOR_PADDING := 60.0
@@ -64,6 +66,18 @@ func _ready() -> void:
 	dash_pips = HBoxContainer.new()
 	dash_pips.add_theme_constant_override("separation", 6)
 	vbox.add_child(dash_pips)
+
+	var tame_row := HBoxContainer.new()
+	tame_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(tame_row)
+
+	tame_pip = ColorRect.new()
+	tame_pip.custom_minimum_size = Vector2(18, 18)
+	tame_row.add_child(tame_pip)
+
+	ally_label = Label.new()
+	ally_label.text = "Alleati: 0 / %d" % Run.MAX_ALLIES
+	tame_row.add_child(ally_label)
 
 	var powerup_label := Label.new()
 	powerup_label.text = "Potenziamenti attivi"
@@ -146,6 +160,8 @@ func _process(delta: float) -> void:
 
 	_sync_dash_pips(player.max_dash_charges, player.dash_charges)
 	_update_powerup_tray(player)
+	ally_label.text = "Alleati: %d / %d" % [run.allies.size(), Run.MAX_ALLIES]
+	tame_pip.color = Color(0.4, 0.88, 0.76) if player.can_tame() else Color(0.25, 0.27, 0.33)
 
 	if run.current_boss != null and is_instance_valid(run.current_boss) and run.current_boss.alive:
 		boss_panel.show()

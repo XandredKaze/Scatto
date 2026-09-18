@@ -27,6 +27,12 @@ const WALL_MARGIN := 48.0
 const EXIT_RADIUS := 28.0
 const SHOCKWAVE_RADIUS := 70.0
 const SHOCKWAVE_RATIO := 0.4
+# Addomesticamento: rende alleato un nemico comune nelle vicinanze (non
+# dorato). Gli alleati restano con te finché non muoiono o non finisci/
+# riavvii la run (persistono invece tra una stanza e l'altra, e tra le
+# run consecutive di una stessa serie).
+const MAX_ALLIES := 2
+const TAME_RANGE := 180.0
 
 var player: Player
 var current_boss: Boss = null
@@ -39,6 +45,7 @@ var current_maze: MazeGrid = null
 var arena_rect: Rect2
 var exit_position: Vector2
 var rng := RandomNumberGenerator.new()
+var allies: Array = []
 
 var debug_mode := false
 var debug_force_golden := false
@@ -111,6 +118,7 @@ func _spawn_player() -> void:
 	player.enemy_defeated.connect(_on_enemy_defeated)
 	player.dash_hit.connect(_on_dash_hit)
 	player.died.connect(_on_player_died)
+	player.tame_requested.connect(_on_tame_requested)
 	player_container.add_child(player)
 
 # --- Ciclo di vita della run -------------------------------------------------
@@ -118,6 +126,7 @@ func _spawn_player() -> void:
 func begin_new_streak() -> void:
 	player.reset_stats()
 	streak_run_index = 1
+	_clear_allies()
 	_start_run_common()
 
 func _continue_streak() -> void:
@@ -137,12 +146,13 @@ func _retry_run() -> void:
 	player.restore_stats(run_start_snapshot)
 	room_number = 1
 	current_boss = null
+	_clear_allies()
 	_generate_room(1)
 
 # --- Generazione stanze -------------------------------------------------
 
 func _generate_room(n: int) -> void:
-	_clear_container(enemy_container)
+	_clear_hostile_enemies()
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
@@ -170,6 +180,8 @@ func _generate_room(n: int) -> void:
 
 	var excluded_cells: Array = [spawn_cell]
 	excluded_cells.append_array(maze._open_neighbors(spawn_cell))
+
+	_reposition_allies_maze(maze, spawn_cell, excluded_cells)
 
 	var spawns := _build_room_spawns(n, maze, excluded_cells)
 	var has_golden := false
@@ -288,11 +300,94 @@ func _check_room_cleared() -> void:
 	if room_cleared or current_boss != null:
 		return
 	for e in enemy_container.get_children():
+		if e is Enemy and e.is_ally:
+			continue
 		if e.alive:
 			return
 	room_cleared = true
 	arena_visual.set_exit_active(true)
 	hud.show_banner("Stanza ripulita! Raggiungi il portale.", 2.5)
+
+# --- Alleati (addomesticamento) -------------------------------------------------
+
+func _on_tame_requested() -> void:
+	if allies.size() >= MAX_ALLIES:
+		hud.show_banner("Hai già %d alleati al seguito (massimo)." % MAX_ALLIES, 2.0)
+		return
+	var candidate := _find_tameable_enemy()
+	if candidate == null:
+		hud.show_banner("Nessun nemico comune abbastanza vicino da addomesticare.", 2.0)
+		return
+	_convert_enemy_to_ally(candidate)
+
+func _find_tameable_enemy() -> Enemy:
+	var best: Enemy = null
+	var best_dist := TAME_RANGE
+	for c in enemy_container.get_children():
+		if not (c is Enemy) or c.is_ally or c.is_golden or not c.alive:
+			continue
+		var d: float = player.global_position.distance_to(c.global_position)
+		if d <= best_dist:
+			best_dist = d
+			best = c
+	return best
+
+func _convert_enemy_to_ally(enemy: Enemy) -> void:
+	enemy.is_ally = true
+	enemy.collision_mask = 2 | 4 | 8
+	enemy.hp = enemy.max_hp
+	enemy.ally_path = PackedVector2Array()
+	enemy.defeated.connect(_on_ally_defeated.bind(enemy))
+	allies.append(enemy)
+	SaveManager.unlock_enemy(enemy.enemy_id)
+	hud.show_banner("%s si è unito a te!" % enemy.display_name, 2.5)
+
+func _on_ally_defeated(ally) -> void:
+	allies.erase(ally)
+	var fallen_name: String = ally.display_name
+	if is_instance_valid(ally):
+		ally.queue_free()
+	hud.show_banner("Il tuo alleato %s è caduto in battaglia." % fallen_name, 2.5)
+
+func _clear_allies() -> void:
+	for a in allies:
+		if is_instance_valid(a):
+			a.queue_free()
+	allies.clear()
+
+func _clear_hostile_enemies() -> void:
+	for c in enemy_container.get_children():
+		if c is Enemy and c.is_ally:
+			continue
+		c.queue_free()
+
+func _reposition_allies_maze(maze: MazeGrid, spawn_cell: Vector2i, excluded_cells: Array) -> void:
+	if allies.is_empty():
+		return
+	var neighbor_cells: Array = maze._open_neighbors(spawn_cell)
+	for i in range(allies.size()):
+		var ally = allies[i]
+		if not is_instance_valid(ally) or not ally.alive:
+			continue
+		ally.maze = maze
+		ally.arena_bounds = Rect2()
+		ally.ally_path = PackedVector2Array()
+		var cell: Vector2i = neighbor_cells[i] if i < neighbor_cells.size() else spawn_cell
+		ally.global_position = maze.cell_center(cell.x, cell.y)
+	excluded_cells.append_array(neighbor_cells)
+
+func _reposition_allies_open(rect: Rect2, near_pos: Vector2) -> void:
+	if allies.is_empty():
+		return
+	for i in range(allies.size()):
+		var ally = allies[i]
+		if not is_instance_valid(ally) or not ally.alive:
+			continue
+		ally.maze = null
+		ally.arena_bounds = rect
+		ally.ally_path = PackedVector2Array()
+		var side: float = 1.0 if i % 2 == 0 else -1.0
+		ally.global_position = near_pos + Vector2(side * 40.0 * float(i + 1), 30.0)
 
 func _on_boss_defeated(boss) -> void:
 	SaveManager.record_run_won(streak_run_index)
@@ -341,7 +436,7 @@ func _start_boss_room() -> void:
 	var boss_id: String = (archetype + "_corrotto") if special else archetype
 	var data: Dictionary = GameData.BOSSES[boss_id]
 
-	_clear_container(enemy_container)
+	_clear_hostile_enemies()
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
@@ -359,6 +454,8 @@ func _start_boss_room() -> void:
 	player.global_position = Vector2(BOSS_ARENA_SIZE.x / 2.0, BOSS_ARENA_SIZE.y - WALL_MARGIN - 60.0)
 	player.hit_enemies_this_dash.clear()
 	_configure_camera_limits(arena_rect)
+
+	_reposition_allies_open(arena_rect, player.global_position)
 
 	var boss := Boss.new()
 	boss.arena_bounds = arena_rect
@@ -437,6 +534,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _debug_kill_all() -> void:
 	for e in enemy_container.get_children():
+		if e is Enemy and e.is_ally:
+			continue
 		if e.alive:
 			e.take_damage(99999.0)
 			if not e.alive:

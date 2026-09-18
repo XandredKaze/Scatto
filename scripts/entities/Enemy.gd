@@ -33,6 +33,18 @@ var current_path: PackedVector2Array = PackedVector2Array()
 var path_target_index := 0
 var path_recalc_timer := 0.0
 
+# Alleato: convertito da nemico comune tramite l'abilità speciale del
+# giocatore (Run._convert_enemy_to_ally). Da questo momento insegue e
+# attacca gli altri nemici invece del giocatore, riusando lo stesso
+# sistema di pathfinding/collisione ma con logica di movimento e
+# combattimento dedicata (vedi _physics_process_ally sotto).
+var is_ally := false
+const ALLY_ENGAGE_RADIUS := 260.0
+const ALLY_FOLLOW_DISTANCE := 130.0
+var ally_path: PackedVector2Array = PackedVector2Array()
+var ally_path_target_index := 0
+var ally_path_recalc_timer := 0.0
+
 func setup_from_data(data: Dictionary, golden: bool) -> void:
 	enemy_id = data.id
 	display_name = data.name
@@ -64,6 +76,9 @@ func _physics_process(delta: float) -> void:
 		return
 	var player := get_tree().get_first_node_in_group("player")
 	if player == null:
+		return
+	if is_ally:
+		_physics_process_ally(delta, player)
 		return
 	if maze != null:
 		_physics_process_maze(delta, player)
@@ -134,6 +149,93 @@ func _move_along_path(delta: float, player: Node) -> void:
 	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
 	global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
 
+# --- Comportamento da alleato -------------------------------------------------
+
+func _physics_process_ally(delta: float, player: Node) -> void:
+	var hostile := _find_nearest_hostile(ALLY_ENGAGE_RADIUS)
+	var dest_pos: Vector2 = hostile.global_position if hostile != null else player.global_position
+	var stop_distance: float = (radius + hostile.radius - 4.0) if hostile != null else ALLY_FOLLOW_DISTANCE
+	if global_position.distance_to(dest_pos) > stop_distance:
+		if maze != null:
+			_ally_move_along_maze(delta, dest_pos)
+		else:
+			var to_dest: Vector2 = dest_pos - global_position
+			var dir: Vector2 = to_dest.normalized() if to_dest.length() > 0.001 else Vector2.ZERO
+			global_position += dir * speed * delta
+			_clamp_to_arena()
+	_ally_resolve_combat()
+
+func _find_nearest_hostile(max_radius: float) -> Node:
+	var nearest: Node = null
+	var nearest_dist := max_radius
+	for group in ["enemy", "boss"]:
+		for node in get_tree().get_nodes_in_group(group):
+			if node == self or not node.alive:
+				continue
+			if node is Enemy and node.is_ally:
+				continue
+			var d: float = global_position.distance_to(node.global_position)
+			if d < nearest_dist:
+				nearest_dist = d
+				nearest = node
+	return nearest
+
+func _ally_move_along_maze(delta: float, dest_pos: Vector2) -> void:
+	ally_path_recalc_timer -= delta
+	if ally_path_recalc_timer <= 0.0 or ally_path.size() < 2:
+		ally_path = maze.get_path(global_position, dest_pos)
+		ally_path_target_index = 1 if ally_path.size() > 1 else 0
+		ally_path_recalc_timer = 0.35 + randf() * 0.25
+
+	if ally_path.size() < 2:
+		var to_dest: Vector2 = dest_pos - global_position
+		if to_dest.length() > 0.001:
+			var dir: Vector2 = to_dest.normalized()
+			global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
+		return
+	if ally_path_target_index >= ally_path.size():
+		ally_path_target_index = ally_path.size() - 1
+	var target: Vector2 = ally_path[ally_path_target_index]
+	var to_target: Vector2 = target - global_position
+	if to_target.length() < 10.0 and ally_path_target_index < ally_path.size() - 1:
+		ally_path_target_index += 1
+		target = ally_path[ally_path_target_index]
+		to_target = target - global_position
+	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
+	global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
+
+func _ally_resolve_combat() -> void:
+	# Stesso schema del Player._resolve_combat(): è l'alleato stesso a
+	# scandire le proprie aree sovrapposte, dato che i nemici comuni non
+	# controllano mai le proprie (collision_mask = 0 di default). Il
+	# cooldown di contatto (contact_timer, ereditato da CombatEntity) è
+	# per-istanza, quindi alleato e nemico infliggono danno l'un l'altro
+	# ognuno al proprio ritmo, esattamente come già avviene per il
+	# contatto nemico -> giocatore.
+	if not alive:
+		return
+	for area in get_overlapping_areas():
+		if not alive:
+			return
+		if area == self:
+			continue
+		if area.is_in_group("enemy_projectile"):
+			take_damage(area.damage)
+			area.queue_free()
+			continue
+		if not area.is_in_group("combat_target"):
+			continue
+		if area is Enemy and area.is_ally:
+			continue
+		if not area.alive:
+			continue
+		if can_deal_contact_damage():
+			area.take_damage(damage)
+			trigger_contact()
+		if area.can_deal_contact_damage():
+			take_damage(area.damage)
+			area.trigger_contact()
+
 func _clamp_to_arena() -> void:
 	if arena_bounds.size == Vector2.ZERO:
 		return
@@ -144,3 +246,5 @@ func _draw() -> void:
 	super._draw()
 	if is_golden:
 		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24, Color(0.96, 0.77, 0.19), 2.0)
+	if is_ally:
+		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24, Color(0.4, 0.88, 0.76), 3.0)
