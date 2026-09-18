@@ -13,9 +13,12 @@ extends Node2D
 signal return_to_hub_requested
 
 # Stanze 1-5: labirinto procedurale, molto più grande dello schermo.
-const MAZE_COLS := 10
-const MAZE_ROWS := 8
-const CELL_SIZE := 160.0
+# Corridoi larghi e spessore delle pareti maggiorato per l'aspetto da
+# galleria mineraria (vedi ArenaVisual per il rendering roccioso).
+const MAZE_COLS := 8
+const MAZE_ROWS := 6
+const CELL_SIZE := 300.0
+const WALL_THICKNESS := 34.0
 # Sala del boss (6): arena aperta (niente pareti interne) ma comunque
 # più grande della finestra di gioco, cosí anche lí la camera segue il
 # giocatore invece di mostrare l'intera sala in un colpo solo.
@@ -145,6 +148,7 @@ func _generate_room(n: int) -> void:
 	room_cleared = false
 
 	var maze := MazeGrid.new()
+	maze.wall_thickness = WALL_THICKNESS
 	maze.generate(MAZE_COLS, MAZE_ROWS, CELL_SIZE, rng)
 	current_maze = maze
 	arena_rect = Rect2()

@@ -13,7 +13,9 @@ Un roguelike top-down realizzato in **Godot 4.3** in cui l'unico attacco a dispo
 
 ### Stanze e labirinto
 
-Le stanze 1-5 sono **labirinti generati proceduralmente** (10x8 celle, molto più grandi dello schermo), con corridoi e qualche anello per evitare vicoli ciechi frustranti. La telecamera resta sempre centrata sul giocatore e lo segue ovunque si muova; i nemici della stanza inseguono seguendo un percorso reale attraverso i corridoi, non in linea retta. L'uscita è sempre posizionata nel punto del labirinto più lontano dal tuo ingresso (in numero di corridoi da percorrere, non in linea d'aria).
+Le stanze 1-5 sono **labirinti generati proceduralmente** (8x6 celle, molto più grandi dello schermo) con corridoi larghi e qualche anello per evitare vicoli ciechi frustranti. La telecamera resta sempre centrata sul giocatore e lo segue ovunque si muova; i nemici della stanza inseguono seguendo un percorso reale attraverso i corridoi, non in linea retta. L'uscita è sempre posizionata nel punto del labirinto più lontano dal tuo ingresso (in numero di corridoi da percorrere, non in linea d'aria).
+
+Visivamente i corridoi hanno un aspetto da **galleria mineraria/grotta**: le pareti non sono rettangoli netti ma sagome di roccia dai bordi irregolari, con toni di colore che variano leggermente da un tratto all'altro, e il pavimento è punteggiato di piccoli detriti. La collisione resta comunque rettangolare sotto il cofano (il "bordo roccioso" è puramente decorativo, generato una volta per stanza), cosí il movimento resta preciso e prevedibile.
 
 La **sesta stanza** (il boss) è invece un'unica arena aperta, senza pareti interne, ma comunque più grande dello schermo: lo spazio per schivare gli attacchi del boss non è mai limitato al primo piano visibile.
 
