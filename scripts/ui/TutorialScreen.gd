@@ -72,7 +72,7 @@ func _steps() -> Array:
 		{"n": 4, "title": "Ripulisci la stanza", "text": "Sconfiggi tutti i nemici della stanza: la ricompensa viene consegnata subito, senza doverla raccogliere."},
 		{"n": 5, "title": "Scegli un potenziamento", "text": "Dopo ogni stanza scegli uno tra 3 potenziamenti casuali: ti rendono più forte per il resto della run."},
 		{"n": 6, "title": "Addomesticamento", "text": "Tasto E o tasto X/Quadrato del controller: rende alleato il nemico comune più vicino. Puoi avere al massimo 2 alleati contemporaneamente, riconoscibili dall'anello acqua che li circonda; restano al tuo fianco e combattono per te finché non muoiono o non concludi/riavvii la run. L'abilità ha un tempo di recupero prima di poter essere riusata."},
-		{"n": 7, "title": "Attacco speciale dell'alleato", "text": "Tasto Q o tasto Y/Triangolo del controller: scatena un attacco speciale che dipende dal tipo di nemico che hai reso alleato più di recente (vedi sotto). Se l'alleato che te l'ha concesso muore, l'attacco resta disponibile solo se hai un altro alleato in vita; anche questa abilità ha un tempo di recupero."},
+		{"n": 7, "title": "Attacchi speciali degli alleati", "text": "Tasto Q (tasto Y/Triangolo del controller) e tasto R (dorsale destro/RB-R1): ogni alleato vivo concede il proprio attacco speciale su un pulsante diverso (vedi sotto), cosí con 2 alleati diversi hai 2 attacchi distinti utilizzabili in modo indipendente, ciascuno con il proprio tempo di recupero. Se addomestichi due nemici dello stesso tipo, i due alleati condividono un solo pulsante ma con una versione potenziata dell'attacco. Se un alleato muore, il suo attacco sparisce (o torna alla versione normale, se era potenziato)."},
 	]
 
 func _build_section_title(text: String) -> Label:

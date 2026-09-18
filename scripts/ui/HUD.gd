@@ -22,8 +22,9 @@ var powerup_tray: HBoxContainer
 var _last_powerup_summary := ""
 var ally_label: Label
 var tame_pip: ColorRect
-var special_attack_label: Label
-var special_attack_pip: ColorRect
+const SPECIAL_ATTACK_KEYS := ["Q", "R"]
+var special_attack_labels: Array = []
+var special_attack_pips: Array = []
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -77,17 +78,20 @@ func _ready() -> void:
 	ally_label.text = "Alleati: 0 / %d" % Run.MAX_ALLIES
 	tame_row.add_child(ally_label)
 
-	var special_row := HBoxContainer.new()
-	special_row.add_theme_constant_override("separation", 8)
-	vbox.add_child(special_row)
+	for i in range(SPECIAL_ATTACK_KEYS.size()):
+		var special_row := HBoxContainer.new()
+		special_row.add_theme_constant_override("separation", 8)
+		vbox.add_child(special_row)
 
-	special_attack_pip = ColorRect.new()
-	special_attack_pip.custom_minimum_size = Vector2(18, 18)
-	special_row.add_child(special_attack_pip)
+		var special_pip := ColorRect.new()
+		special_pip.custom_minimum_size = Vector2(18, 18)
+		special_row.add_child(special_pip)
+		special_attack_pips.append(special_pip)
 
-	special_attack_label = Label.new()
-	special_attack_label.text = "Attacco speciale: nessuno"
-	special_row.add_child(special_attack_label)
+		var special_label := Label.new()
+		special_label.text = "%s: nessuno" % SPECIAL_ATTACK_KEYS[i]
+		special_row.add_child(special_label)
+		special_attack_labels.append(special_label)
 
 	var powerup_label := Label.new()
 	powerup_label.text = "Potenziamenti attivi"
@@ -169,13 +173,20 @@ func _process(delta: float) -> void:
 	ally_label.text = "Alleati: %d / %d" % [run.allies.size(), Run.MAX_ALLIES]
 	tame_pip.color = Color(0.4, 0.88, 0.76) if player.can_tame() else Color(0.25, 0.27, 0.33)
 
-	if player.granted_ability_id == "":
-		special_attack_label.text = "Attacco speciale: nessuno"
-		special_attack_pip.color = Color(0.25, 0.27, 0.33)
-	else:
-		var ability: Dictionary = GameData.ALLY_SPECIAL_ATTACKS[player.granted_ability_id]
-		special_attack_label.text = "Attacco speciale: %s" % ability.name
-		special_attack_pip.color = Color(0.4, 0.88, 0.76) if player.can_use_special_attack() else Color(0.25, 0.27, 0.33)
+	for i in range(SPECIAL_ATTACK_KEYS.size()):
+		var ability_id: String = player.granted_ability_ids[i]
+		var label: Label = special_attack_labels[i]
+		var pip: ColorRect = special_attack_pips[i]
+		if ability_id == "":
+			label.text = "%s: nessuno" % SPECIAL_ATTACK_KEYS[i]
+			pip.color = Color(0.25, 0.27, 0.33)
+		else:
+			var ability: Dictionary = GameData.ALLY_SPECIAL_ATTACKS[ability_id]
+			var name_text: String = ability.name
+			if player.special_attack_empowered[i]:
+				name_text += " (potenziato)"
+			label.text = "%s: %s" % [SPECIAL_ATTACK_KEYS[i], name_text]
+			pip.color = Color(0.4, 0.88, 0.76) if player.can_use_special_attack(i) else Color(0.25, 0.27, 0.33)
 
 	if run.current_boss != null and is_instance_valid(run.current_boss) and run.current_boss.alive:
 		boss_panel.show()

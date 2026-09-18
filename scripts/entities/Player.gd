@@ -9,7 +9,7 @@ extends Area2D
 signal dash_hit(target: Node, damage: float)
 signal enemy_defeated(target: Node)
 signal tame_requested
-signal special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2)
+signal special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2, empowered: bool)
 signal died
 
 const BASE_SPEED := 220.0
@@ -21,6 +21,9 @@ const HIT_IFRAME := 0.8
 const KNOCKBACK := 20.0
 const TAME_COOLDOWN := 14.0
 const SPECIAL_ATTACK_COOLDOWN := 6.0
+# Un'azione di input per alleato vivo (fino a MAX_ALLIES = 2), cosí ogni
+# attacco speciale concesso resta utilizzabile in modo indipendente.
+const SPECIAL_ATTACK_ACTIONS := ["special_attack", "special_attack_2"]
 
 var radius := 14.0
 var speed_mult := 1.0
@@ -44,11 +47,18 @@ var dash_vector := Vector2.ZERO
 var hit_iframe_timer := 0.0
 var hit_enemies_this_dash: Array = []
 var tame_cooldown_timer := 0.0
-# Id (Enemy.enemy_id) dell'attacco speciale concesso dall'alleato più di
-# recente addomesticato ancora vivo, impostato da Run ad ogni cambio
-# degli alleati; stringa vuota se nessun alleato è attualmente vivo.
-var granted_ability_id := ""
-var special_attack_cooldown_timer := 0.0
+# Un'abilità per slot (indice = indice nel bottone SPECIAL_ATTACK_ACTIONS),
+# impostate da Run ad ogni cambio degli alleati: ogni alleato vivo occupa
+# un proprio slot/pulsante, stringa vuota se quello slot non ha alleato.
+# Se due alleati vivi sono dello stesso tipo, condividono un solo slot in
+# versione potenziata (special_attack_empowered) e l'altro slot resta vuoto.
+var granted_ability_ids: Array = ["", ""]
+var special_attack_empowered: Array = [false, false]
+# Tempo di recupero per id di abilità (non per slot): cosí il tempo di
+# recupero resta legato all'abilità stessa anche se cambia lo slot/pulsante
+# a cui è assegnata (es. un alleato muore e l'altro viene ripromosso allo
+# slot 0).
+var special_attack_cooldowns: Dictionary = {}
 var alive := true
 var active_powerups: Array = []
 
@@ -97,7 +107,7 @@ func reset_stats() -> void:
 	hit_iframe_timer = 0.0
 	hit_enemies_this_dash.clear()
 	tame_cooldown_timer = 0.0
-	special_attack_cooldown_timer = 0.0
+	special_attack_cooldowns.clear()
 	active_powerups.clear()
 	alive = true
 
@@ -138,7 +148,7 @@ func restore_stats(snapshot: Dictionary) -> void:
 	hit_iframe_timer = 0.0
 	hit_enemies_this_dash.clear()
 	tame_cooldown_timer = 0.0
-	special_attack_cooldown_timer = 0.0
+	special_attack_cooldowns.clear()
 	alive = true
 
 func dash_cooldown() -> float:
@@ -160,8 +170,13 @@ func can_dash() -> bool:
 func can_tame() -> bool:
 	return tame_cooldown_timer <= 0.0 and alive
 
-func can_use_special_attack() -> bool:
-	return special_attack_cooldown_timer <= 0.0 and alive and granted_ability_id != ""
+func can_use_special_attack(slot: int) -> bool:
+	if not alive or slot < 0 or slot >= granted_ability_ids.size():
+		return false
+	var ability_id: String = granted_ability_ids[slot]
+	if ability_id == "":
+		return false
+	return special_attack_cooldowns.get(ability_id, 0.0) <= 0.0
 
 func start_dash(direction: Vector2) -> void:
 	is_dashing = true
@@ -217,9 +232,11 @@ func _read_input_and_move(delta: float) -> void:
 		tame_cooldown_timer = TAME_COOLDOWN
 		tame_requested.emit()
 
-	if Input.is_action_just_pressed("special_attack") and can_use_special_attack():
-		special_attack_cooldown_timer = SPECIAL_ATTACK_COOLDOWN
-		special_attack_requested.emit(granted_ability_id, global_position, facing)
+	for slot in range(SPECIAL_ATTACK_ACTIONS.size()):
+		if Input.is_action_just_pressed(SPECIAL_ATTACK_ACTIONS[slot]) and can_use_special_attack(slot):
+			var ability_id: String = granted_ability_ids[slot]
+			special_attack_cooldowns[ability_id] = SPECIAL_ATTACK_COOLDOWN
+			special_attack_requested.emit(ability_id, global_position, facing, special_attack_empowered[slot])
 
 	var move_delta: Vector2
 	if is_dashing:
@@ -238,8 +255,9 @@ func _update_timers(delta: float) -> void:
 		hit_iframe_timer -= delta
 	if tame_cooldown_timer > 0.0:
 		tame_cooldown_timer -= delta
-	if special_attack_cooldown_timer > 0.0:
-		special_attack_cooldown_timer -= delta
+	for ability_id in special_attack_cooldowns.keys():
+		if special_attack_cooldowns[ability_id] > 0.0:
+			special_attack_cooldowns[ability_id] -= delta
 	if dash_charges < max_dash_charges:
 		charge_regen_timer += delta
 		if charge_regen_timer >= dash_cooldown():

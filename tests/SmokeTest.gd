@@ -36,6 +36,7 @@ func run_and_quit() -> void:
 	await _test_unlocked_boss_legendary_in_reward_pool()
 	await _test_legendary_rarity_weighting()
 	await _test_ally_grants_special_attack()
+	await _test_ally_special_attack_empowered_duplicate()
 	await _test_ally_special_attack_effects()
 
 	SaveManager.reset_all()
@@ -672,7 +673,7 @@ func _test_legendary_rarity_weighting() -> void:
 	print("Peso di rarità dei leggendari: OK")
 
 func _test_ally_grants_special_attack() -> void:
-	print("--- Test regressione: addomesticare concede l'attacco speciale dell'alleato ---")
+	print("--- Test regressione: addomesticare concede un attacco speciale per alleato, su slot indipendenti ---")
 	var grant_run := Run.new()
 	add_child(grant_run)
 	grant_run.begin_new_streak()
@@ -682,8 +683,8 @@ func _test_ally_grants_special_attack() -> void:
 		e.queue_free()
 	await get_tree().process_frame
 
-	_assert(grant_run.player.granted_ability_id == "", "setup del test: senza alleati non dovrebbe esserci alcun attacco speciale concesso")
-	_assert(not grant_run.player.can_use_special_attack(), "senza alleati l'attacco speciale non dovrebbe essere utilizzabile")
+	_assert(grant_run.player.granted_ability_ids == ["", ""], "setup del test: senza alleati non dovrebbe esserci alcun attacco speciale concesso")
+	_assert(not grant_run.player.can_use_special_attack(0) and not grant_run.player.can_use_special_attack(1), "senza alleati nessuno slot dovrebbe essere utilizzabile")
 
 	var first_ally := Enemy.new()
 	first_ally.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
@@ -691,27 +692,77 @@ func _test_ally_grants_special_attack() -> void:
 	grant_run.enemy_container.add_child(first_ally)
 	grant_run.player.global_position = first_ally.global_position
 	grant_run._on_tame_requested()
-	_assert(grant_run.player.granted_ability_id == "strisciante", "l'attacco speciale dovrebbe corrispondere al tipo dell'alleato appena addomesticato")
-	_assert(grant_run.player.can_use_special_attack(), "con un alleato vivo l'attacco speciale dovrebbe essere utilizzabile")
+	_assert(grant_run.player.granted_ability_ids[0] == "strisciante", "il primo slot dovrebbe corrispondere al tipo dell'alleato appena addomesticato")
+	_assert(grant_run.player.granted_ability_ids[1] == "", "il secondo slot dovrebbe restare vuoto con un solo alleato")
+	_assert(not grant_run.player.special_attack_empowered[0], "con un solo alleato l'attacco non dovrebbe essere potenziato")
+	_assert(grant_run.player.can_use_special_attack(0), "con un alleato vivo lo slot 0 dovrebbe essere utilizzabile")
 
 	var second_ally := Enemy.new()
 	second_ally.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
 	second_ally.global_position = grant_run.player.global_position
 	grant_run.enemy_container.add_child(second_ally)
 	grant_run._on_tame_requested()
-	_assert(grant_run.player.granted_ability_id == "pungiglione", "l'attacco speciale dovrebbe passare al tipo dell'alleato più di recente addomesticato")
+	_assert(grant_run.player.granted_ability_ids[0] == "strisciante", "il primo alleato dovrebbe mantenere il proprio slot dopo il secondo addomesticamento")
+	_assert(grant_run.player.granted_ability_ids[1] == "pungiglione", "il secondo alleato di tipo diverso dovrebbe occupare il secondo slot")
+	_assert(grant_run.player.can_use_special_attack(0) and grant_run.player.can_use_special_attack(1), "con 2 alleati diversi entrambi gli slot dovrebbero essere utilizzabili")
 
-	# Se l'alleato più recente muore, l'attacco deve tornare a quello
-	# dell'alleato superstite, non sparire finché resta almeno un alleato.
+	# Gli slot hanno tempi di recupero indipendenti per abilità: mettere in
+	# cooldown l'abilità dello slot 0 non deve toccare lo slot 1.
+	grant_run.player.special_attack_cooldowns[grant_run.player.granted_ability_ids[0]] = 3.0
+	_assert(not grant_run.player.can_use_special_attack(0), "lo slot 0 dovrebbe risultare in tempo di recupero")
+	_assert(grant_run.player.can_use_special_attack(1), "lo slot 1 non dovrebbe essere influenzato dal tempo di recupero dello slot 0")
+	grant_run.player.special_attack_cooldowns.clear()
+
+	# Se l'alleato nello slot 1 muore, il suo slot torna vuoto; lo slot 0
+	# resta legato all'alleato superstite.
 	second_ally.take_damage(99999.0)
-	_assert(grant_run.player.granted_ability_id == "strisciante", "l'attacco speciale dovrebbe tornare al tipo dell'alleato superstite")
+	_assert(grant_run.player.granted_ability_ids[0] == "strisciante", "lo slot dell'alleato superstite non dovrebbe cambiare")
+	_assert(grant_run.player.granted_ability_ids[1] == "", "lo slot dell'alleato caduto dovrebbe tornare vuoto")
 
 	first_ally.take_damage(99999.0)
-	_assert(grant_run.player.granted_ability_id == "", "senza alleati superstiti l'attacco speciale dovrebbe sparire")
-	_assert(not grant_run.player.can_use_special_attack(), "senza alleati l'attacco speciale non dovrebbe essere più utilizzabile")
+	_assert(grant_run.player.granted_ability_ids == ["", ""], "senza alleati superstiti nessuno slot dovrebbe restare assegnato")
+	_assert(not grant_run.player.can_use_special_attack(0) and not grant_run.player.can_use_special_attack(1), "senza alleati nessuno slot dovrebbe essere più utilizzabile")
 
-	print("Concessione dell'attacco speciale: OK")
+	print("Concessione dell'attacco speciale su slot indipendenti: OK")
 	grant_run.queue_free()
+	await get_tree().process_frame
+
+func _test_ally_special_attack_empowered_duplicate() -> void:
+	print("--- Test regressione: 2 alleati dello stesso tipo condividono uno slot potenziato ---")
+	var dup_run := Run.new()
+	add_child(dup_run)
+	dup_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in dup_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	var first_ally := Enemy.new()
+	first_ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	first_ally.global_position = dup_run.player.global_position
+	dup_run.enemy_container.add_child(first_ally)
+	dup_run.player.global_position = first_ally.global_position
+	dup_run._on_tame_requested()
+
+	var second_ally := Enemy.new()
+	second_ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	second_ally.global_position = dup_run.player.global_position
+	dup_run.enemy_container.add_child(second_ally)
+	dup_run._on_tame_requested()
+
+	_assert(dup_run.player.granted_ability_ids[0] == "corazzato", "il primo slot dovrebbe restare assegnato al tipo condiviso")
+	_assert(dup_run.player.granted_ability_ids[1] == "", "il secondo slot dovrebbe restare vuoto quando i due alleati sono dello stesso tipo")
+	_assert(dup_run.player.special_attack_empowered[0], "con 2 alleati dello stesso tipo l'unico slot dovrebbe risultare potenziato")
+
+	# Se uno dei due gemelli muore, resta un solo alleato di quel tipo:
+	# l'abilità deve tornare alla versione normale (non più potenziata).
+	second_ally.take_damage(99999.0)
+	_assert(dup_run.player.granted_ability_ids[0] == "corazzato", "il tipo condiviso dovrebbe restare assegnato con un alleato superstite")
+	_assert(not dup_run.player.special_attack_empowered[0], "con un solo alleato superstite l'attacco non dovrebbe più essere potenziato")
+
+	print("Attacco speciale potenziato su alleati gemelli: OK")
+	dup_run.queue_free()
 	await get_tree().process_frame
 
 func _test_ally_special_attack_effects() -> void:
@@ -742,7 +793,21 @@ func _test_ally_special_attack_effects() -> void:
 	var lunge_hp_before: float = lunge_target.hp
 	fx_run._on_special_attack_requested("strisciante", player_pos, dir)
 	_assert(lunge_target.hp < lunge_hp_before, "Morso Selvaggio non ha danneggiato il nemico davanti al giocatore")
+	var lunge_dmg: float = lunge_hp_before - lunge_target.hp
 	lunge_target.queue_free()
+	await get_tree().process_frame
+
+	# Versione potenziata di Morso Selvaggio: stesso bersaglio/posizione,
+	# ma deve infliggere più danno (EMPOWERED_DAMAGE_MULT) della versione base.
+	var lunge_target_emp := Enemy.new()
+	lunge_target_emp.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	lunge_target_emp.global_position = player_pos + dir * fx_run.LUNGE_OFFSET
+	fx_run.enemy_container.add_child(lunge_target_emp)
+	var lunge_hp_before_emp: float = lunge_target_emp.hp
+	fx_run._on_special_attack_requested("strisciante", player_pos, dir, true)
+	var lunge_dmg_emp: float = lunge_hp_before_emp - lunge_target_emp.hp
+	_assert(lunge_dmg_emp > lunge_dmg, "Morso Selvaggio potenziato dovrebbe infliggere più danno della versione base (base=%.1f potenziato=%.1f)" % [lunge_dmg, lunge_dmg_emp])
+	lunge_target_emp.queue_free()
 	await get_tree().process_frame
 
 	# Colpo Corazzato (corazzato): danno ad area intorno al giocatore.
@@ -753,7 +818,21 @@ func _test_ally_special_attack_effects() -> void:
 	var slam_hp_before: float = slam_target.hp
 	fx_run._on_special_attack_requested("corazzato", player_pos, dir)
 	_assert(slam_target.hp < slam_hp_before, "Colpo Corazzato non ha danneggiato il nemico nei paraggi del giocatore")
+	var slam_dmg: float = slam_hp_before - slam_target.hp
 	slam_target.queue_free()
+	await get_tree().process_frame
+
+	# Versione potenziata di Colpo Corazzato: stesso danno base atteso più
+	# alto di EMPOWERED_DAMAGE_MULT rispetto alla versione normale.
+	var slam_target_emp := Enemy.new()
+	slam_target_emp.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	slam_target_emp.global_position = player_pos + Vector2(fx_run.SLAM_RADIUS - 10.0, 0.0)
+	fx_run.enemy_container.add_child(slam_target_emp)
+	var slam_hp_before_emp: float = slam_target_emp.hp
+	fx_run._on_special_attack_requested("corazzato", player_pos, dir, true)
+	var slam_dmg_emp: float = slam_hp_before_emp - slam_target_emp.hp
+	_assert(slam_dmg_emp > slam_dmg, "Colpo Corazzato potenziato dovrebbe infliggere più danno della versione base (base=%.1f potenziato=%.1f)" % [slam_dmg, slam_dmg_emp])
+	slam_target_emp.queue_free()
 	await get_tree().process_frame
 
 	# Dardo Velenoso (pungiglione): proiettile singolo, serve fisica reale.
@@ -762,30 +841,52 @@ func _test_ally_special_attack_effects() -> void:
 	dart_target.global_position = player_pos + dir * 200.0
 	fx_run.enemy_container.add_child(dart_target)
 	var dart_hp_before: float = dart_target.hp
+	var dart_count_before: int = fx_run.projectile_container.get_child_count()
 	fx_run._on_special_attack_requested("pungiglione", player_pos, dir)
+	_assert(fx_run.projectile_container.get_child_count() - dart_count_before == 1, "Dardo Velenoso normale dovrebbe generare un solo proiettile")
 	for i in range(60):
 		await get_tree().physics_frame
 		if dart_target.hp < dart_hp_before:
 			break
 	_assert(dart_target.hp < dart_hp_before, "Dardo Velenoso non ha mai raggiunto/danneggiato il bersaglio")
 	dart_target.queue_free()
+	fx_run._clear_container(fx_run.projectile_container)
+	await get_tree().process_frame
+
+	# Versione potenziata di Dardo Velenoso: un secondo dardo in più
+	# (invece di raddoppiare il danno di un singolo colpo).
+	var dart_count_before_emp: int = fx_run.projectile_container.get_child_count()
+	fx_run._on_special_attack_requested("pungiglione", player_pos, dir, true)
+	_assert(fx_run.projectile_container.get_child_count() - dart_count_before_emp == 2, "Dardo Velenoso potenziato dovrebbe generare due proiettili")
+	fx_run._clear_container(fx_run.projectile_container)
 	await get_tree().process_frame
 
 	# Sciame Vendicativo (sciame): raffica a ventaglio; un bersaglio
-	# sull'angolo 0 (direzione (1, 0), il primo dei 6 proiettili) viene
+	# sull'angolo 0 (direzione (1, 0), il primo dei proiettili) viene
 	# colpito con certezza.
 	var swarm_target := Enemy.new()
 	swarm_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
 	swarm_target.global_position = player_pos + Vector2(150.0, 0.0)
 	fx_run.enemy_container.add_child(swarm_target)
 	var swarm_hp_before: float = swarm_target.hp
+	var swarm_count_before: int = fx_run.projectile_container.get_child_count()
 	fx_run._on_special_attack_requested("sciame", player_pos, dir)
+	_assert(fx_run.projectile_container.get_child_count() - swarm_count_before == fx_run.SWARM_COUNT, "Sciame Vendicativo normale dovrebbe generare SWARM_COUNT proiettili")
 	for i in range(60):
 		await get_tree().physics_frame
 		if swarm_target.hp < swarm_hp_before:
 			break
 	_assert(swarm_target.hp < swarm_hp_before, "Sciame Vendicativo non ha mai raggiunto/danneggiato il bersaglio")
 	swarm_target.queue_free()
+	fx_run._clear_container(fx_run.projectile_container)
+	await get_tree().process_frame
+
+	# Versione potenziata di Sciame Vendicativo: più proiettili
+	# (EMPOWERED_SWARM_COUNT invece di SWARM_COUNT).
+	var swarm_count_before_emp: int = fx_run.projectile_container.get_child_count()
+	fx_run._on_special_attack_requested("sciame", player_pos, dir, true)
+	_assert(fx_run.projectile_container.get_child_count() - swarm_count_before_emp == GameData.EMPOWERED_SWARM_COUNT, "Sciame Vendicativo potenziato dovrebbe generare EMPOWERED_SWARM_COUNT proiettili")
+	fx_run._clear_container(fx_run.projectile_container)
 	await get_tree().process_frame
 
 	print("Effetti degli attacchi speciali: OK")

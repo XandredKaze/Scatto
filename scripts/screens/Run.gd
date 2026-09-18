@@ -33,7 +33,7 @@ const SHOCKWAVE_RATIO := 0.4
 const MAX_ALLIES := 2
 const TAME_RANGE := 180.0
 # Attacchi speciali concessi dagli alleati (vedi GameData.ALLY_SPECIAL_ATTACKS
-# e Player.granted_ability_id/special_attack_requested).
+# e Player.granted_ability_ids/special_attack_requested).
 const LUNGE_OFFSET := 40.0
 const LUNGE_RADIUS := 50.0
 const LUNGE_DAMAGE := 18.0
@@ -356,7 +356,13 @@ func _convert_enemy_to_ally(enemy: Enemy) -> void:
 	SaveManager.unlock_enemy(enemy.enemy_id)
 	_sync_granted_ability()
 	var ability_name: String = GameData.ALLY_SPECIAL_ATTACKS[enemy.enemy_id].name
-	hud.show_banner("%s si è unito a te! Nuovo attacco speciale: %s" % [enemy.display_name, ability_name], 3.0)
+	var has_twin: bool = allies.any(func(a): return a != enemy and is_instance_valid(a) and a.alive and a.enemy_id == enemy.enemy_id)
+	var banner_text: String
+	if has_twin:
+		banner_text = "%s si è unito a te! %s ora è potenziato!" % [enemy.display_name, ability_name]
+	else:
+		banner_text = "%s si è unito a te! Nuovo attacco speciale: %s" % [enemy.display_name, ability_name]
+	hud.show_banner(banner_text, 3.0)
 	# L'addomesticamento non passa da _on_enemy_defeated (il nemico non è
 	# stato sconfitto, è ancora vivo come alleato): se era l'ultimo nemico
 	# ostile della stanza, va comunque verificato qui, altrimenti la
@@ -378,33 +384,55 @@ func _clear_allies() -> void:
 	allies.clear()
 	_sync_granted_ability()
 
-# L'attacco speciale concesso al giocatore riflette sempre l'alleato più
-# di recente addomesticato tra quelli ancora vivi (ultimo in `allies`,
-# dato che le nuove conversioni vengono accodate): se muore, l'abilità
-# passa all'alleato superstite più recente, o sparisce se non ne resta
-# nessuno.
+# Ogni alleato vivo occupa un proprio slot/pulsante d'attacco speciale
+# (fino a MAX_ALLIES = 2 alleati). Se i due alleati vivi sono dello stesso
+# tipo, condividono un solo slot in versione potenziata e il secondo slot
+# resta vuoto, invece di offrire due volte la stessa identica abilità.
 func _sync_granted_ability() -> void:
-	var latest_type := ""
+	var living: Array = []
 	for a in allies:
 		if is_instance_valid(a) and a.alive:
-			latest_type = a.enemy_id
-	player.granted_ability_id = latest_type
+			living.append(a)
 
-func _on_special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2) -> void:
+	var ids: Array = ["", ""]
+	var empowered: Array = [false, false]
+	if living.size() == 1:
+		ids[0] = living[0].enemy_id
+	elif living.size() >= 2:
+		if living[0].enemy_id == living[1].enemy_id:
+			ids[0] = living[0].enemy_id
+			empowered[0] = true
+		else:
+			ids[0] = living[0].enemy_id
+			ids[1] = living[1].enemy_id
+
+	player.granted_ability_ids = ids
+	player.special_attack_empowered = empowered
+
+func _on_special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2, empowered: bool = false) -> void:
 	match ability_id:
 		"strisciante":
-			_damage_hostiles_in_radius(origin + dir * LUNGE_OFFSET, LUNGE_RADIUS, LUNGE_DAMAGE)
+			var dmg: float = LUNGE_DAMAGE * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
+			_damage_hostiles_in_radius(origin + dir * LUNGE_OFFSET, LUNGE_RADIUS, dmg)
 		"pungiglione":
 			_on_enemy_spawn_projectile(origin, dir, DART_SPEED, DART_DAMAGE, true)
+			if empowered:
+				var spread_dir: Vector2 = dir.rotated(GameData.EMPOWERED_DART_SPREAD)
+				_on_enemy_spawn_projectile(origin, spread_dir, DART_SPEED, DART_DAMAGE, true)
 		"corazzato":
-			_damage_hostiles_in_radius(origin, SLAM_RADIUS, SLAM_DAMAGE)
+			var dmg: float = SLAM_DAMAGE * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
+			_damage_hostiles_in_radius(origin, SLAM_RADIUS, dmg)
 		"sciame":
-			for i in range(SWARM_COUNT):
-				var angle: float = TAU * float(i) / float(SWARM_COUNT)
+			var count: int = GameData.EMPOWERED_SWARM_COUNT if empowered else SWARM_COUNT
+			for i in range(count):
+				var angle: float = TAU * float(i) / float(count)
 				_on_enemy_spawn_projectile(origin, Vector2(cos(angle), sin(angle)), SWARM_SPEED, SWARM_DAMAGE, true)
 		_:
 			return
-	hud.show_banner("%s!" % GameData.ALLY_SPECIAL_ATTACKS[ability_id].name, 1.5)
+	var ability_name: String = GameData.ALLY_SPECIAL_ATTACKS[ability_id].name
+	if empowered:
+		ability_name += " (potenziato)"
+	hud.show_banner("%s!" % ability_name, 1.5)
 
 func _clear_hostile_enemies() -> void:
 	for c in enemy_container.get_children():

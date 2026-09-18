@@ -21,6 +21,7 @@ static func ensure_actions() -> void:
 	_ensure_dash()
 	_ensure_tame()
 	_ensure_special_attack()
+	_ensure_special_attack_2()
 	_ensure_joypad_button_on_action("ui_accept", JOY_BUTTON_A)
 	_ensure_joypad_button_on_action("ui_cancel", JOY_BUTTON_B)
 	_ensure_pause()
@@ -89,6 +90,19 @@ static func _ensure_special_attack() -> void:
 	var joy_btn := InputEventJoypadButton.new()
 	joy_btn.button_index = JOY_BUTTON_Y
 	InputMap.action_add_event("special_attack", joy_btn)
+
+static func _ensure_special_attack_2() -> void:
+	if InputMap.has_action("special_attack_2"):
+		return
+	InputMap.add_action("special_attack_2")
+
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_R
+	InputMap.action_add_event("special_attack_2", key)
+
+	var joy_btn := InputEventJoypadButton.new()
+	joy_btn.button_index = JOY_BUTTON_RIGHT_SHOULDER
+	InputMap.action_add_event("special_attack_2", joy_btn)
 
 static func _ensure_pause() -> void:
 	if InputMap.has_action("pause"):

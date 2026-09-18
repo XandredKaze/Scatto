@@ -41,9 +41,12 @@ const ENEMY_TYPES := {
 }
 
 # Attacco speciale concesso al giocatore da un alleato di questo tipo
-# (vedi Player.granted_ability_id e Run._on_special_attack_requested):
+# (vedi Player.granted_ability_ids e Run._on_special_attack_requested):
 # ogni nemico comune diventa un'abilità attiva diversa una volta reso
-# amico, in tema con il suo comportamento originale da ostile.
+# amico, in tema con il suo comportamento originale da ostile. Ogni alleato
+# vivo occupa un proprio pulsante (fino a Run.MAX_ALLIES = 2); se i due
+# alleati vivi sono dello stesso tipo, condividono un solo pulsante in
+# versione "potenziata" (EMPOWERED_DAMAGE_MULT e affini qui sotto).
 const ALLY_SPECIAL_ATTACKS := {
 	"strisciante": {
 		"name": "Morso Selvaggio", "icon": "sword",
@@ -62,6 +65,17 @@ const ALLY_SPECIAL_ATTACKS := {
 		"desc": "Una raffica di proiettili in tutte le direzioni intorno a te.",
 	},
 }
+
+# Moltiplicatore di danno applicato alla versione potenziata di Morso
+# Selvaggio e Colpo Corazzato quando due alleati dello stesso tipo
+# condividono un solo pulsante d'attacco speciale.
+const EMPOWERED_DAMAGE_MULT := 1.75
+# Dardo Velenoso potenziato spara un secondo dardo con questo scarto
+# angolare (radianti) invece di raddoppiare il danno di un singolo colpo.
+const EMPOWERED_DART_SPREAD := 0.25
+# Sciame Vendicativo potenziato spara più proiettili (invece della sola
+# versione base a SWARM_COUNT, vedi Run.gd).
+const EMPOWERED_SWARM_COUNT := 10
 
 # L'avversario comune con variante dorata: 1 possibilità su GOLDEN_CHANCE_DENOMINATOR
 # di comparire in una stanza al posto (o in aggiunta) allo Strisciante normale.
