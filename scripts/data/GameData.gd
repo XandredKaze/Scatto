@@ -53,18 +53,52 @@ const GOLDEN_VARIANTS := {
 
 const GOLDEN_CHANCE_DENOMINATOR := 4096
 
+# Ogni voce normale ha una variante speciale corrispondente
+# (id + "_corrotto"), usata quando streak_run_index >= 3.
+const BOSS_ARCHETYPES := ["custode", "colosso", "spettro"]
+
 const BOSSES := {
 	"custode": {
 		"id": "custode", "name": "Custode", "hp": 320.0, "speed": 65.0, "radius": 34.0,
 		"damage": 18.0, "color": Color8(106, 76, 147),
-		"desc": "Il guardiano che veglia sulla sesta stanza di ogni run.",
+		"attacks": ["charge", "burst"], "special_attacks": ["volley"],
+		"desc": "Il guardiano che veglia sulla sesta stanza di ogni run. Alterna cariche dirette a raffiche di proiettili in cerchio.",
 	},
 	"custode_corrotto": {
 		"id": "custode_corrotto", "name": "Custode Corrotto", "special": true,
 		"hp": 480.0, "speed": 75.0, "radius": 38.0, "damage": 24.0,
 		"color": Color8(58, 13, 43), "glow": Color8(255, 45, 85),
+		"attacks": ["charge", "burst"], "special_attacks": ["volley"],
 		"guaranteed_drop": "benedizione_del_custode",
-		"desc": "Una versione corrotta del Custode, risvegliata solo da chi incatena tre vittorie senza mai tornare all'Hub.",
+		"desc": "Una versione corrotta del Custode, risvegliata solo da chi incatena tre vittorie senza mai tornare all'Hub. Aggiunge una raffica di proiettili mirati.",
+	},
+	"colosso": {
+		"id": "colosso", "name": "Colosso di Pietra", "hp": 420.0, "speed": 45.0, "radius": 40.0,
+		"damage": 20.0, "color": Color8(120, 100, 80),
+		"attacks": ["slam", "cono"], "special_attacks": ["richiamo"],
+		"desc": "Una massa di roccia lenta ma devastante: colpisce il terreno intorno a sé e scaglia detriti in un cono.",
+	},
+	"colosso_corrotto": {
+		"id": "colosso_corrotto", "name": "Colosso Corrotto", "special": true,
+		"hp": 620.0, "speed": 50.0, "radius": 44.0, "damage": 27.0,
+		"color": Color8(50, 20, 15), "glow": Color8(255, 120, 40),
+		"attacks": ["slam", "cono"], "special_attacks": ["richiamo"],
+		"guaranteed_drop": "corazza_di_magma",
+		"desc": "Una versione corrotta del Colosso: oltre a colpo al suolo e detriti, richiama sciami di creature in suo aiuto.",
+	},
+	"spettro": {
+		"id": "spettro", "name": "Spettro Errante", "hp": 260.0, "speed": 85.0, "radius": 28.0,
+		"damage": 14.0, "color": Color8(150, 180, 220),
+		"attacks": ["teletrasporto", "raffica"], "special_attacks": ["raffica_ampia"],
+		"desc": "Una presenza inafferrabile che si teletrasporta accanto alla preda e colpisce a distanza con raffiche rapide.",
+	},
+	"spettro_corrotto": {
+		"id": "spettro_corrotto", "name": "Spettro Corrotto", "special": true,
+		"hp": 380.0, "speed": 95.0, "radius": 30.0, "damage": 18.0,
+		"color": Color8(60, 40, 110), "glow": Color8(140, 80, 255),
+		"attacks": ["teletrasporto", "raffica"], "special_attacks": ["raffica_ampia"],
+		"guaranteed_drop": "velo_spettrale",
+		"desc": "Una versione corrotta dello Spettro: la sua raffica diventa una tempesta di proiettili quasi impossibile da schivare del tutto.",
 	},
 }
 
@@ -80,6 +114,8 @@ const POWERUPS := [
 	{"id": "furia", "name": "Furia", "rarity": "rare", "icon": "flame", "desc": "Più sei ferito, più danno infligge il tuo scatto (fino a +50%)."},
 	{"id": "cuore_dorato", "name": "Cuore Dorato", "rarity": "legendary", "icon": "heart_gold", "desc": "Bottino di uno Strisciante Dorato. +40 vita massima e +10 danno da scatto.", "dropped_only_by": "strisciante_dorato"},
 	{"id": "benedizione_del_custode", "name": "Benedizione del Custode", "rarity": "legendary", "icon": "shield", "desc": "Concessa dal Custode Corrotto. Lo scatto genera un'onda d'urto che danneggia i nemici vicini.", "dropped_only_by": "custode_corrotto"},
+	{"id": "corazza_di_magma", "name": "Corazza di Magma", "rarity": "legendary", "icon": "flame", "desc": "Bottino del Colosso Corrotto. +80 vita massima e +8 danno da scatto.", "dropped_only_by": "colosso_corrotto"},
+	{"id": "velo_spettrale", "name": "Velo Spettrale", "rarity": "legendary", "icon": "ghost", "desc": "Bottino dello Spettro Corrotto. +25% velocità di movimento e +0.2s di invulnerabilità extra dopo lo scatto.", "dropped_only_by": "spettro_corrotto"},
 ]
 
 static func rarity_color(rarity: String) -> Color:
@@ -143,3 +179,10 @@ static func apply_powerup(id: String, player: Node) -> void:
 			player.dash_damage_bonus += 10.0
 		"benedizione_del_custode":
 			player.has_shockwave = true
+		"corazza_di_magma":
+			player.max_hp += 80.0
+			player.hp += 80.0
+			player.dash_damage_bonus += 8.0
+		"velo_spettrale":
+			player.speed_mult += 0.25
+			player.extra_iframes += 0.2

@@ -16,6 +16,8 @@ func run_and_quit() -> void:
 
 	await _test_gamepad_input()
 	await _test_controller_menu_navigation()
+	await _test_all_boss_moves()
+	await _test_boss_signals_wired_in_run()
 	await _test_real_dash_collision()
 	await _test_boss_attack_patterns()
 	await _test_tutorial_screen_has_no_spoilers()
@@ -60,7 +62,7 @@ func run_and_quit() -> void:
 	_assert(run.current_boss != null, "il boss non è stato generato")
 	_assert(not run.current_boss.is_special, "il boss della run 1 non dovrebbe essere speciale")
 	print("Run 1: boss normale confermato (", run.current_boss.display_name, ")")
-	_defeat_current_boss()
+	var normal_boss_id := _defeat_current_boss()
 	_assert(run.run_complete_screen.visible, "schermata di fine run non mostrata")
 	_assert(run.streak_run_index == 1, "streak_run_index atteso 1, trovato %d" % run.streak_run_index)
 
@@ -82,17 +84,24 @@ func run_and_quit() -> void:
 	_clear_five_rooms_to_boss()
 	_assert(run.current_boss.is_special, "il boss della run 3 DOVREBBE essere speciale")
 	print("Run 3: boss SPECIALE confermato (", run.current_boss.display_name, ")")
-	_defeat_current_boss()
+	var special_boss_id := _defeat_current_boss()
+	var special_boss_drop: String = GameData.BOSSES[special_boss_id].guaranteed_drop
+
+	# Sconfiggere un boss speciale deve concludere la partita: resta solo
+	# "Torna all'Hub", "Continua" deve sparire.
+	_assert(not run.run_complete_screen.continue_btn.visible, "'Continua' non dovrebbe essere disponibile dopo un boss speciale")
+	_assert(run.run_complete_screen.hub_btn.visible, "'Torna all'Hub' dovrebbe restare disponibile dopo un boss speciale")
+	_assert(run.run_complete_screen.hub_btn.has_focus(), "'Torna all'Hub' dovrebbe avere il focus dopo un boss speciale")
 
 	print("Statistiche finali: ", SaveManager.stats)
 	_assert(SaveManager.stats.runs_won == 3, "attese 3 run vinte, trovate %d" % SaveManager.stats.runs_won)
 	_assert(SaveManager.stats.special_boss_defeated == 1, "atteso 1 boss speciale sconfitto")
 	_assert(SaveManager.stats.golden_defeated == 1, "atteso 1 nemico dorato sconfitto")
 	_assert(SaveManager.is_powerup_unlocked("cuore_dorato"), "potenziamento leggendario del dorato non sbloccato")
-	_assert(SaveManager.is_powerup_unlocked("benedizione_del_custode"), "potenziamento leggendario del boss speciale non sbloccato")
+	_assert(SaveManager.is_powerup_unlocked(special_boss_drop), "potenziamento leggendario del boss speciale (%s) non sbloccato" % special_boss_drop)
 	_assert(SaveManager.is_enemy_unlocked("strisciante_dorato"), "variante dorata non sbloccata nel bestiario")
-	_assert(SaveManager.is_enemy_unlocked("custode_corrotto"), "boss speciale non sbloccato nel bestiario")
-	_assert(SaveManager.is_enemy_unlocked("custode"), "boss normale non sbloccato nel bestiario")
+	_assert(SaveManager.is_enemy_unlocked(special_boss_id), "boss speciale (%s) non sbloccato nel bestiario" % special_boss_id)
+	_assert(SaveManager.is_enemy_unlocked(normal_boss_id), "boss normale (%s) non sbloccato nel bestiario" % normal_boss_id)
 
 	run._on_hub_pressed()
 
@@ -135,7 +144,7 @@ func _test_tutorial_screen_has_no_spoilers() -> void:
 	_collect_label_texts(tutorial, texts)
 	_assert(texts.size() > 0, "il tutorial non contiene alcun testo")
 
-	var forbidden := ["custode", "corrotto", "dorat", "boss"]
+	var forbidden := ["custode", "corrotto", "dorat", "boss", "colosso", "spettro"]
 	for text in texts:
 		var lowered: String = String(text).to_lower()
 		for word in forbidden:
@@ -408,6 +417,82 @@ func _test_boss_attack_patterns() -> void:
 	container.queue_free()
 	await get_tree().physics_frame
 
+func _test_all_boss_moves() -> void:
+	print("--- Test di ogni mossa di ogni boss (esecuzione diretta e deterministica) ---")
+	var bounds := Rect2(Vector2(48, 48), Vector2(1184, 624))
+
+	for boss_id in GameData.BOSSES.keys():
+		var data: Dictionary = GameData.BOSSES[boss_id]
+		var container := Node2D.new()
+		add_child(container)
+
+		var projectile_count := [0]
+		var melee_count := [0]
+		var summon_count := [0]
+
+		var boss := Boss.new()
+		boss.arena_bounds = bounds
+		boss.setup_from_data(data)
+		boss.global_position = Vector2(600, 300)
+		boss.spawn_projectile.connect(func(pos, dir, speed, dmg): projectile_count[0] += 1)
+		boss.melee_aoe.connect(func(origin, radius, dmg): melee_count[0] += 1)
+		boss.summon_requested.connect(func(enemy_type_id, count, origin): summon_count[0] += 1)
+		container.add_child(boss)
+		boss.intro_timer = 0.0
+
+		var p := Player.new()
+		p.arena_bounds = bounds
+		p.global_position = Vector2(600, 500)
+		container.add_child(p)
+		await get_tree().physics_frame
+
+		for attack_name in data.get("attacks", []) + data.get("special_attacks", []):
+			projectile_count[0] = 0
+			melee_count[0] = 0
+			summon_count[0] = 0
+			var pos_before: Vector2 = boss.global_position
+			boss.pending_attack = attack_name
+			boss.mode = "telegraph"
+			boss.telegraph_timer = 0.0
+			boss._execute_attack(p)
+
+			match attack_name:
+				"charge":
+					_assert(boss.mode == "charge", "%s/charge dovrebbe entrare in modalità charge" % boss_id)
+				"burst", "volley", "raffica", "raffica_ampia", "cono":
+					_assert(projectile_count[0] > 0, "%s/%s dovrebbe generare almeno un proiettile" % [boss_id, attack_name])
+				"slam":
+					_assert(melee_count[0] == 1, "%s/slam dovrebbe emettere un colpo ad area corpo a corpo" % boss_id)
+				"teletrasporto":
+					_assert(boss.global_position != pos_before, "%s/teletrasporto dovrebbe spostare il boss" % boss_id)
+				"richiamo":
+					_assert(summon_count[0] == 1, "%s/richiamo dovrebbe richiedere l'evocazione di rinforzi" % boss_id)
+			_assert(boss.alive, "%s non dovrebbe morire eseguendo %s" % [boss_id, attack_name])
+
+		print("%s (%s): mosse verificate senza errori -> %s" % [data.name, boss_id, data.get("attacks", []) + data.get("special_attacks", [])])
+		container.queue_free()
+		await get_tree().process_frame
+
+	print("Mosse di tutti i boss: OK")
+
+func _test_boss_signals_wired_in_run() -> void:
+	print("--- Test collegamento segnali melee_aoe/summon_requested in Run ---")
+	var signal_run := Run.new()
+	add_child(signal_run)
+	signal_run.begin_new_streak()
+
+	var hp_before: float = signal_run.player.hp
+	signal_run._on_boss_melee_aoe(signal_run.player.global_position, 100.0, 20.0)
+	_assert(signal_run.player.hp == hp_before - 20.0, "_on_boss_melee_aoe non ha applicato il danno corretto al giocatore")
+
+	var enemy_count_before: int = signal_run.enemy_container.get_child_count()
+	signal_run._on_boss_summon_requested("sciame", 3, signal_run.player.global_position)
+	_assert(signal_run.enemy_container.get_child_count() == enemy_count_before + 3, "_on_boss_summon_requested non ha generato il numero corretto di rinforzi")
+
+	print("Segnali boss collegati a Run: OK")
+	signal_run.queue_free()
+	await get_tree().process_frame
+
 func _test_real_dash_collision() -> void:
 	print("--- Test collisione reale scatto->nemico (fisica Area2D) ---")
 	var p := Player.new()
@@ -481,10 +566,12 @@ func _kill_all_room_enemies() -> void:
 			e.take_damage(99999.0)
 			run._on_enemy_defeated(e)
 
-func _defeat_current_boss() -> void:
+func _defeat_current_boss() -> String:
 	var boss = run.current_boss
+	var boss_id: String = boss.boss_id
 	boss.take_damage(99999.0)
 	run._on_enemy_defeated(boss)
+	return boss_id
 
 func _assert(condition: bool, message: String) -> void:
 	if not condition:

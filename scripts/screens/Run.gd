@@ -254,7 +254,7 @@ func _on_dash_hit(target, damage: float) -> void:
 					_on_enemy_defeated(other)
 
 func _check_room_cleared() -> void:
-	if room_cleared:
+	if room_cleared or current_boss != null:
 		return
 	for e in enemy_container.get_children():
 		if e.alive:
@@ -266,11 +266,15 @@ func _check_room_cleared() -> void:
 func _on_boss_defeated(boss) -> void:
 	SaveManager.record_run_won(streak_run_index)
 	var was_special: bool = boss.is_special
+	var boss_name: String = boss.display_name
 	current_boss = null
 	boss.queue_free()
-	run_complete_screen.show_summary(streak_run_index, was_special)
+	run_complete_screen.show_summary(streak_run_index, was_special, boss_name)
 	run_complete_screen.show()
-	run_complete_screen.continue_btn.grab_focus()
+	if was_special:
+		run_complete_screen.hub_btn.grab_focus()
+	else:
+		run_complete_screen.continue_btn.grab_focus()
 
 func _on_room_exit() -> void:
 	# Disattiva subito il portale: restare fermi al suo interno non deve
@@ -302,7 +306,9 @@ func _advance_after_room_clear() -> void:
 func _start_boss_room() -> void:
 	room_number = 6
 	var special := streak_run_index >= 3
-	var data: Dictionary = GameData.BOSSES["custode_corrotto"] if special else GameData.BOSSES["custode"]
+	var archetype: String = GameData.BOSS_ARCHETYPES[rng.randi_range(0, GameData.BOSS_ARCHETYPES.size() - 1)]
+	var boss_id: String = (archetype + "_corrotto") if special else archetype
+	var data: Dictionary = GameData.BOSSES[boss_id]
 
 	_clear_container(enemy_container)
 	_clear_container(projectile_container)
@@ -317,10 +323,34 @@ func _start_boss_room() -> void:
 	boss.setup_from_data(data)
 	boss.global_position = Vector2(ARENA_SIZE.x / 2.0, WALL_MARGIN + 90.0)
 	boss.spawn_projectile.connect(_on_enemy_spawn_projectile)
+	boss.melee_aoe.connect(_on_boss_melee_aoe)
+	boss.summon_requested.connect(_on_boss_summon_requested)
 	boss_container.add_child(boss)
 	current_boss = boss
 
-	hud.show_banner("Il Custode Corrotto si risveglia!" if special else "Il Custode appare!", 2.5)
+	hud.show_banner("%s si risveglia!" % data.name if special else "%s appare!" % data.name, 2.5)
+
+func _on_boss_melee_aoe(origin: Vector2, radius: float, dmg: float) -> void:
+	if player != null and player.alive and player.global_position.distance_to(origin) <= radius:
+		player.take_damage(dmg)
+
+func _on_boss_summon_requested(enemy_type_id: String, count: int, origin: Vector2) -> void:
+	if not GameData.ENEMY_TYPES.has(enemy_type_id):
+		return
+	var data: Dictionary = GameData.ENEMY_TYPES[enemy_type_id]
+	for i in range(count):
+		var angle: float = rng.randf_range(0.0, TAU)
+		var offset := Vector2(cos(angle), sin(angle)) * rng.randf_range(50.0, 110.0)
+		var pos := origin + offset
+		if arena_rect.size != Vector2.ZERO:
+			pos.x = clamp(pos.x, arena_rect.position.x + 20.0, arena_rect.end.x - 20.0)
+			pos.y = clamp(pos.y, arena_rect.position.y + 20.0, arena_rect.end.y - 20.0)
+		var enemy := Enemy.new()
+		enemy.arena_bounds = arena_rect
+		enemy.setup_from_data(data, false)
+		enemy.global_position = pos
+		enemy.spawn_projectile.connect(_on_enemy_spawn_projectile)
+		enemy_container.add_child(enemy)
 
 func _on_enemy_spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float) -> void:
 	var proj := EnemyProjectile.new()

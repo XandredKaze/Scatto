@@ -14,9 +14,12 @@ Un roguelike top-down realizzato in **Godot 4.3** in cui l'unico attacco a dispo
 ### Struttura di una run
 
 - Una run completa consiste nel ripulire **5 stanze** di nemici; dopo ogni stanza scegli uno tra 3 potenziamenti casuali.
-- Alla **sesta stanza** trovi il **Custode**, il boss.
-- Dopo aver sconfitto il Custode puoi scegliere se **tornare all'Hub** (la serie si azzera, ma i progressi restano salvati) oppure **continuare senza tornarci**: mantieni i potenziamenti accumulati e affronti subito una nuova run.
-- Se vinci **3 run consecutive senza mai tornare all'Hub**, il Custode della terza run è sostituito dal **Custode Corrotto**, una variante speciale più potente che garantisce un potenziamento leggendario esclusivo.
+- Alla **sesta stanza** trovi un boss, scelto a caso tra tre archetipi, ciascuno con mosse proprie:
+  - **Custode**: carica diretta o raffica di proiettili in cerchio.
+  - **Colosso di Pietra**: lento e tanky, colpisce il terreno intorno a sé (danno ad area) o scaglia detriti in un cono.
+  - **Spettro Errante**: veloce e sfuggente, si teletrasporta accanto al giocatore e spara raffiche rapide.
+- Dopo aver sconfitto un boss normale puoi scegliere se **tornare all'Hub** (la serie si azzera, ma i progressi restano salvati) oppure **continuare senza tornarci**: mantieni i potenziamenti accumulati e affronti subito una nuova run.
+- Se vinci **3 run consecutive senza mai tornare all'Hub**, il boss della terza run è sostituito dalla sua variante speciale corrotta (più potente, con una mossa esclusiva in più e un potenziamento leggendario garantito). **Sconfiggere un boss speciale conclude la partita**: resta disponibile solo "Torna all'Hub".
 - Morire in qualsiasi momento interrompe la serie e riporta all'Hub.
 
 ### Nemico dorato

@@ -2,10 +2,15 @@ class_name Boss
 extends CombatEntity
 
 # Boss della sesta stanza. Macchina a stati semplice: chase -> telegraph
-# -> (charge | burst | volley) -> recover -> chase. "volley" è disponibile
-# solo per la variante speciale (Custode Corrotto).
+# -> (una mossa scelta dal pool di questo boss) -> recover -> chase.
+# Il pool di mosse è dati-driven (GameData.BOSSES[...].attacks /
+# .special_attacks), cosí ogni archetipo di boss ha un set di attacchi
+# propri e la variante speciale ne aggiunge uno esclusivo, senza dover
+# duplicare la macchina a stati per ogni boss.
 
 signal spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float)
+signal melee_aoe(origin: Vector2, radius: float, dmg: float)
+signal summon_requested(enemy_type_id: String, count: int, origin: Vector2)
 
 var boss_id := "custode"
 var display_name := "Custode"
@@ -14,6 +19,7 @@ var speed := 65.0
 var is_special := false
 var guaranteed_drop := ""
 var glow_color := Color(1, 0.18, 0.33)
+var attack_pool: Array = ["charge", "burst"]
 
 var mode := "chase"
 var mode_timer := 1.5
@@ -37,6 +43,9 @@ func setup_from_data(data: Dictionary) -> void:
 	guaranteed_drop = data.get("guaranteed_drop", "")
 	if data.has("glow"):
 		glow_color = data.glow
+	attack_pool = data.get("attacks", ["charge", "burst"]).duplicate()
+	if is_special:
+		attack_pool.append_array(data.get("special_attacks", []))
 
 func _ready() -> void:
 	collision_layer = 4
@@ -88,10 +97,7 @@ func _clamp_to_arena() -> void:
 	global_position.y = clamp(global_position.y, arena_bounds.position.y + radius, arena_bounds.end.y - radius)
 
 func _begin_attack(player: Node) -> void:
-	var options := ["charge", "burst"]
-	if is_special:
-		options.append("volley")
-	pending_attack = options[randi() % options.size()]
+	pending_attack = attack_pool[randi() % attack_pool.size()]
 	mode = "telegraph"
 	telegraph_timer = 0.5
 	var dir: Vector2 = player.global_position - global_position
@@ -103,20 +109,50 @@ func _execute_attack(player: Node) -> void:
 			mode = "charge"
 			mode_timer = 0.4
 		"burst":
-			var count := 10
-			for i in range(count):
-				var angle: float = TAU * float(i) / float(count)
-				spawn_projectile.emit(global_position, Vector2(cos(angle), sin(angle)), 220.0, damage * 0.6)
+			_fire_ring(10, 220.0, damage * 0.6)
 			_end_attack()
 		"volley":
-			var to_player: Vector2 = player.global_position - global_position
-			var base_angle := to_player.angle()
-			var count := 6
-			for i in range(count):
-				var spread: float = (float(i) - float(count - 1) / 2.0) * 0.12
-				var angle: float = base_angle + spread
-				spawn_projectile.emit(global_position, Vector2(cos(angle), sin(angle)), 300.0, damage * 0.7)
+			_fire_aimed_fan(player, 6, 0.12, 300.0, damage * 0.7)
 			_end_attack()
+		"raffica":
+			_fire_aimed_fan(player, 4, 0.08, 340.0, damage * 0.65)
+			_end_attack()
+		"raffica_ampia":
+			_fire_aimed_fan(player, 8, 0.1, 360.0, damage * 0.7)
+			_end_attack()
+		"cono":
+			_fire_aimed_fan(player, 5, 0.22, 200.0, damage * 0.55)
+			_end_attack()
+		"slam":
+			melee_aoe.emit(global_position, radius + 90.0, damage * 1.4)
+			_end_attack()
+		"teletrasporto":
+			var offset_angle: float = randf() * TAU
+			var offset_dist: float = randf_range(140.0, 220.0)
+			var target: Vector2 = player.global_position + Vector2(cos(offset_angle), sin(offset_angle)) * offset_dist
+			if arena_bounds.size != Vector2.ZERO:
+				target.x = clamp(target.x, arena_bounds.position.x + radius, arena_bounds.end.x - radius)
+				target.y = clamp(target.y, arena_bounds.position.y + radius, arena_bounds.end.y - radius)
+			global_position = target
+			_end_attack()
+		"richiamo":
+			summon_requested.emit("sciame", randi_range(2, 3), global_position)
+			_end_attack()
+		_:
+			_end_attack()
+
+func _fire_ring(count: int, speed_val: float, dmg: float) -> void:
+	for i in range(count):
+		var angle: float = TAU * float(i) / float(count)
+		spawn_projectile.emit(global_position, Vector2(cos(angle), sin(angle)), speed_val, dmg)
+
+func _fire_aimed_fan(player: Node, count: int, spread_step: float, speed_val: float, dmg: float) -> void:
+	var to_player: Vector2 = player.global_position - global_position
+	var base_angle := to_player.angle()
+	for i in range(count):
+		var spread: float = (float(i) - float(count - 1) / 2.0) * spread_step
+		var angle: float = base_angle + spread
+		spawn_projectile.emit(global_position, Vector2(cos(angle), sin(angle)), speed_val, dmg)
 
 func _end_attack() -> void:
 	mode = "recover"
@@ -127,4 +163,5 @@ func _draw() -> void:
 	if is_special:
 		draw_arc(Vector2.ZERO, radius + 6.0, 0.0, TAU, 32, glow_color, 3.0)
 	if mode == "telegraph":
-		draw_arc(Vector2.ZERO, radius + 10.0, 0.0, TAU, 24, Color(1, 1, 1, 0.6), 2.0)
+		var telegraph_radius: float = radius + 90.0 if pending_attack == "slam" else radius + 10.0
+		draw_arc(Vector2.ZERO, telegraph_radius, 0.0, TAU, 24, Color(1, 1, 1, 0.6), 2.0)
