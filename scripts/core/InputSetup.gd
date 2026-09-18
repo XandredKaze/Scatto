@@ -71,7 +71,7 @@ static func _ensure_tame() -> void:
 	InputMap.add_action("tame")
 
 	var key := InputEventKey.new()
-	key.physical_keycode = KEY_E
+	key.physical_keycode = KEY_F
 	InputMap.action_add_event("tame", key)
 
 	var joy_btn := InputEventJoypadButton.new()
@@ -84,11 +84,11 @@ static func _ensure_special_attack() -> void:
 	InputMap.add_action("special_attack")
 
 	var key := InputEventKey.new()
-	key.physical_keycode = KEY_Q
+	key.physical_keycode = KEY_E
 	InputMap.action_add_event("special_attack", key)
 
 	var joy_btn := InputEventJoypadButton.new()
-	joy_btn.button_index = JOY_BUTTON_Y
+	joy_btn.button_index = JOY_BUTTON_RIGHT_SHOULDER
 	InputMap.action_add_event("special_attack", joy_btn)
 
 static func _ensure_special_attack_2() -> void:
@@ -97,11 +97,11 @@ static func _ensure_special_attack_2() -> void:
 	InputMap.add_action("special_attack_2")
 
 	var key := InputEventKey.new()
-	key.physical_keycode = KEY_R
+	key.physical_keycode = KEY_Q
 	InputMap.action_add_event("special_attack_2", key)
 
 	var joy_btn := InputEventJoypadButton.new()
-	joy_btn.button_index = JOY_BUTTON_RIGHT_SHOULDER
+	joy_btn.button_index = JOY_BUTTON_LEFT_SHOULDER
 	InputMap.action_add_event("special_attack_2", joy_btn)
 
 static func _ensure_pause() -> void:

@@ -16,6 +16,11 @@ var maze: MazeGrid = null
 # è vero, si occupa di controllare le proprie sovrapposizioni e infliggere
 # danno al primo bersaglio ostile valido.
 var is_ally_projectile := false
+# Colore del proiettile, personalizzabile da Run in base a chi lo spara
+# (es. il colore a tema dell'alleato per Dardo Velenoso/Sciame Vendicativo),
+# cosí gli attacchi speciali del giocatore restano riconoscibili a colpo
+# d'occhio rispetto ai proiettili nemici generici.
+var color := Color8(224, 102, 63)
 
 signal ally_kill(defeated: Node)
 
@@ -69,4 +74,10 @@ func _hit_hostile_target() -> bool:
 	return false
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, radius, Color8(224, 102, 63))
+	# I proiettili degli attacchi speciali del giocatore hanno anche una
+	# breve scia dietro di sé, per distinguerli a colpo d'occhio dai
+	# proiettili nemici generici (che restano un semplice cerchio).
+	if is_ally_projectile and velocity.length() > 0.001:
+		var back: Vector2 = -velocity.normalized() * (radius * 2.5)
+		draw_line(Vector2.ZERO, back, Color(color.r, color.g, color.b, 0.4), radius)
+	draw_circle(Vector2.ZERO, radius, color)

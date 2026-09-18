@@ -38,6 +38,10 @@ func run_and_quit() -> void:
 	await _test_ally_grants_special_attack()
 	await _test_ally_special_attack_empowered_duplicate()
 	await _test_ally_special_attack_effects()
+	await _test_special_attack_visual_effects()
+	_test_special_attack_key_bindings()
+	await _test_room_clear_freezes_player_and_clears_projectiles()
+	await _test_boss_defeat_freezes_player_and_clears_projectiles()
 
 	SaveManager.reset_all()
 
@@ -335,6 +339,13 @@ func _test_ally_taming() -> void:
 	targets[2].take_damage(99999.0)
 	tame_run._on_enemy_defeated(targets[2])
 	_assert(tame_run.room_cleared, "la stanza dovrebbe risultare ripulita ignorando gli alleati ancora vivi")
+	_assert(tame_run.player.frozen, "il giocatore dovrebbe restare fermo dopo la pulizia della stanza")
+
+	# Il resto del test verifica un'altra regressione (lo scatto non deve
+	# mai colpire un alleato): sblocca qui il giocatore, cosí non si
+	# confonde con l'immobilità dovuta alla pulizia della stanza appena
+	# verificata sopra.
+	tame_run.player.unfreeze()
 
 	# Lo scatto del giocatore non deve mai danneggiare un proprio alleato.
 	var ally_hp_before: float = targets[0].hp
@@ -683,6 +694,15 @@ func _test_ally_grants_special_attack() -> void:
 		e.queue_free()
 	await get_tree().process_frame
 
+	# Un nemico ostile "esca" mai coinvolto, cosí la stanza non risulta mai
+	# ripulita durante questo test (altrimenti il giocatore verrebbe
+	# congelato dalla pulizia della stanza, confondendosi con quanto si
+	# vuole verificare qui: la sola concessione/gestione degli slot).
+	var decoy := Enemy.new()
+	decoy.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	decoy.global_position = grant_run.player.global_position + Vector2(600.0, 600.0)
+	grant_run.enemy_container.add_child(decoy)
+
 	_assert(grant_run.player.granted_ability_ids == ["", ""], "setup del test: senza alleati non dovrebbe esserci alcun attacco speciale concesso")
 	_assert(not grant_run.player.can_use_special_attack(0) and not grant_run.player.can_use_special_attack(1), "senza alleati nessuno slot dovrebbe essere utilizzabile")
 
@@ -737,6 +757,14 @@ func _test_ally_special_attack_empowered_duplicate() -> void:
 	for e in dup_run.enemy_container.get_children():
 		e.queue_free()
 	await get_tree().process_frame
+
+	# Nemico "esca" mai coinvolto, per lo stesso motivo del test precedente:
+	# evita che la stanza risulti ripulita (e il giocatore congelato) come
+	# effetto collaterale dell'addomesticamento durante questo test.
+	var decoy := Enemy.new()
+	decoy.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	decoy.global_position = dup_run.player.global_position + Vector2(600.0, 600.0)
+	dup_run.enemy_container.add_child(decoy)
 
 	var first_ally := Enemy.new()
 	first_ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
@@ -893,6 +921,130 @@ func _test_ally_special_attack_effects() -> void:
 	fx_run.queue_free()
 	await get_tree().process_frame
 
+func _test_special_attack_visual_effects() -> void:
+	print("--- Test regressione: gli attacchi speciali generano un effetto visivo riconoscibile ---")
+	var vfx_run := Run.new()
+	add_child(vfx_run)
+	vfx_run.begin_new_streak()
+	await get_tree().process_frame
+	vfx_run.current_maze = null
+
+	var player_pos: Vector2 = vfx_run.player.global_position
+	for ability_id in ["strisciante", "corazzato", "pungiglione", "sciame"]:
+		var effect_count_before: int = vfx_run.effect_container.get_child_count()
+		vfx_run._on_special_attack_requested(ability_id, player_pos, Vector2.RIGHT)
+		_assert(vfx_run.effect_container.get_child_count() > effect_count_before, "%s non ha generato alcun effetto visivo in effect_container" % ability_id)
+		var effect = vfx_run.effect_container.get_child(vfx_run.effect_container.get_child_count() - 1)
+		_assert(effect is SpecialAttackEffect, "il nodo generato in effect_container non è un SpecialAttackEffect (%s)" % ability_id)
+		_assert(effect.color == GameData.ENEMY_TYPES[ability_id].color, "l'effetto visivo di %s non usa il colore a tema dell'alleato" % ability_id)
+	vfx_run._clear_container(vfx_run.effect_container)
+	vfx_run._clear_container(vfx_run.projectile_container)
+	await get_tree().process_frame
+
+	# Gli effetti sono puramente decorativi e temporanei: si autodistruggono
+	# da soli entro la propria durata, senza bisogno di ripulitura esterna.
+	var short_effect := SpecialAttackEffect.new()
+	short_effect.setup(SpecialAttackEffect.Kind.RING, Color.WHITE, 20.0, 0.05)
+	vfx_run.effect_container.add_child(short_effect)
+	for i in range(30):
+		await get_tree().process_frame
+		if not is_instance_valid(short_effect):
+			break
+	_assert(not is_instance_valid(short_effect), "l'effetto visivo dovrebbe autodistruggersi alla fine della propria durata")
+
+	# I proiettili degli attacchi speciali del giocatore (Dardo Velenoso,
+	# Sciame Vendicativo) usano il colore a tema dell'alleato invece del
+	# colore generico dei proiettili nemici, per restare riconoscibili.
+	var default_color := Color8(224, 102, 63)
+	vfx_run._on_special_attack_requested("pungiglione", player_pos, Vector2.RIGHT)
+	var dart := vfx_run.projectile_container.get_child(vfx_run.projectile_container.get_child_count() - 1)
+	_assert(dart.color == GameData.ENEMY_TYPES["pungiglione"].color, "Dardo Velenoso dovrebbe usare il colore a tema del Pungiglione")
+	_assert(dart.color != default_color, "Dardo Velenoso non dovrebbe usare il colore generico dei proiettili nemici")
+	vfx_run._clear_container(vfx_run.projectile_container)
+	vfx_run._clear_container(vfx_run.effect_container)
+	await get_tree().process_frame
+
+	print("Effetti visivi degli attacchi speciali: OK")
+	vfx_run.queue_free()
+	await get_tree().process_frame
+
+func _test_special_attack_key_bindings() -> void:
+	print("--- Test regressione: addomesticamento e attacchi speciali su pulsanti distinti ---")
+	_assert(_action_has_key("tame", KEY_F), "l'azione tame non ha un binding per il tasto F")
+	_assert(_action_has_joypad_button("tame", JOY_BUTTON_X), "l'azione tame non ha un binding per il tasto X del controller")
+	_assert(_action_has_key("special_attack", KEY_E), "l'azione special_attack non ha un binding per il tasto E")
+	_assert(_action_has_joypad_button("special_attack", JOY_BUTTON_RIGHT_SHOULDER), "l'azione special_attack non ha un binding per il dorsale destro (R1/RB) del controller")
+	_assert(_action_has_key("special_attack_2", KEY_Q), "l'azione special_attack_2 non ha un binding per il tasto Q")
+	_assert(_action_has_joypad_button("special_attack_2", JOY_BUTTON_LEFT_SHOULDER), "l'azione special_attack_2 non ha un binding per il dorsale sinistro (L1/LB) del controller")
+	print("Binding addomesticamento/attacchi speciali su pulsanti distinti: OK")
+
+func _test_room_clear_freezes_player_and_clears_projectiles() -> void:
+	print("--- Test regressione: la pulizia della stanza ferma il giocatore e rimuove i proiettili in volo ---")
+	var freeze_run := Run.new()
+	add_child(freeze_run)
+	freeze_run.begin_new_streak()
+	await get_tree().process_frame
+
+	# Un proiettile ostile in volo, indipendente dai nemici della stanza.
+	freeze_run._on_enemy_spawn_projectile(freeze_run.player.global_position + Vector2(300.0, 0.0), Vector2.LEFT, 50.0, 5.0)
+	_assert(freeze_run.projectile_container.get_child_count() == 1, "setup del test: il proiettile ostile dovrebbe essere presente")
+	_assert(not freeze_run.player.frozen, "setup del test: il giocatore non dovrebbe partire congelato")
+	var pos_before: Vector2 = freeze_run.player.global_position
+
+	_kill_all_room_enemies_of(freeze_run)
+	await get_tree().process_frame
+
+	_assert(freeze_run.room_cleared, "setup del test: la stanza dovrebbe risultare ripulita")
+	_assert(freeze_run.player.frozen, "la pulizia della stanza dovrebbe congelare il giocatore")
+	_assert(freeze_run.projectile_container.get_child_count() == 0, "la pulizia della stanza dovrebbe rimuovere ogni proiettile in volo")
+	_assert(not freeze_run.player.can_dash(), "il giocatore congelato non dovrebbe poter scattare")
+	_assert(not freeze_run.player.can_tame(), "il giocatore congelato non dovrebbe poter addomesticare")
+
+	for i in range(5):
+		await get_tree().physics_frame
+	_assert(freeze_run.player.global_position == pos_before, "il giocatore congelato non dovrebbe muoversi")
+
+	# Scegliendo il potenziamento e passando alla stanza successiva il
+	# giocatore riprende il controllo.
+	var choice: Dictionary = GameData.get_regular_powerup_pool()[0]
+	freeze_run._on_powerup_selected(choice.id)
+	_assert(not freeze_run.player.frozen, "il giocatore dovrebbe riprendere il controllo nella stanza successiva")
+
+	print("Congelamento del giocatore e pulizia dei proiettili alla fine stanza: OK")
+	freeze_run.queue_free()
+	await get_tree().process_frame
+
+func _test_boss_defeat_freezes_player_and_clears_projectiles() -> void:
+	print("--- Test regressione: la sconfitta del boss ferma il giocatore e rimuove i proiettili in volo ---")
+	var boss_run := Run.new()
+	add_child(boss_run)
+	boss_run.begin_new_streak()
+	await get_tree().process_frame
+
+	boss_run._start_boss_room()
+	await get_tree().process_frame
+	_assert(not boss_run.player.frozen, "setup del test: il giocatore non dovrebbe partire congelato nella sala del boss")
+
+	# Un proiettile del boss ancora in volo al momento della sconfitta.
+	boss_run._on_enemy_spawn_projectile(boss_run.player.global_position + Vector2(300.0, 0.0), Vector2.LEFT, 50.0, 5.0)
+	_assert(boss_run.projectile_container.get_child_count() == 1, "setup del test: il proiettile del boss dovrebbe essere presente")
+
+	var boss = boss_run.current_boss
+	boss.take_damage(99999.0)
+	boss_run._on_enemy_defeated(boss)
+	await get_tree().process_frame
+
+	_assert(boss_run.run_complete_screen.visible, "setup del test: la schermata di fine run dovrebbe comparire")
+	_assert(boss_run.player.frozen, "la sconfitta del boss dovrebbe congelare il giocatore")
+	_assert(boss_run.projectile_container.get_child_count() == 0, "la sconfitta del boss dovrebbe rimuovere ogni proiettile in volo")
+
+	boss_run._on_continue_pressed()
+	_assert(not boss_run.player.frozen, "il giocatore dovrebbe riprendere il controllo continuando la serie")
+
+	print("Congelamento del giocatore e pulizia dei proiettili alla sconfitta del boss: OK")
+	boss_run.queue_free()
+	await get_tree().process_frame
+
 func _kill_all_room_enemies_of(target_run: Run) -> void:
 	for e in target_run.enemy_container.get_children():
 		if e.alive:
@@ -955,6 +1107,12 @@ func _test_controller_menu_navigation() -> void:
 func _action_has_joypad_button(action: String, button: JoyButton) -> bool:
 	for event in InputMap.action_get_events(action):
 		if event is InputEventJoypadButton and event.button_index == button:
+			return true
+	return false
+
+func _action_has_key(action: String, key: Key) -> bool:
+	for event in InputMap.action_get_events(action):
+		if event is InputEventKey and event.physical_keycode == key:
 			return true
 	return false
 

@@ -64,6 +64,7 @@ var player_container: Node2D
 var enemy_container: Node2D
 var boss_container: Node2D
 var projectile_container: Node2D
+var effect_container: Node2D
 var arena_visual: ArenaVisual
 var ui_layer: CanvasLayer
 var hud: HUD
@@ -92,6 +93,10 @@ func _build_scene_tree() -> void:
 	add_child(boss_container)
 	projectile_container = Node2D.new()
 	add_child(projectile_container)
+	# Sopra a tutto il resto (aggiunto per ultimo tra i nodi di gioco 2D),
+	# cosí gli effetti degli attacchi speciali restano sempre ben visibili.
+	effect_container = Node2D.new()
+	add_child(effect_container)
 
 	ui_layer = CanvasLayer.new()
 	add_child(ui_layer)
@@ -166,6 +171,7 @@ func _generate_room(n: int) -> void:
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
+	player.unfreeze()
 
 	var maze := MazeGrid.new()
 	maze.wall_thickness = WALL_THICKNESS
@@ -314,6 +320,12 @@ func _check_room_cleared() -> void:
 		if e.alive:
 			return
 	room_cleared = true
+	# Nessun proiettile in volo (nemico, alleato o dell'ultimo attacco
+	# speciale) deve restare a schermo una volta ripulita la stanza, e il
+	# giocatore resta fermo finché non sceglie il potenziamento: non c'è
+	# più nulla da combattere.
+	_clear_container(projectile_container)
+	player.freeze()
 	# La ricompensa viene consegnata subito, senza dover raggiungere un
 	# punto della stanza: non appena l'ultimo nemico ostile cade, si
 	# passa direttamente alla scelta del potenziamento.
@@ -410,29 +422,46 @@ func _sync_granted_ability() -> void:
 	player.special_attack_empowered = empowered
 
 func _on_special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2, empowered: bool = false) -> void:
+	if not GameData.ENEMY_TYPES.has(ability_id):
+		return
+	var theme_color: Color = GameData.ENEMY_TYPES[ability_id].color
 	match ability_id:
 		"strisciante":
 			var dmg: float = LUNGE_DAMAGE * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
-			_damage_hostiles_in_radius(origin + dir * LUNGE_OFFSET, LUNGE_RADIUS, dmg)
+			var target_pos: Vector2 = origin + dir * LUNGE_OFFSET
+			_damage_hostiles_in_radius(target_pos, LUNGE_RADIUS, dmg)
+			_spawn_special_effect(SpecialAttackEffect.Kind.SLASH, theme_color, LUNGE_RADIUS * 1.6, 0.22, target_pos, dir)
 		"pungiglione":
-			_on_enemy_spawn_projectile(origin, dir, DART_SPEED, DART_DAMAGE, true)
+			_on_enemy_spawn_projectile(origin, dir, DART_SPEED, DART_DAMAGE, true, theme_color)
 			if empowered:
 				var spread_dir: Vector2 = dir.rotated(GameData.EMPOWERED_DART_SPREAD)
-				_on_enemy_spawn_projectile(origin, spread_dir, DART_SPEED, DART_DAMAGE, true)
+				_on_enemy_spawn_projectile(origin, spread_dir, DART_SPEED, DART_DAMAGE, true, theme_color)
+			_spawn_special_effect(SpecialAttackEffect.Kind.RING, theme_color, 26.0, 0.15, origin)
 		"corazzato":
 			var dmg: float = SLAM_DAMAGE * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
 			_damage_hostiles_in_radius(origin, SLAM_RADIUS, dmg)
+			_spawn_special_effect(SpecialAttackEffect.Kind.RING, theme_color, SLAM_RADIUS, 0.35, origin)
 		"sciame":
 			var count: int = GameData.EMPOWERED_SWARM_COUNT if empowered else SWARM_COUNT
 			for i in range(count):
 				var angle: float = TAU * float(i) / float(count)
-				_on_enemy_spawn_projectile(origin, Vector2(cos(angle), sin(angle)), SWARM_SPEED, SWARM_DAMAGE, true)
+				_on_enemy_spawn_projectile(origin, Vector2(cos(angle), sin(angle)), SWARM_SPEED, SWARM_DAMAGE, true, theme_color)
+			_spawn_special_effect(SpecialAttackEffect.Kind.RING, theme_color, 50.0, 0.2, origin)
 		_:
 			return
 	var ability_name: String = GameData.ALLY_SPECIAL_ATTACKS[ability_id].name
 	if empowered:
 		ability_name += " (potenziato)"
 	hud.show_banner("%s!" % ability_name, 1.5)
+
+# Effetto visivo puramente decorativo (vedi SpecialAttackEffect) usato per
+# rendere gli attacchi speciali del giocatore riconoscibili a colpo
+# d'occhio: si autodistrugge da solo, nessuna gestione esterna richiesta.
+func _spawn_special_effect(kind: int, color: Color, radius: float, duration: float, pos: Vector2, direction: Vector2 = Vector2.RIGHT) -> void:
+	var effect := SpecialAttackEffect.new()
+	effect.setup(kind, color, radius, duration, direction)
+	effect.global_position = pos
+	effect_container.add_child(effect)
 
 func _clear_hostile_enemies() -> void:
 	for c in enemy_container.get_children():
@@ -474,6 +503,11 @@ func _on_boss_defeated(boss) -> void:
 	var boss_name: String = boss.display_name
 	current_boss = null
 	boss.queue_free()
+	# Come per la fine di una stanza normale: nessun proiettile del boss
+	# deve restare in volo e il giocatore resta fermo sulla schermata di
+	# fine run.
+	_clear_container(projectile_container)
+	player.freeze()
 	run_complete_screen.show_summary(streak_run_index, was_special, boss_name)
 	run_complete_screen.show()
 	if was_special:
@@ -517,6 +551,7 @@ func _start_boss_room() -> void:
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
+	player.unfreeze()
 
 	current_maze = null
 	arena_rect = Rect2(Vector2(WALL_MARGIN, WALL_MARGIN), BOSS_ARENA_SIZE - Vector2(WALL_MARGIN, WALL_MARGIN) * 2.0)
@@ -568,11 +603,12 @@ func _on_boss_summon_requested(enemy_type_id: String, count: int, origin: Vector
 		enemy.spawn_projectile.connect(_on_enemy_spawn_projectile)
 		enemy_container.add_child(enemy)
 
-func _on_enemy_spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool = false) -> void:
+func _on_enemy_spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool = false, color: Color = Color8(224, 102, 63)) -> void:
 	var proj := EnemyProjectile.new()
 	proj.maze = current_maze
 	proj.arena_bounds = arena_rect
 	proj.is_ally_projectile = is_ally_projectile
+	proj.color = color
 	proj.setup(pos, dir, speed, dmg)
 	if is_ally_projectile:
 		proj.ally_kill.connect(_on_enemy_defeated)

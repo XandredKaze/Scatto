@@ -61,6 +61,10 @@ var special_attack_empowered: Array = [false, false]
 var special_attack_cooldowns: Dictionary = {}
 var alive := true
 var active_powerups: Array = []
+# Impostato da Run mentre è aperta la scelta del potenziamento di fine
+# stanza (o la schermata di fine boss): il giocatore resta immobile e non
+# risponde più a input finché non riprende una nuova stanza.
+var frozen := false
 
 var arena_bounds: Rect2 = Rect2()
 var maze: MazeGrid = null
@@ -109,6 +113,7 @@ func reset_stats() -> void:
 	tame_cooldown_timer = 0.0
 	special_attack_cooldowns.clear()
 	active_powerups.clear()
+	frozen = false
 	alive = true
 
 func snapshot_stats() -> Dictionary:
@@ -149,6 +154,7 @@ func restore_stats(snapshot: Dictionary) -> void:
 	hit_enemies_this_dash.clear()
 	tame_cooldown_timer = 0.0
 	special_attack_cooldowns.clear()
+	frozen = false
 	alive = true
 
 func dash_cooldown() -> float:
@@ -165,18 +171,30 @@ func is_invulnerable() -> bool:
 	return is_dashing or hit_iframe_timer > 0.0
 
 func can_dash() -> bool:
-	return dash_charges > 0 and not is_dashing and alive
+	return dash_charges > 0 and not is_dashing and alive and not frozen
 
 func can_tame() -> bool:
-	return tame_cooldown_timer <= 0.0 and alive
+	return tame_cooldown_timer <= 0.0 and alive and not frozen
 
 func can_use_special_attack(slot: int) -> bool:
-	if not alive or slot < 0 or slot >= granted_ability_ids.size():
+	if not alive or frozen or slot < 0 or slot >= granted_ability_ids.size():
 		return false
 	var ability_id: String = granted_ability_ids[slot]
 	if ability_id == "":
 		return false
 	return special_attack_cooldowns.get(ability_id, 0.0) <= 0.0
+
+# Richiamato da Run quando la stanza viene ripulita (o il boss sconfitto):
+# il giocatore resta fermo e invulnerabile mentre è aperta la schermata di
+# scelta del potenziamento/fine run, cosí non può continuare a scattare o
+# usare abilità a vuoto mentre non c'è più nulla da combattere.
+func freeze() -> void:
+	frozen = true
+	is_dashing = false
+	dash_timer = 0.0
+
+func unfreeze() -> void:
+	frozen = false
 
 func start_dash(direction: Vector2) -> void:
 	is_dashing = true
@@ -210,6 +228,9 @@ func apply_powerup(id: String) -> void:
 
 func _physics_process(delta: float) -> void:
 	if not alive:
+		return
+	if frozen:
+		queue_redraw()
 		return
 	_read_input_and_move(delta)
 	_update_timers(delta)

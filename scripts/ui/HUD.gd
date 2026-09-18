@@ -22,7 +22,7 @@ var powerup_tray: HBoxContainer
 var _last_powerup_summary := ""
 var ally_label: Label
 var tame_pip: ColorRect
-const SPECIAL_ATTACK_KEYS := ["Q", "R"]
+const SPECIAL_ATTACK_KEYS := ["E", "Q"]
 var special_attack_labels: Array = []
 var special_attack_pips: Array = []
 
