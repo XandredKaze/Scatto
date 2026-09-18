@@ -35,6 +35,8 @@ func run_and_quit() -> void:
 	await _test_ranged_ally_keeps_behavior()
 	await _test_unlocked_boss_legendary_in_reward_pool()
 	await _test_legendary_rarity_weighting()
+	await _test_ally_grants_special_attack()
+	await _test_ally_special_attack_effects()
 
 	SaveManager.reset_all()
 
@@ -668,6 +670,127 @@ func _test_legendary_rarity_weighting() -> void:
 	SaveManager.bestiary = previous_bestiary
 	SaveManager.save_data()
 	print("Peso di rarità dei leggendari: OK")
+
+func _test_ally_grants_special_attack() -> void:
+	print("--- Test regressione: addomesticare concede l'attacco speciale dell'alleato ---")
+	var grant_run := Run.new()
+	add_child(grant_run)
+	grant_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in grant_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	_assert(grant_run.player.granted_ability_id == "", "setup del test: senza alleati non dovrebbe esserci alcun attacco speciale concesso")
+	_assert(not grant_run.player.can_use_special_attack(), "senza alleati l'attacco speciale non dovrebbe essere utilizzabile")
+
+	var first_ally := Enemy.new()
+	first_ally.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	first_ally.global_position = grant_run.player.global_position
+	grant_run.enemy_container.add_child(first_ally)
+	grant_run.player.global_position = first_ally.global_position
+	grant_run._on_tame_requested()
+	_assert(grant_run.player.granted_ability_id == "strisciante", "l'attacco speciale dovrebbe corrispondere al tipo dell'alleato appena addomesticato")
+	_assert(grant_run.player.can_use_special_attack(), "con un alleato vivo l'attacco speciale dovrebbe essere utilizzabile")
+
+	var second_ally := Enemy.new()
+	second_ally.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
+	second_ally.global_position = grant_run.player.global_position
+	grant_run.enemy_container.add_child(second_ally)
+	grant_run._on_tame_requested()
+	_assert(grant_run.player.granted_ability_id == "pungiglione", "l'attacco speciale dovrebbe passare al tipo dell'alleato più di recente addomesticato")
+
+	# Se l'alleato più recente muore, l'attacco deve tornare a quello
+	# dell'alleato superstite, non sparire finché resta almeno un alleato.
+	second_ally.take_damage(99999.0)
+	_assert(grant_run.player.granted_ability_id == "strisciante", "l'attacco speciale dovrebbe tornare al tipo dell'alleato superstite")
+
+	first_ally.take_damage(99999.0)
+	_assert(grant_run.player.granted_ability_id == "", "senza alleati superstiti l'attacco speciale dovrebbe sparire")
+	_assert(not grant_run.player.can_use_special_attack(), "senza alleati l'attacco speciale non dovrebbe essere più utilizzabile")
+
+	print("Concessione dell'attacco speciale: OK")
+	grant_run.queue_free()
+	await get_tree().process_frame
+
+func _test_ally_special_attack_effects() -> void:
+	print("--- Test regressione: gli attacchi speciali degli alleati infliggono danno reale ---")
+	var fx_run := Run.new()
+	add_child(fx_run)
+	fx_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in fx_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+	# Niente labirinto per questo test: con la mappa reale il percorso in
+	# linea retta di un proiettile potrebbe attraversare un muro (vedi
+	# nota analoga in _test_ranged_ally_keeps_behavior), rendendo
+	# imprevedibile se Dardo Velenoso/Sciame Vendicativo raggiungono il
+	# bersaglio.
+	fx_run.current_maze = null
+
+	var player_pos: Vector2 = fx_run.player.global_position
+	var dir := Vector2.RIGHT
+
+	# Morso Selvaggio (strisciante): mischia davanti al giocatore.
+	var lunge_target := Enemy.new()
+	lunge_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	lunge_target.global_position = player_pos + dir * fx_run.LUNGE_OFFSET
+	fx_run.enemy_container.add_child(lunge_target)
+	var lunge_hp_before: float = lunge_target.hp
+	fx_run._on_special_attack_requested("strisciante", player_pos, dir)
+	_assert(lunge_target.hp < lunge_hp_before, "Morso Selvaggio non ha danneggiato il nemico davanti al giocatore")
+	lunge_target.queue_free()
+	await get_tree().process_frame
+
+	# Colpo Corazzato (corazzato): danno ad area intorno al giocatore.
+	var slam_target := Enemy.new()
+	slam_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	slam_target.global_position = player_pos + Vector2(fx_run.SLAM_RADIUS - 10.0, 0.0)
+	fx_run.enemy_container.add_child(slam_target)
+	var slam_hp_before: float = slam_target.hp
+	fx_run._on_special_attack_requested("corazzato", player_pos, dir)
+	_assert(slam_target.hp < slam_hp_before, "Colpo Corazzato non ha danneggiato il nemico nei paraggi del giocatore")
+	slam_target.queue_free()
+	await get_tree().process_frame
+
+	# Dardo Velenoso (pungiglione): proiettile singolo, serve fisica reale.
+	var dart_target := Enemy.new()
+	dart_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	dart_target.global_position = player_pos + dir * 200.0
+	fx_run.enemy_container.add_child(dart_target)
+	var dart_hp_before: float = dart_target.hp
+	fx_run._on_special_attack_requested("pungiglione", player_pos, dir)
+	for i in range(60):
+		await get_tree().physics_frame
+		if dart_target.hp < dart_hp_before:
+			break
+	_assert(dart_target.hp < dart_hp_before, "Dardo Velenoso non ha mai raggiunto/danneggiato il bersaglio")
+	dart_target.queue_free()
+	await get_tree().process_frame
+
+	# Sciame Vendicativo (sciame): raffica a ventaglio; un bersaglio
+	# sull'angolo 0 (direzione (1, 0), il primo dei 6 proiettili) viene
+	# colpito con certezza.
+	var swarm_target := Enemy.new()
+	swarm_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	swarm_target.global_position = player_pos + Vector2(150.0, 0.0)
+	fx_run.enemy_container.add_child(swarm_target)
+	var swarm_hp_before: float = swarm_target.hp
+	fx_run._on_special_attack_requested("sciame", player_pos, dir)
+	for i in range(60):
+		await get_tree().physics_frame
+		if swarm_target.hp < swarm_hp_before:
+			break
+	_assert(swarm_target.hp < swarm_hp_before, "Sciame Vendicativo non ha mai raggiunto/danneggiato il bersaglio")
+	swarm_target.queue_free()
+	await get_tree().process_frame
+
+	print("Effetti degli attacchi speciali: OK")
+	fx_run.queue_free()
+	await get_tree().process_frame
 
 func _kill_all_room_enemies_of(target_run: Run) -> void:
 	for e in target_run.enemy_container.get_children():

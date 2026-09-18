@@ -32,6 +32,18 @@ const SHOCKWAVE_RATIO := 0.4
 # run consecutive di una stessa serie).
 const MAX_ALLIES := 2
 const TAME_RANGE := 180.0
+# Attacchi speciali concessi dagli alleati (vedi GameData.ALLY_SPECIAL_ATTACKS
+# e Player.granted_ability_id/special_attack_requested).
+const LUNGE_OFFSET := 40.0
+const LUNGE_RADIUS := 50.0
+const LUNGE_DAMAGE := 18.0
+const DART_SPEED := 420.0
+const DART_DAMAGE := 14.0
+const SLAM_RADIUS := 90.0
+const SLAM_DAMAGE := 16.0
+const SWARM_COUNT := 6
+const SWARM_SPEED := 300.0
+const SWARM_DAMAGE := 6.0
 
 var player: Player
 var current_boss: Boss = null
@@ -116,6 +128,7 @@ func _spawn_player() -> void:
 	player.dash_hit.connect(_on_dash_hit)
 	player.died.connect(_on_player_died)
 	player.tame_requested.connect(_on_tame_requested)
+	player.special_attack_requested.connect(_on_special_attack_requested)
 	player_container.add_child(player)
 
 # --- Ciclo di vita della run -------------------------------------------------
@@ -274,15 +287,21 @@ func _on_enemy_defeated(entity) -> void:
 func _on_dash_hit(target, damage: float) -> void:
 	if not player.has_shockwave:
 		return
-	var origin: Vector2 = target.global_position
+	_damage_hostiles_in_radius(target.global_position, SHOCKWAVE_RADIUS, damage * SHOCKWAVE_RATIO, target)
+
+# Danneggia ogni nemico/boss ostile (alleati sempre esclusi) entro
+# `radius` da `center`, notificando Run se qualcuno viene ucciso.
+# `exclude`, se impostato, salta quel nodo specifico (es. il bersaglio
+# già colpito direttamente dallo scatto, per l'onda d'urto).
+func _damage_hostiles_in_radius(center: Vector2, radius: float, damage: float, exclude: Node = null) -> void:
 	for group in ["enemy", "boss"]:
 		for other in get_tree().get_nodes_in_group(group):
-			if other == target or not other.alive:
+			if other == exclude or not other.alive:
 				continue
 			if other is Enemy and other.is_ally:
 				continue
-			if origin.distance_to(other.global_position) <= SHOCKWAVE_RADIUS:
-				other.take_damage(damage * SHOCKWAVE_RATIO)
+			if center.distance_to(other.global_position) <= radius:
+				other.take_damage(damage)
 				if not other.alive:
 					_on_enemy_defeated(other)
 
@@ -335,7 +354,9 @@ func _convert_enemy_to_ally(enemy: Enemy) -> void:
 	enemy.ally_kill.connect(_on_enemy_defeated)
 	allies.append(enemy)
 	SaveManager.unlock_enemy(enemy.enemy_id)
-	hud.show_banner("%s si è unito a te!" % enemy.display_name, 2.5)
+	_sync_granted_ability()
+	var ability_name: String = GameData.ALLY_SPECIAL_ATTACKS[enemy.enemy_id].name
+	hud.show_banner("%s si è unito a te! Nuovo attacco speciale: %s" % [enemy.display_name, ability_name], 3.0)
 	# L'addomesticamento non passa da _on_enemy_defeated (il nemico non è
 	# stato sconfitto, è ancora vivo come alleato): se era l'ultimo nemico
 	# ostile della stanza, va comunque verificato qui, altrimenti la
@@ -347,6 +368,7 @@ func _on_ally_defeated(ally) -> void:
 	var fallen_name: String = ally.display_name
 	if is_instance_valid(ally):
 		ally.queue_free()
+	_sync_granted_ability()
 	hud.show_banner("Il tuo alleato %s è caduto in battaglia." % fallen_name, 2.5)
 
 func _clear_allies() -> void:
@@ -354,6 +376,35 @@ func _clear_allies() -> void:
 		if is_instance_valid(a):
 			a.queue_free()
 	allies.clear()
+	_sync_granted_ability()
+
+# L'attacco speciale concesso al giocatore riflette sempre l'alleato più
+# di recente addomesticato tra quelli ancora vivi (ultimo in `allies`,
+# dato che le nuove conversioni vengono accodate): se muore, l'abilità
+# passa all'alleato superstite più recente, o sparisce se non ne resta
+# nessuno.
+func _sync_granted_ability() -> void:
+	var latest_type := ""
+	for a in allies:
+		if is_instance_valid(a) and a.alive:
+			latest_type = a.enemy_id
+	player.granted_ability_id = latest_type
+
+func _on_special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2) -> void:
+	match ability_id:
+		"strisciante":
+			_damage_hostiles_in_radius(origin + dir * LUNGE_OFFSET, LUNGE_RADIUS, LUNGE_DAMAGE)
+		"pungiglione":
+			_on_enemy_spawn_projectile(origin, dir, DART_SPEED, DART_DAMAGE, true)
+		"corazzato":
+			_damage_hostiles_in_radius(origin, SLAM_RADIUS, SLAM_DAMAGE)
+		"sciame":
+			for i in range(SWARM_COUNT):
+				var angle: float = TAU * float(i) / float(SWARM_COUNT)
+				_on_enemy_spawn_projectile(origin, Vector2(cos(angle), sin(angle)), SWARM_SPEED, SWARM_DAMAGE, true)
+		_:
+			return
+	hud.show_banner("%s!" % GameData.ALLY_SPECIAL_ATTACKS[ability_id].name, 1.5)
 
 func _clear_hostile_enemies() -> void:
 	for c in enemy_container.get_children():

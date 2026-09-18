@@ -9,6 +9,7 @@ extends Area2D
 signal dash_hit(target: Node, damage: float)
 signal enemy_defeated(target: Node)
 signal tame_requested
+signal special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2)
 signal died
 
 const BASE_SPEED := 220.0
@@ -19,6 +20,7 @@ const BASE_DASH_COOLDOWN := 0.55
 const HIT_IFRAME := 0.8
 const KNOCKBACK := 20.0
 const TAME_COOLDOWN := 14.0
+const SPECIAL_ATTACK_COOLDOWN := 6.0
 
 var radius := 14.0
 var speed_mult := 1.0
@@ -42,6 +44,11 @@ var dash_vector := Vector2.ZERO
 var hit_iframe_timer := 0.0
 var hit_enemies_this_dash: Array = []
 var tame_cooldown_timer := 0.0
+# Id (Enemy.enemy_id) dell'attacco speciale concesso dall'alleato più di
+# recente addomesticato ancora vivo, impostato da Run ad ogni cambio
+# degli alleati; stringa vuota se nessun alleato è attualmente vivo.
+var granted_ability_id := ""
+var special_attack_cooldown_timer := 0.0
 var alive := true
 var active_powerups: Array = []
 
@@ -90,6 +97,7 @@ func reset_stats() -> void:
 	hit_iframe_timer = 0.0
 	hit_enemies_this_dash.clear()
 	tame_cooldown_timer = 0.0
+	special_attack_cooldown_timer = 0.0
 	active_powerups.clear()
 	alive = true
 
@@ -130,6 +138,7 @@ func restore_stats(snapshot: Dictionary) -> void:
 	hit_iframe_timer = 0.0
 	hit_enemies_this_dash.clear()
 	tame_cooldown_timer = 0.0
+	special_attack_cooldown_timer = 0.0
 	alive = true
 
 func dash_cooldown() -> float:
@@ -150,6 +159,9 @@ func can_dash() -> bool:
 
 func can_tame() -> bool:
 	return tame_cooldown_timer <= 0.0 and alive
+
+func can_use_special_attack() -> bool:
+	return special_attack_cooldown_timer <= 0.0 and alive and granted_ability_id != ""
 
 func start_dash(direction: Vector2) -> void:
 	is_dashing = true
@@ -205,6 +217,10 @@ func _read_input_and_move(delta: float) -> void:
 		tame_cooldown_timer = TAME_COOLDOWN
 		tame_requested.emit()
 
+	if Input.is_action_just_pressed("special_attack") and can_use_special_attack():
+		special_attack_cooldown_timer = SPECIAL_ATTACK_COOLDOWN
+		special_attack_requested.emit(granted_ability_id, global_position, facing)
+
 	var move_delta: Vector2
 	if is_dashing:
 		var dist: float = DASH_SPEED * dash_distance_mult
@@ -222,6 +238,8 @@ func _update_timers(delta: float) -> void:
 		hit_iframe_timer -= delta
 	if tame_cooldown_timer > 0.0:
 		tame_cooldown_timer -= delta
+	if special_attack_cooldown_timer > 0.0:
+		special_attack_cooldown_timer -= delta
 	if dash_charges < max_dash_charges:
 		charge_regen_timer += delta
 		if charge_regen_timer >= dash_cooldown():

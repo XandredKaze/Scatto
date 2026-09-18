@@ -51,6 +51,13 @@ func _ready() -> void:
 	for key in GameData.ENEMY_TYPES.keys():
 		enemies_box.add_child(_build_enemy_row(GameData.ENEMY_TYPES[key]))
 
+	content.add_child(_build_section_title("Attacchi speciali degli alleati"))
+	var abilities_box := VBoxContainer.new()
+	abilities_box.add_theme_constant_override("separation", 6)
+	content.add_child(abilities_box)
+	for key in GameData.ALLY_SPECIAL_ATTACKS.keys():
+		abilities_box.add_child(_build_ability_row(GameData.ENEMY_TYPES[key], GameData.ALLY_SPECIAL_ATTACKS[key]))
+
 	close_btn = Button.new()
 	close_btn.text = "Chiudi"
 	close_btn.custom_minimum_size = Vector2(140, 40)
@@ -65,6 +72,7 @@ func _steps() -> Array:
 		{"n": 4, "title": "Ripulisci la stanza", "text": "Sconfiggi tutti i nemici della stanza: la ricompensa viene consegnata subito, senza doverla raccogliere."},
 		{"n": 5, "title": "Scegli un potenziamento", "text": "Dopo ogni stanza scegli uno tra 3 potenziamenti casuali: ti rendono più forte per il resto della run."},
 		{"n": 6, "title": "Addomesticamento", "text": "Tasto E o tasto X/Quadrato del controller: rende alleato il nemico comune più vicino. Puoi avere al massimo 2 alleati contemporaneamente, riconoscibili dall'anello acqua che li circonda; restano al tuo fianco e combattono per te finché non muoiono o non concludi/riavvii la run. L'abilità ha un tempo di recupero prima di poter essere riusata."},
+		{"n": 7, "title": "Attacco speciale dell'alleato", "text": "Tasto Q o tasto Y/Triangolo del controller: scatena un attacco speciale che dipende dal tipo di nemico che hai reso alleato più di recente (vedi sotto). Se l'alleato che te l'ha concesso muore, l'attacco resta disponibile solo se hai un altro alleato in vita; anche questa abilità ha un tempo di recupero."},
 	]
 
 func _build_section_title(text: String) -> Label:
@@ -132,6 +140,35 @@ func _build_enemy_row(entry: Dictionary) -> Control:
 	tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	tip_label.modulate = Color(0.85, 0.85, 0.88)
 	hbox.add_child(tip_label)
+
+	return row
+
+func _build_ability_row(enemy_entry: Dictionary, ability_entry: Dictionary) -> Control:
+	var row := PanelContainer.new()
+	row.add_theme_stylebox_override("panel", _row_style())
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 16)
+	row.add_child(hbox)
+
+	var icon := PowerupIcon.new()
+	icon.custom_minimum_size = Vector2(28, 28)
+	icon.set_icon(ability_entry.get("icon", "circle"), enemy_entry.color)
+	hbox.add_child(icon)
+
+	var name_label := Label.new()
+	name_label.text = "%s (da %s)" % [ability_entry.name, enemy_entry.name]
+	name_label.custom_minimum_size = Vector2(260, 0)
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	hbox.add_child(name_label)
+
+	var desc_label := Label.new()
+	desc_label.text = ability_entry.desc
+	desc_label.custom_minimum_size = Vector2(660, 0)
+	desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	desc_label.modulate = Color(0.85, 0.85, 0.88)
+	hbox.add_child(desc_label)
 
 	return row
 

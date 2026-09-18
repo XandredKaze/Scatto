@@ -40,6 +40,29 @@ const ENEMY_TYPES := {
 	},
 }
 
+# Attacco speciale concesso al giocatore da un alleato di questo tipo
+# (vedi Player.granted_ability_id e Run._on_special_attack_requested):
+# ogni nemico comune diventa un'abilità attiva diversa una volta reso
+# amico, in tema con il suo comportamento originale da ostile.
+const ALLY_SPECIAL_ATTACKS := {
+	"strisciante": {
+		"name": "Morso Selvaggio", "icon": "sword",
+		"desc": "Un balzo che morde tutti i nemici davanti a te.",
+	},
+	"pungiglione": {
+		"name": "Dardo Velenoso", "icon": "arrow",
+		"desc": "Scaglia un dardo avvelenato nella direzione in cui guardi.",
+	},
+	"corazzato": {
+		"name": "Colpo Corazzato", "icon": "shield",
+		"desc": "Un'onda d'urto che danneggia i nemici intorno a te.",
+	},
+	"sciame": {
+		"name": "Sciame Vendicativo", "icon": "bolt",
+		"desc": "Una raffica di proiettili in tutte le direzioni intorno a te.",
+	},
+}
+
 # L'avversario comune con variante dorata: 1 possibilità su GOLDEN_CHANCE_DENOMINATOR
 # di comparire in una stanza al posto (o in aggiunta) allo Strisciante normale.
 const GOLDEN_VARIANTS := {
