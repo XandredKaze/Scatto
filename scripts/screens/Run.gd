@@ -255,6 +255,7 @@ func _on_boss_defeated(boss) -> void:
 	boss.queue_free()
 	run_complete_screen.show_summary(streak_run_index, was_special)
 	run_complete_screen.show()
+	run_complete_screen.continue_btn.grab_focus()
 
 func _on_room_exit() -> void:
 	# Disattiva subito il portale: restare fermi al suo interno non deve
@@ -262,8 +263,8 @@ func _on_room_exit() -> void:
 	room_cleared = false
 	arena_visual.set_exit_active(false)
 	var choices := _roll_powerup_choices(3)
-	powerup_choice_screen.show_choices(choices, room_number)
 	powerup_choice_screen.show()
+	powerup_choice_screen.show_choices(choices, room_number)
 
 func _roll_powerup_choices(count: int) -> Array:
 	var pool: Array = GameData.get_regular_powerup_pool().duplicate()
@@ -316,6 +317,7 @@ func _on_player_died() -> void:
 	SaveManager.record_death()
 	game_over_screen.show_summary(room_number, streak_run_index)
 	game_over_screen.show()
+	game_over_screen.hub_btn.grab_focus()
 	streak_run_index = 0
 
 func _on_continue_pressed() -> void:

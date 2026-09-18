@@ -6,6 +6,12 @@ extends RefCounted
 # controller (stick sinistro/D-pad per il movimento, tasto A/Croce per
 # lo scatto) senza dover scrivere a mano il formato [input] del progetto.
 # Chiamata una sola volta all'avvio (Main._ready()).
+#
+# Le azioni predefinite di Godot per la navigazione nei menu (ui_up/down/
+# left/right) hanno già un binding joypad nativo (stick sinistro e D-pad);
+# manca solo il tasto di conferma/annulla, aggiunto qui a ui_accept/ui_cancel
+# cosí i pulsanti dell'Hub e della scelta dei potenziamenti sono navigabili
+# e selezionabili anche da controller.
 
 static func ensure_actions() -> void:
 	_ensure_move_axis("move_left", KEY_A, KEY_LEFT, JOY_AXIS_LEFT_X, -1.0, JOY_BUTTON_DPAD_LEFT)
@@ -13,6 +19,8 @@ static func ensure_actions() -> void:
 	_ensure_move_axis("move_up", KEY_W, KEY_UP, JOY_AXIS_LEFT_Y, -1.0, JOY_BUTTON_DPAD_UP)
 	_ensure_move_axis("move_down", KEY_S, KEY_DOWN, JOY_AXIS_LEFT_Y, 1.0, JOY_BUTTON_DPAD_DOWN)
 	_ensure_dash()
+	_ensure_joypad_button_on_action("ui_accept", JOY_BUTTON_A)
+	_ensure_joypad_button_on_action("ui_cancel", JOY_BUTTON_B)
 
 static func _ensure_move_axis(action: String, key1: Key, key2: Key, axis: JoyAxis, axis_value: float, dpad_button: JoyButton) -> void:
 	if InputMap.has_action(action):
@@ -52,3 +60,13 @@ static func _ensure_dash() -> void:
 	var joy_btn := InputEventJoypadButton.new()
 	joy_btn.button_index = JOY_BUTTON_A
 	InputMap.action_add_event("dash", joy_btn)
+
+static func _ensure_joypad_button_on_action(action: String, button: JoyButton) -> void:
+	if not InputMap.has_action(action):
+		return
+	for event in InputMap.action_get_events(action):
+		if event is InputEventJoypadButton and event.button_index == button:
+			return
+	var joy_btn := InputEventJoypadButton.new()
+	joy_btn.button_index = button
+	InputMap.action_add_event(action, joy_btn)

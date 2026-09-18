@@ -4,11 +4,12 @@ extends Control
 signal hub_pressed
 
 var summary_label: Label
+var hub_btn: Button
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 235)
+	bg.color = Color8(10, 11, 15, 255)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
@@ -32,7 +33,7 @@ func _ready() -> void:
 	summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(summary_label)
 
-	var hub_btn := Button.new()
+	hub_btn = Button.new()
 	hub_btn.text = "Torna all'Hub"
 	hub_btn.custom_minimum_size = Vector2(280, 44)
 	hub_btn.pressed.connect(func(): hub_pressed.emit())

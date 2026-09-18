@@ -8,6 +8,8 @@ extends Control
 
 signal closed
 
+var close_btn: Button
+
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
@@ -49,7 +51,7 @@ func _ready() -> void:
 	for key in GameData.ENEMY_TYPES.keys():
 		enemies_box.add_child(_build_enemy_row(GameData.ENEMY_TYPES[key]))
 
-	var close_btn := Button.new()
+	close_btn = Button.new()
 	close_btn.text = "Chiudi"
 	close_btn.custom_minimum_size = Vector2(140, 40)
 	close_btn.pressed.connect(func(): closed.emit())

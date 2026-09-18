@@ -11,6 +11,7 @@ var archive_panel: ArchiveScreen
 var bestiary_panel: BestiaryScreen
 var tutorial_panel: TutorialScreen
 var stats_label: Label
+var start_btn: Button
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -53,7 +54,7 @@ func _ready() -> void:
 
 	_add_spacer(vbox, 16)
 
-	var start_btn := Button.new()
+	start_btn = Button.new()
 	start_btn.text = "Inizia Run"
 	start_btn.custom_minimum_size = Vector2(260, 48)
 	start_btn.pressed.connect(func(): start_run_requested.emit())
@@ -85,6 +86,7 @@ func _ready() -> void:
 	vbox.add_child(hint)
 
 	_refresh_stats()
+	start_btn.grab_focus()
 
 func _refresh_stats() -> void:
 	var s: Dictionary = SaveManager.stats
@@ -100,22 +102,25 @@ func _add_spacer(container: Control, h: int) -> void:
 func _open_archive() -> void:
 	if archive_panel == null:
 		archive_panel = ArchiveScreen.new()
-		archive_panel.closed.connect(func(): archive_panel.hide())
+		archive_panel.closed.connect(func(): archive_panel.hide(); start_btn.grab_focus())
 		add_child(archive_panel)
 	archive_panel.refresh()
 	archive_panel.show()
+	archive_panel.close_btn.grab_focus()
 
 func _open_bestiary() -> void:
 	if bestiary_panel == null:
 		bestiary_panel = BestiaryScreen.new()
-		bestiary_panel.closed.connect(func(): bestiary_panel.hide())
+		bestiary_panel.closed.connect(func(): bestiary_panel.hide(); start_btn.grab_focus())
 		add_child(bestiary_panel)
 	bestiary_panel.refresh()
 	bestiary_panel.show()
+	bestiary_panel.close_btn.grab_focus()
 
 func _open_tutorial() -> void:
 	if tutorial_panel == null:
 		tutorial_panel = TutorialScreen.new()
-		tutorial_panel.closed.connect(func(): tutorial_panel.hide())
+		tutorial_panel.closed.connect(func(): tutorial_panel.hide(); start_btn.grab_focus())
 		add_child(tutorial_panel)
 	tutorial_panel.show()
+	tutorial_panel.close_btn.grab_focus()

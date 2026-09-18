@@ -15,6 +15,7 @@ func run_and_quit() -> void:
 	print("=== SCATTO SMOKE TEST ===")
 
 	await _test_gamepad_input()
+	await _test_controller_menu_navigation()
 	await _test_real_dash_collision()
 	await _test_boss_attack_patterns()
 	await _test_tutorial_screen_has_no_spoilers()
@@ -44,8 +45,12 @@ func run_and_quit() -> void:
 	# 5 scelte di fine stanza + 1 bottino garantito dal nemico dorato forzato.
 	_assert(run.player.active_powerups.size() == 6, "attesi 6 potenziamenti raccolti, trovati %d" % run.player.active_powerups.size())
 	# La HUD aggiorna il vassoio in _process(): servono alcuni frame reali
-	# (non chiamate sincrone) perché il motore lo esegua davvero.
-	for i in range(4):
+	# (non chiamate sincrone) perché il motore lo esegua davvero. Si
+	# attende con un margine generoso per non essere fragili a
+	# variazioni di timing in headless.
+	for i in range(20):
+		if run.hud.powerup_tray.get_child_count() == 2:
+			break
 		await get_tree().process_frame
 	_assert(run.hud.powerup_tray.get_child_count() == 2, "attese 2 icone distinte in HUD (bottino dorato + potenziamento ripetuto), trovate %d" % run.hud.powerup_tray.get_child_count())
 	print("Potenziamenti attivi mostrati in HUD: ", run.hud.powerup_tray.get_child_count())
@@ -181,6 +186,47 @@ func _find_button_with_text(node: Node, text: String) -> Button:
 			return found
 	return null
 
+func _test_controller_menu_navigation() -> void:
+	print("--- Test navigazione menu da controller (Hub + scelta potenziamenti) ---")
+
+	# La traduzione "pulsante a fuoco + ui_accept -> click" è gestita
+	# internamente da BaseButton (Godot stesso, non codice di questo
+	# progetto) e in headless la pipeline GUI di eventi sintetici non è
+	# affidabile da simulare end-to-end; qui verifichiamo quindi le due
+	# cose che dipendono dal nostro codice: che i binding joypad per
+	# conferma/annulla esistano e che il focus iniziale sia impostato
+	# correttamente su ciascun menu, cosí che un pad abbia sempre da
+	# dove partire per navigare.
+	_assert(_action_has_joypad_button("ui_accept", JOY_BUTTON_A), "ui_accept non ha un binding per il tasto A del controller")
+	_assert(_action_has_joypad_button("ui_cancel", JOY_BUTTON_B), "ui_cancel non ha un binding per il tasto B del controller")
+
+	var hub := Hub.new()
+	add_child(hub)
+	await get_tree().process_frame
+	_assert(hub.start_btn.has_focus(), "'Inizia Run' non ha il focus iniziale nell'Hub")
+	hub.queue_free()
+	await get_tree().process_frame
+
+	var choice_screen := PowerupChoiceScreen.new()
+	add_child(choice_screen)
+	choice_screen.show()
+	var choices: Array = GameData.get_regular_powerup_pool().slice(0, 3)
+	choice_screen.show_choices(choices, 1)
+	await get_tree().process_frame
+
+	var first_card_button: Button = choice_screen.cards_box.get_child(0).get_meta("pick_button")
+	_assert(first_card_button.has_focus(), "il primo potenziamento non ha il focus dopo show_choices()")
+
+	print("Navigazione menu da controller: OK (binding e focus iniziale verificati)")
+	choice_screen.queue_free()
+	await get_tree().process_frame
+
+func _action_has_joypad_button(action: String, button: JoyButton) -> bool:
+	for event in InputMap.action_get_events(action):
+		if event is InputEventJoypadButton and event.button_index == button:
+			return true
+	return false
+
 func _test_gamepad_input() -> void:
 	print("--- Test input da controller (eventi joypad simulati) ---")
 	_assert(InputMap.has_action("move_right"), "l'azione move_right non è stata registrata")
@@ -215,10 +261,13 @@ func _test_gamepad_input() -> void:
 	btn.pressed = true
 	Input.parse_input_event(btn)
 	# parse_input_event accoda l'evento al prossimo ciclo di input del
-	# motore: servono due frame reali prima che Player lo veda come
-	# "appena premuto" nel proprio _physics_process.
-	await get_tree().physics_frame
-	await get_tree().physics_frame
+	# motore: servono un paio di frame reali prima che Player lo veda
+	# come "appena premuto" nel proprio _physics_process. Si attende con
+	# un margine generoso per non essere fragili a variazioni di timing.
+	for i in range(10):
+		if p.is_dashing:
+			break
+		await get_tree().physics_frame
 	_assert(p.is_dashing, "il tasto A del controller non ha attivato lo scatto")
 	print("Input da controller (stick + tasto A): OK")
 

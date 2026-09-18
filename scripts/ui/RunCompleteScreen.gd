@@ -10,11 +10,12 @@ signal continue_pressed
 signal hub_pressed
 
 var summary_label: Label
+var continue_btn: Button
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 235)
+	bg.color = Color8(10, 11, 15, 255)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
@@ -38,7 +39,7 @@ func _ready() -> void:
 	summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(summary_label)
 
-	var continue_btn := Button.new()
+	continue_btn = Button.new()
 	continue_btn.text = "Continua senza tornare all'Hub"
 	continue_btn.custom_minimum_size = Vector2(320, 44)
 	continue_btn.pressed.connect(func(): continue_pressed.emit())

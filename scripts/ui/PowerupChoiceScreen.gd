@@ -42,8 +42,16 @@ func show_choices(choices: Array, room_number: int) -> void:
 	title_label.text = "Stanza %d ripulita! Scegli un potenziamento" % room_number
 	for c in cards_box.get_children():
 		c.queue_free()
+	var first_button: Button = null
 	for choice in choices:
-		cards_box.add_child(_build_card(choice))
+		var card := _build_card(choice)
+		cards_box.add_child(card)
+		if first_button == null:
+			first_button = card.get_meta("pick_button")
+	# Le carte cambiano ogni volta: senza un focus esplicito il pad
+	# non avrebbe nulla da cui partire per navigare tra le scelte.
+	if first_button != null:
+		first_button.grab_focus()
 
 func _build_card(entry: Dictionary) -> Control:
 	var panel := PanelContainer.new()
@@ -86,5 +94,6 @@ func _build_card(entry: Dictionary) -> Control:
 	pick_btn.custom_minimum_size = Vector2(0, 36)
 	pick_btn.pressed.connect(func(): powerup_selected.emit(entry.id))
 	vbox.add_child(pick_btn)
+	panel.set_meta("pick_button", pick_btn)
 
 	return panel

@@ -8,6 +8,7 @@ Un roguelike top-down realizzato in **Godot 4.3** in cui l'unico attacco a dispo
 - **Scatto (unico attacco)**: `Spazio`/`Shift`, oppure il tasto A (Xbox) / Croce (PlayStation) del controller. Durante lo scatto sei invulnerabile e infliggi danno a ogni nemico che attraversi (una sola volta a scatto).
 - Fuori dallo scatto, il contatto con un nemico o un suo proiettile ti danneggia.
 - Il controller è riconosciuto automaticamente (nessuna configurazione richiesta) e può essere usato insieme alla tastiera in qualsiasi momento.
+- **Menu e scelta dei potenziamenti**: navigabili anche da controller con lo stick/D-pad, confermando con il tasto A/Croce e tornando indietro con B/Cerchio. Ogni menu (Hub, scelta del potenziamento, archivio, bestiario, tutorial, fine run) mette a fuoco automaticamente l'opzione predefinita, cosí il pad ha sempre un punto di partenza da cui navigare.
 
 ### Struttura di una run
 

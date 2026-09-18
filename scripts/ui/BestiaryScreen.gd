@@ -8,6 +8,7 @@ extends Control
 signal closed
 
 var list_box: VBoxContainer
+var close_btn: Button
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -38,7 +39,7 @@ func _ready() -> void:
 	list_box.add_theme_constant_override("separation", 6)
 	scroll.add_child(list_box)
 
-	var close_btn := Button.new()
+	close_btn = Button.new()
 	close_btn.text = "Chiudi"
 	close_btn.custom_minimum_size = Vector2(140, 40)
 	close_btn.pressed.connect(func(): closed.emit())
