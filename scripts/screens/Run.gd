@@ -341,6 +341,11 @@ func _convert_enemy_to_ally(enemy: Enemy) -> void:
 	allies.append(enemy)
 	SaveManager.unlock_enemy(enemy.enemy_id)
 	hud.show_banner("%s si è unito a te!" % enemy.display_name, 2.5)
+	# L'addomesticamento non passa da _on_enemy_defeated (il nemico non è
+	# stato sconfitto, è ancora vivo come alleato): se era l'ultimo nemico
+	# ostile della stanza, va comunque verificato qui, altrimenti il
+	# portale non si attiverebbe mai.
+	_check_room_cleared()
 
 func _on_ally_defeated(ally) -> void:
 	allies.erase(ally)

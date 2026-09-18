@@ -30,6 +30,7 @@ func run_and_quit() -> void:
 	await _test_pause_menu()
 	await _test_ally_taming()
 	await _test_ally_combat()
+	await _test_taming_last_enemy_clears_room()
 
 	SaveManager.reset_all()
 
@@ -426,6 +427,36 @@ func _test_ally_combat() -> void:
 	hostile.queue_free()
 	p.queue_free()
 	await get_tree().physics_frame
+
+func _test_taming_last_enemy_clears_room() -> void:
+	print("--- Test regressione: addomesticare l'ultimo nemico deve ripulire la stanza ---")
+	# L'addomesticamento non passa da _on_enemy_defeated (il bersaglio
+	# resta vivo, come alleato): senza il controllo dedicato in
+	# _convert_enemy_to_ally(), convertire l'ultimo nemico ostile della
+	# stanza lascerebbe il portale disattivato per sempre.
+	var solo_run := Run.new()
+	add_child(solo_run)
+	solo_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in solo_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	var last_enemy := Enemy.new()
+	last_enemy.maze = solo_run.current_maze
+	last_enemy.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	last_enemy.global_position = solo_run.player.global_position
+	solo_run.enemy_container.add_child(last_enemy)
+
+	_assert(not solo_run.room_cleared, "setup del test: la stanza non dovrebbe risultare ripulita prima dell'addomesticamento")
+	solo_run._on_tame_requested()
+	_assert(last_enemy.is_ally, "l'unico nemico della stanza dovrebbe diventare alleato")
+	_assert(solo_run.room_cleared, "addomesticare l'ultimo nemico ostile dovrebbe ripulire la stanza (portale attivo)")
+
+	print("Addomesticare l'ultimo nemico: OK (portale attivato)")
+	solo_run.queue_free()
+	await get_tree().process_frame
 
 func _kill_all_room_enemies_of(target_run: Run) -> void:
 	for e in target_run.enemy_container.get_children():
