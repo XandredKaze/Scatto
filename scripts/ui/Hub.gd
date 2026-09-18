@@ -1,0 +1,107 @@
+class_name Hub
+extends Control
+
+# Schermata centrale: avvia una nuova run, apre l'archivio dei
+# potenziamenti o il bestiario. Le statistiche mostrate provengono
+# dal salvataggio persistente (SaveManager).
+
+signal start_run_requested
+
+var archive_panel: ArchiveScreen
+var bestiary_panel: BestiaryScreen
+var stats_label: Label
+
+func _ready() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	custom_minimum_size = Vector2(960, 640)
+
+	var bg := ColorRect.new()
+	bg.color = Color8(13, 14, 18)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+
+	var vbox := VBoxContainer.new()
+	vbox.position = Vector2(330, 130)
+	vbox.custom_minimum_size = Vector2(300, 0)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 14)
+	add_child(vbox)
+
+	var title := Label.new()
+	title.text = "SCATTO"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.custom_minimum_size = Vector2(300, 0)
+	title.add_theme_font_size_override("font_size", 40)
+	vbox.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "Un roguelike a scatto"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.custom_minimum_size = Vector2(300, 0)
+	subtitle.modulate = Color(0.7, 0.7, 0.75)
+	vbox.add_child(subtitle)
+
+	_add_spacer(vbox, 16)
+
+	stats_label = Label.new()
+	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats_label.custom_minimum_size = Vector2(300, 0)
+	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	stats_label.modulate = Color(0.75, 0.75, 0.8)
+	vbox.add_child(stats_label)
+
+	_add_spacer(vbox, 16)
+
+	var start_btn := Button.new()
+	start_btn.text = "Inizia Run"
+	start_btn.custom_minimum_size = Vector2(260, 48)
+	start_btn.pressed.connect(func(): start_run_requested.emit())
+	vbox.add_child(start_btn)
+
+	var archive_btn := Button.new()
+	archive_btn.text = "Archivio Potenziamenti"
+	archive_btn.custom_minimum_size = Vector2(260, 48)
+	archive_btn.pressed.connect(_open_archive)
+	vbox.add_child(archive_btn)
+
+	var bestiary_btn := Button.new()
+	bestiary_btn.text = "Bestiario"
+	bestiary_btn.custom_minimum_size = Vector2(260, 48)
+	bestiary_btn.pressed.connect(_open_bestiary)
+	vbox.add_child(bestiary_btn)
+
+	var hint := Label.new()
+	hint.text = "WASD/Frecce per muoversi, Spazio/Shift per scattare"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.custom_minimum_size = Vector2(300, 0)
+	hint.modulate = Color(0.5, 0.5, 0.55)
+	vbox.add_child(hint)
+
+	_refresh_stats()
+
+func _refresh_stats() -> void:
+	var s: Dictionary = SaveManager.stats
+	stats_label.text = "Run vinte: %d  •  Serie migliore: %d\nMorti: %d  •  Dorati sconfitti: %d" % [
+		s.runs_won, s.best_streak, s.deaths, s.golden_defeated
+	]
+
+func _add_spacer(container: Control, h: int) -> void:
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, h)
+	container.add_child(spacer)
+
+func _open_archive() -> void:
+	if archive_panel == null:
+		archive_panel = ArchiveScreen.new()
+		archive_panel.closed.connect(func(): archive_panel.hide())
+		add_child(archive_panel)
+	archive_panel.refresh()
+	archive_panel.show()
+
+func _open_bestiary() -> void:
+	if bestiary_panel == null:
+		bestiary_panel = BestiaryScreen.new()
+		bestiary_panel.closed.connect(func(): bestiary_panel.hide())
+		add_child(bestiary_panel)
+	bestiary_panel.refresh()
+	bestiary_panel.show()
