@@ -9,6 +9,7 @@ Un roguelike top-down realizzato in **Godot 4.3** in cui l'unico attacco a dispo
 - Fuori dallo scatto, il contatto con un nemico o un suo proiettile ti danneggia.
 - Il controller è riconosciuto automaticamente (nessuna configurazione richiesta) e può essere usato insieme alla tastiera in qualsiasi momento.
 - **Menu e scelta dei potenziamenti**: navigabili anche da controller con lo stick/D-pad, confermando con il tasto A/Croce e tornando indietro con B/Cerchio. Ogni menu (Hub, scelta del potenziamento, archivio, bestiario, tutorial, fine run) mette a fuoco automaticamente l'opzione predefinita, cosí il pad ha sempre un punto di partenza da cui navigare.
+- **Pausa**: `Esc` o il tasto Start/Opzioni del controller, in qualsiasi momento durante una run (tranne sopra un altro menu già aperto, come la scelta del potenziamento). Il menu di pausa offre tre opzioni, navigabili anch'esse da controller: **Riprendi** (torna esattamente da dove eri), **Riprova la run dall'inizio** (rigioca la stanza 1 di questa run con le statistiche che avevi quando l'hai iniziata, senza i potenziamenti presi nel frattempo) e **Torna all'Hub** (abbandona la run e interrompe la serie, come morire).
 
 ### Struttura di una run
 
@@ -53,7 +54,7 @@ scripts/
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
-  ui/                         # Hub, Archivio, Bestiario, Tutorial, scelta potenziamento, fine run, game over, HUD
+  ui/                         # Hub, Archivio, Bestiario, Tutorial, scelta potenziamento, pausa, fine run, game over, HUD
 tests/SmokeTest.gd            # test end-to-end eseguibile in headless (vedi sotto)
 ```
 

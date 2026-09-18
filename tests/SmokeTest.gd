@@ -20,6 +20,7 @@ func run_and_quit() -> void:
 	await _test_boss_attack_patterns()
 	await _test_tutorial_screen_has_no_spoilers()
 	await _test_hud_debug_golden_button()
+	await _test_pause_menu()
 
 	SaveManager.reset_all()
 
@@ -185,6 +186,96 @@ func _find_button_with_text(node: Node, text: String) -> Button:
 		if found != null:
 			return found
 	return null
+
+func _test_pause_menu() -> void:
+	print("--- Test menu di pausa (riprendi / riprova / torna all'Hub) ---")
+	_assert(_action_has_joypad_button("pause", JOY_BUTTON_START), "l'azione pause non ha un binding per il tasto Start del controller")
+
+	var pause_run := Run.new()
+	add_child(pause_run)
+	pause_run.begin_new_streak()
+
+	_assert(not get_tree().paused, "il gioco non dovrebbe partire in pausa")
+	_assert(not pause_run.pause_screen.visible, "il menu di pausa non dovrebbe essere visibile all'avvio")
+
+	# Apertura: Esc (azione "pause") deve mettere in pausa e mostrare il menu.
+	await _tap_key(KEY_ESCAPE)
+	_assert(get_tree().paused, "Esc non ha messo in pausa il gioco")
+	_assert(pause_run.pause_screen.visible, "Esc non ha mostrato il menu di pausa")
+	_assert(pause_run.pause_screen.resume_btn.has_focus(), "'Riprendi' non ha il focus quando si apre la pausa")
+
+	# Chiusura con lo stesso tasto: deve riprendere.
+	await _tap_key(KEY_ESCAPE)
+	_assert(not get_tree().paused, "Esc non ha tolto la pausa")
+	_assert(not pause_run.pause_screen.visible, "Esc non ha nascosto il menu di pausa")
+
+	# Non deve aprirsi sopra un altro overlay modale già attivo.
+	pause_run.powerup_choice_screen.show()
+	await _tap_key(KEY_ESCAPE)
+	_assert(not get_tree().paused, "la pausa non dovrebbe aprirsi sopra la scelta del potenziamento")
+	pause_run.powerup_choice_screen.hide()
+
+	# "Torna all'Hub": deve togliere la pausa ed emettere return_to_hub_requested.
+	# Un Array (tipo per riferimento) invece di un bool: i lambda di
+	# GDScript catturano le variabili locali per valore, quindi una
+	# riassegnazione diretta dentro al lambda non sarebbe visibile qui.
+	pause_run.pause_screen._open()
+	_assert(get_tree().paused, "setup del test: la pausa dovrebbe essere attiva prima di premere 'Torna all'Hub'")
+	var went_to_hub := [false]
+	pause_run.return_to_hub_requested.connect(func(): went_to_hub[0] = true)
+	pause_run.pause_screen.hub_pressed.emit()
+	_assert(not get_tree().paused, "'Torna all'Hub' dal menu di pausa non ha tolto la pausa")
+	_assert(went_to_hub[0], "'Torna all'Hub' dal menu di pausa non ha emesso return_to_hub_requested")
+
+	pause_run.queue_free()
+	await get_tree().process_frame
+
+	# "Riprova la run dall'inizio": ripristina lo stato del giocatore a
+	# come era all'inizio di questa run e riparte dalla stanza 1.
+	var retry_run := Run.new()
+	add_child(retry_run)
+	retry_run.begin_new_streak()
+	_assert(retry_run.player.dash_damage_bonus == 0.0, "setup del test: il danno da scatto dovrebbe partire da 0")
+
+	_kill_all_room_enemies_of(retry_run)
+	retry_run.player.global_position = retry_run.exit_position
+	retry_run._physics_process(0.016)
+	retry_run._on_powerup_selected("lama_rapida")
+	_assert(retry_run.room_number == 2, "setup del test: dopo la scelta si dovrebbe essere alla stanza 2")
+	_assert(retry_run.player.dash_damage_bonus == 6.0, "setup del test: 'Lama Rapida' dovrebbe dare +6 danno da scatto")
+
+	retry_run.pause_screen.retry_pressed.emit()
+	_assert(retry_run.room_number == 1, "'Riprova la run dall'inizio' non ha riportato alla stanza 1")
+	_assert(retry_run.player.dash_damage_bonus == 0.0, "'Riprova la run dall'inizio' non ha ripristinato le statistiche del giocatore")
+	_assert(retry_run.player.active_powerups.is_empty(), "'Riprova la run dall'inizio' non ha svuotato i potenziamenti attivi")
+
+	print("Menu di pausa: OK")
+	retry_run.queue_free()
+	await get_tree().process_frame
+
+func _kill_all_room_enemies_of(target_run: Run) -> void:
+	for e in target_run.enemy_container.get_children():
+		if e.alive:
+			e.take_damage(99999.0)
+			target_run._on_enemy_defeated(e)
+
+func _tap_key(keycode: Key) -> void:
+	var down := InputEventKey.new()
+	down.physical_keycode = keycode
+	down.pressed = true
+	Input.parse_input_event(down)
+	# parse_input_event accoda l'evento al prossimo ciclo del motore:
+	# un paio di frame reali bastano perché PauseScreen._process() lo
+	# veda come "appena premuto" (comportamento già osservato per le
+	# altre azioni testate in questo file).
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var up := InputEventKey.new()
+	up.physical_keycode = keycode
+	up.pressed = false
+	Input.parse_input_event(up)
+	await get_tree().process_frame
 
 func _test_controller_menu_navigation() -> void:
 	print("--- Test navigazione menu da controller (Hub + scelta potenziamenti) ---")

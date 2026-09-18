@@ -79,6 +79,44 @@ func reset_stats() -> void:
 	active_powerups.clear()
 	alive = true
 
+func snapshot_stats() -> Dictionary:
+	return {
+		"speed_mult": speed_mult,
+		"dash_damage_bonus": dash_damage_bonus,
+		"dash_distance_mult": dash_distance_mult,
+		"dash_cooldown_mult": dash_cooldown_mult,
+		"max_dash_charges": max_dash_charges,
+		"extra_iframes": extra_iframes,
+		"has_contrattacco": has_contrattacco,
+		"has_furia": has_furia,
+		"has_shockwave": has_shockwave,
+		"max_hp": max_hp,
+		"hp": hp,
+		"active_powerups": active_powerups.duplicate(),
+	}
+
+func restore_stats(snapshot: Dictionary) -> void:
+	speed_mult = snapshot.speed_mult
+	dash_damage_bonus = snapshot.dash_damage_bonus
+	dash_distance_mult = snapshot.dash_distance_mult
+	dash_cooldown_mult = snapshot.dash_cooldown_mult
+	max_dash_charges = snapshot.max_dash_charges
+	dash_charges = snapshot.max_dash_charges
+	charge_regen_timer = 0.0
+	extra_iframes = snapshot.extra_iframes
+	has_contrattacco = snapshot.has_contrattacco
+	has_furia = snapshot.has_furia
+	has_shockwave = snapshot.has_shockwave
+	max_hp = snapshot.max_hp
+	hp = snapshot.hp
+	active_powerups = snapshot.active_powerups.duplicate()
+	facing = Vector2.UP
+	is_dashing = false
+	dash_timer = 0.0
+	hit_iframe_timer = 0.0
+	hit_enemies_this_dash.clear()
+	alive = true
+
 func dash_cooldown() -> float:
 	return BASE_DASH_COOLDOWN * dash_cooldown_mult
 

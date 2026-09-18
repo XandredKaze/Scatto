@@ -16,6 +16,9 @@ func _ready() -> void:
 		_show_hub()
 
 func _show_hub() -> void:
+	# Rete di sicurezza: qualunque cosa abbia lasciato l'albero in pausa
+	# (es. si torna all'Hub dal menu di pausa) non deve congelare l'Hub.
+	get_tree().paused = false
 	_clear_world()
 	var hub := Hub.new()
 	hub.start_run_requested.connect(_on_start_run_requested)

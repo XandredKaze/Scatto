@@ -23,6 +23,7 @@ var current_boss: Boss = null
 var room_number := 1
 var streak_run_index := 0
 var room_cleared := false
+var run_start_snapshot: Dictionary = {}
 
 var arena_rect: Rect2
 var exit_position: Vector2
@@ -41,6 +42,7 @@ var hud: HUD
 var powerup_choice_screen: PowerupChoiceScreen
 var run_complete_screen: RunCompleteScreen
 var game_over_screen: GameOverScreen
+var pause_screen: PauseScreen
 
 func _ready() -> void:
 	rng.randomize()
@@ -92,6 +94,12 @@ func _build_scene_tree() -> void:
 	game_over_screen.hub_pressed.connect(_on_hub_pressed)
 	ui_layer.add_child(game_over_screen)
 
+	pause_screen = PauseScreen.new()
+	pause_screen.run = self
+	pause_screen.hub_pressed.connect(_on_hub_pressed)
+	pause_screen.retry_pressed.connect(_retry_run)
+	ui_layer.add_child(pause_screen)
+
 func _spawn_player() -> void:
 	player = Player.new()
 	player.arena_bounds = arena_rect
@@ -115,6 +123,13 @@ func _continue_streak() -> void:
 
 func _start_run_common() -> void:
 	SaveManager.record_run_start()
+	room_number = 1
+	current_boss = null
+	run_start_snapshot = player.snapshot_stats()
+	_generate_room(1)
+
+func _retry_run() -> void:
+	player.restore_stats(run_start_snapshot)
 	room_number = 1
 	current_boss = null
 	_generate_room(1)
@@ -325,6 +340,7 @@ func _on_continue_pressed() -> void:
 	_continue_streak()
 
 func _on_hub_pressed() -> void:
+	get_tree().paused = false
 	return_to_hub_requested.emit()
 
 func _clear_container(container: Node) -> void:
