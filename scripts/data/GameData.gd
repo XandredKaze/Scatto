@@ -127,6 +127,44 @@ static func rarity_color(rarity: String) -> Color:
 		_:
 			return Color8(200, 200, 205)
 
+# Pesi relativi per l'estrazione casuale delle scelte di fine stanza: un
+# comune è 3 volte più probabile di un raro, un raro 4 volte più
+# probabile di un leggendario (quindi un leggendario ~12 volte più raro
+# di un comune), cosí i leggendari dei boss sconfitti restano un colpo
+# di fortuna occasionale invece di comparire alla pari degli altri.
+static func rarity_weight(rarity: String) -> float:
+	match rarity:
+		"legendary":
+			return 1.0
+		"rare":
+			return 4.0
+		_:
+			return 12.0
+
+# Estrae `count` voci distinte da `pool` senza reinserimento, con
+# probabilità proporzionale al peso di rarità di ciascuna (vedi
+# rarity_weight): ad ogni estrazione si ricalcola il peso totale delle
+# voci rimaste, cosí l'assenza (o esaurimento) di una rarità non altera
+# le proporzioni tra le altre.
+static func weighted_pick_without_replacement(pool: Array, count: int, rng: RandomNumberGenerator) -> Array:
+	var remaining: Array = pool.duplicate()
+	var result: Array = []
+	while remaining.size() > 0 and result.size() < count:
+		var total_weight := 0.0
+		for p in remaining:
+			total_weight += rarity_weight(p.rarity)
+		var roll: float = rng.randf() * total_weight
+		var cumulative := 0.0
+		var picked_index: int = remaining.size() - 1
+		for i in range(remaining.size()):
+			cumulative += rarity_weight(remaining[i].rarity)
+			if roll < cumulative:
+				picked_index = i
+				break
+		result.append(remaining[picked_index])
+		remaining.remove_at(picked_index)
+	return result
+
 static func build_golden_enemy_data(base_id: String) -> Dictionary:
 	var base: Dictionary = ENEMY_TYPES[base_id]
 	var golden: Dictionary = GOLDEN_VARIANTS[base_id]

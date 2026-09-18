@@ -34,6 +34,7 @@ func run_and_quit() -> void:
 	await _test_shockwave_ignores_allies()
 	await _test_ranged_ally_keeps_behavior()
 	await _test_unlocked_boss_legendary_in_reward_pool()
+	await _test_legendary_rarity_weighting()
 
 	SaveManager.reset_all()
 
@@ -610,8 +611,11 @@ func _test_unlocked_boss_legendary_in_reward_pool() -> void:
 	add_child(legend_run)
 	legend_run.begin_new_streak()
 	await get_tree().process_frame
+	# L'estrazione pesata (GameData.weighted_pick_without_replacement) rende
+	# un leggendario molto più raro di un comune/raro: servono molti più
+	# tentativi di prima per non rischiare un falso negativo occasionale.
 	var seen := false
-	for i in range(200):
+	for i in range(3000):
 		var choices: Array = legend_run._roll_powerup_choices(3)
 		for c in choices:
 			if c.id == "benedizione_del_custode":
@@ -619,13 +623,51 @@ func _test_unlocked_boss_legendary_in_reward_pool() -> void:
 				break
 		if seen:
 			break
-	_assert(seen, "la Benedizione del Custode non è mai comparsa tra le scelte di fine stanza in 200 tentativi")
+	_assert(seen, "la Benedizione del Custode non è mai comparsa tra le scelte di fine stanza in 3000 tentativi")
 	legend_run.queue_free()
 	await get_tree().process_frame
 
 	SaveManager.bestiary = previous_bestiary
 	SaveManager.save_data()
 	print("Leggendari dei boss sconfitti nel pool ricompense: OK")
+
+func _test_legendary_rarity_weighting() -> void:
+	print("--- Test regressione: i leggendari devono comparire molto più raramente ---")
+	# Verifica statisticamente (non solo "compare almeno una volta") che
+	# il peso di rarità funzioni davvero: comuni più frequenti dei rari,
+	# rari nettamente più frequenti dei leggendari.
+	var previous_bestiary: Dictionary = SaveManager.bestiary.duplicate(true)
+	SaveManager.bestiary["custode_corrotto"] = {"first_defeated_at": 0, "times_defeated": 1}
+	SaveManager.bestiary["colosso_corrotto"] = {"first_defeated_at": 0, "times_defeated": 1}
+	SaveManager.bestiary["spettro_corrotto"] = {"first_defeated_at": 0, "times_defeated": 1}
+
+	var weight_run := Run.new()
+	add_child(weight_run)
+	weight_run.begin_new_streak()
+	await get_tree().process_frame
+
+	var counts := {"common": 0, "rare": 0, "legendary": 0}
+	var trials := 3000
+	for i in range(trials):
+		var choices: Array = weight_run._roll_powerup_choices(3)
+		for c in choices:
+			counts[c.rarity] += 1
+
+	print("Occorrenze su %d estrazioni da 3 carte: %s" % [trials, counts])
+	_assert(counts.legendary > 0, "setup del test: i leggendari dovrebbero comparire almeno qualche volta su %d tentativi" % trials)
+	_assert(counts.common > counts.rare, "i comuni dovrebbero comparire più spesso dei rari")
+	_assert(counts.rare > counts.legendary, "i rari dovrebbero comparire più spesso dei leggendari")
+	# Confronta l'ORDINE DI GRANDEZZA atteso dai pesi (12 comune / 4 raro /
+	# 1 leggendario a voce), non un valore esatto, per non essere fragile
+	# alla varianza statistica su un campione finito.
+	var legendary_ratio: float = float(counts.rare) / float(max(counts.legendary, 1))
+	_assert(legendary_ratio > 2.0, "i leggendari non sembrano sufficientemente più rari dei rari (rapporto rari/leggendari: %.2f)" % legendary_ratio)
+
+	weight_run.queue_free()
+	await get_tree().process_frame
+	SaveManager.bestiary = previous_bestiary
+	SaveManager.save_data()
+	print("Peso di rarità dei leggendari: OK")
 
 func _kill_all_room_enemies_of(target_run: Run) -> void:
 	for e in target_run.enemy_container.get_children():

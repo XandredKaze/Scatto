@@ -407,11 +407,12 @@ func _roll_powerup_choices(count: int) -> Array:
 	# una volta (in qualsiasi run precedente) entrano nello stesso pool
 	# casuale dei potenziamenti comuni/rari, cosí possono ricomparire
 	# come scelta di fine stanza oltre che come bottino garantito la
-	# prima volta che si sconfigge quel boss.
+	# prima volta che si sconfigge quel boss. L'estrazione è pesata per
+	# rarità (GameData.weighted_pick_without_replacement): un leggendario
+	# resta un colpo di fortuna raro, non una scelta alla pari delle altre.
 	var pool: Array = GameData.get_regular_powerup_pool().duplicate()
 	pool.append_array(GameData.get_unlocked_boss_legendary_pool())
-	pool.shuffle()
-	return pool.slice(0, min(count, pool.size()))
+	return GameData.weighted_pick_without_replacement(pool, count, rng)
 
 func _on_powerup_selected(id: String) -> void:
 	player.apply_powerup(id)
