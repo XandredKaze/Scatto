@@ -16,6 +16,7 @@ func run_and_quit() -> void:
 
 	await _test_gamepad_input()
 	await _test_controller_menu_navigation()
+	_test_maze_grid()
 	await _test_all_boss_moves()
 	await _test_boss_signals_wired_in_run()
 	await _test_real_dash_collision()
@@ -416,6 +417,58 @@ func _test_boss_attack_patterns() -> void:
 
 	container.queue_free()
 	await get_tree().physics_frame
+
+func _test_maze_grid() -> void:
+	print("--- Test MazeGrid (generazione, collisione, pathfinding) ---")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+
+	var maze := MazeGrid.new()
+	maze.generate(7, 6, 160.0, rng)
+
+	_assert(maze.wall_rects.size() > 0, "il labirinto non ha generato pareti")
+
+	# Connettività: ogni cella deve essere raggiungibile da (0,0) via BFS
+	# sulle sole connessioni aperte (nessuna isola scollegata).
+	var reached := {Vector2i(0, 0): true}
+	var queue: Array = [Vector2i(0, 0)]
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		for n in maze._open_neighbors(cur):
+			if not reached.has(n):
+				reached[n] = true
+				queue.append(n)
+	_assert(reached.size() == maze.cols * maze.rows, "il labirinto ha celle non raggiungibili (%d su %d)" % [reached.size(), maze.cols * maze.rows])
+
+	# Il centro di ogni cella deve essere libero (mai dentro una parete).
+	var all_centers_free := true
+	for y in range(maze.rows):
+		for x in range(maze.cols):
+			if not maze.is_position_free(maze.cell_center(x, y), 12.0):
+				all_centers_free = false
+	_assert(all_centers_free, "il centro di almeno una cella risulta dentro una parete")
+
+	# Il centro di una parete perimetrale deve essere bloccato.
+	var boundary_point: Vector2 = maze.origin + Vector2(0.0, maze.cell_size * 0.5)
+	_assert(not maze.is_position_free(boundary_point, 12.0), "il muro perimetrale non blocca la posizione")
+
+	# resolve_move non deve mai spingere un'entità dentro una parete.
+	var far_move := maze.resolve_move(maze.cell_center(0, 0), Vector2(2000, 0), 12.0)
+	_assert(maze.is_position_free(far_move, 12.0), "resolve_move ha lasciato l'entità dentro una parete")
+	_assert(far_move.x < maze.origin.x + maze.cell_size * float(maze.cols), "resolve_move non ha bloccato il movimento al muro perimetrale")
+
+	# Pathfinding: il percorso tra due celle deve esistere ed essere
+	# composto solo da passi verso celle adiacenti aperte.
+	var farthest := maze.find_farthest_cell(Vector2i(0, 0))
+	_assert(farthest != Vector2i(0, 0), "find_farthest_cell dovrebbe trovare una cella diversa dall'origine")
+	var path := maze.get_path(maze.cell_center(0, 0), maze.cell_center(farthest.x, farthest.y))
+	_assert(path.size() >= 2, "il percorso verso la cella più lontana dovrebbe avere almeno 2 punti")
+	for i in range(path.size() - 1):
+		_assert(maze.world_to_cell(path[i]).distance_to(maze.world_to_cell(path[i + 1])) <= 1.5, "il percorso salta tra celle non adiacenti")
+
+	print("MazeGrid: %d x %d celle, %d segmenti muro, tutte connesse, pathfinding OK" % [maze.cols, maze.rows, maze.wall_rects.size()])
 
 func _test_all_boss_moves() -> void:
 	print("--- Test di ogni mossa di ogni boss (esecuzione diretta e deterministica) ---")
