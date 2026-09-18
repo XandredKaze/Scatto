@@ -14,6 +14,7 @@ extends CombatEntity
 # frame, per restare economico anche con molti nemici in campo.
 
 signal spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float)
+signal ally_kill(defeated: Node)
 
 var enemy_id := "strisciante"
 var display_name := "Strisciante"
@@ -230,8 +231,16 @@ func _ally_resolve_combat() -> void:
 		if not area.alive:
 			continue
 		if can_deal_contact_damage():
+			var was_alive: bool = area.alive
 			area.take_damage(damage)
 			trigger_contact()
+			if was_alive and not area.alive:
+				# Il colpo dell'alleato ha ucciso il bersaglio: Run non lo
+				# saprebbe mai (ascolta solo enemy_defeated del Player, per
+				# lo scatto), quindi senza questo segnale una stanza il cui
+				# ultimo nemico viene finito da un alleato invece che dallo
+				# scatto resterebbe bloccata per sempre, portale escluso.
+				ally_kill.emit(area)
 		if area.can_deal_contact_damage():
 			take_damage(area.damage)
 			area.trigger_contact()

@@ -291,6 +291,8 @@ func _on_dash_hit(target, damage: float) -> void:
 		for other in get_tree().get_nodes_in_group(group):
 			if other == target or not other.alive:
 				continue
+			if other is Enemy and other.is_ally:
+				continue
 			if origin.distance_to(other.global_position) <= SHOCKWAVE_RADIUS:
 				other.take_damage(damage * SHOCKWAVE_RATIO)
 				if not other.alive:
@@ -338,6 +340,7 @@ func _convert_enemy_to_ally(enemy: Enemy) -> void:
 	enemy.hp = enemy.max_hp
 	enemy.ally_path = PackedVector2Array()
 	enemy.defeated.connect(_on_ally_defeated.bind(enemy))
+	enemy.ally_kill.connect(_on_enemy_defeated)
 	allies.append(enemy)
 	SaveManager.unlock_enemy(enemy.enemy_id)
 	hud.show_banner("%s si è unito a te!" % enemy.display_name, 2.5)

@@ -31,6 +31,8 @@ func run_and_quit() -> void:
 	await _test_ally_taming()
 	await _test_ally_combat()
 	await _test_taming_last_enemy_clears_room()
+	await _test_ally_kill_clears_room()
+	await _test_shockwave_ignores_allies()
 
 	SaveManager.reset_all()
 
@@ -456,6 +458,94 @@ func _test_taming_last_enemy_clears_room() -> void:
 
 	print("Addomesticare l'ultimo nemico: OK (portale attivato)")
 	solo_run.queue_free()
+	await get_tree().process_frame
+
+func _test_ally_kill_clears_room() -> void:
+	print("--- Test regressione: un'uccisione dell'alleato deve ripulire la stanza ---")
+	# Quando è l'alleato (non lo scatto del giocatore) a finire l'ultimo
+	# nemico ostile, Run non lo saprebbe mai senza il segnale Enemy.ally_kill
+	# collegato in _convert_enemy_to_ally(): il portale resterebbe spento
+	# per sempre. Qui il nemico viene finito per davvero, via fisica reale.
+	var kill_run := Run.new()
+	add_child(kill_run)
+	kill_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in kill_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	# L'ultimo nemico ostile va aggiunto PRIMA di addomesticare l'alleato:
+	# se fosse l'unico nemico presente, l'addomesticamento stesso
+	# ripulirebbe già la stanza (fix precedente), mascherando il bug qui
+	# testato (l'uccisione da parte dell'alleato, non la conversione).
+	var last_hostile := Enemy.new()
+	last_hostile.maze = kill_run.current_maze
+	last_hostile.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	last_hostile.hp = 1.0
+	last_hostile.max_hp = 1.0
+	kill_run.enemy_container.add_child(last_hostile)
+
+	var helper := Enemy.new()
+	helper.maze = kill_run.current_maze
+	helper.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	helper.global_position = kill_run.player.global_position + Vector2(60.0, 0.0)
+	kill_run.enemy_container.add_child(helper)
+	kill_run.player.global_position = helper.global_position
+	kill_run._on_tame_requested()
+	_assert(helper.is_ally, "setup del test: il bersaglio dovrebbe diventare alleato")
+	_assert(not kill_run.room_cleared, "setup del test: la stanza non dovrebbe risultare ripulita prima del colpo di grazia")
+
+	last_hostile.global_position = helper.global_position
+	for i in range(10):
+		await get_tree().physics_frame
+		if not last_hostile.alive:
+			break
+
+	_assert(not last_hostile.alive, "setup del test: l'alleato dovrebbe aver finito l'ultimo nemico ostile")
+	_assert(kill_run.room_cleared, "un'uccisione dell'alleato dovrebbe ripulire la stanza (portale attivo)")
+
+	print("Uccisione dell'alleato: OK (portale attivato)")
+	kill_run.queue_free()
+	await get_tree().process_frame
+
+func _test_shockwave_ignores_allies() -> void:
+	print("--- Test regressione: l'onda d'urto non deve colpire i propri alleati ---")
+	# _on_dash_hit itera i gruppi "enemy"/"boss" per il danno ad area
+	# della benedizione del Custode: gli alleati restano nel gruppo
+	# "enemy" (sono ancora nodi Enemy), quindi senza l'esclusione
+	# esplicita l'onda d'urto del giocatore colpirebbe anche loro.
+	var sw_run := Run.new()
+	add_child(sw_run)
+	sw_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in sw_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	var ally_target := Enemy.new()
+	ally_target.maze = sw_run.current_maze
+	ally_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	ally_target.global_position = sw_run.player.global_position
+	sw_run.enemy_container.add_child(ally_target)
+	sw_run.player.global_position = ally_target.global_position
+	sw_run._on_tame_requested()
+	_assert(ally_target.is_ally, "setup del test: il bersaglio dovrebbe diventare alleato")
+
+	var victim := Enemy.new()
+	victim.maze = sw_run.current_maze
+	victim.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	victim.global_position = ally_target.global_position + Vector2(30.0, 0.0)
+	sw_run.enemy_container.add_child(victim)
+
+	sw_run.player.has_shockwave = true
+	var ally_hp_before: float = ally_target.hp
+	sw_run._on_dash_hit(victim, 40.0)
+	_assert(ally_target.hp == ally_hp_before, "l'onda d'urto ha danneggiato un proprio alleato: non dovrebbe mai accadere")
+
+	print("Onda d'urto: OK (alleati ignorati)")
+	sw_run.queue_free()
 	await get_tree().process_frame
 
 func _kill_all_room_enemies_of(target_run: Run) -> void:
