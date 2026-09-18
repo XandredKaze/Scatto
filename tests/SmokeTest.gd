@@ -26,7 +26,6 @@ func run_and_quit() -> void:
 	await _test_boss_attack_patterns()
 	await _test_tutorial_screen_has_no_spoilers()
 	await _test_hud_debug_golden_button()
-	await _test_direction_indicator()
 	await _test_pause_menu()
 	await _test_ally_taming()
 	await _test_ally_combat()
@@ -171,44 +170,6 @@ func _collect_label_texts(node: Node, out: Array) -> void:
 	for child in node.get_children():
 		_collect_label_texts(child, out)
 
-func _test_direction_indicator() -> void:
-	print("--- Test indicatore di direzione verso il portale ---")
-	var indicator_run := Run.new()
-	add_child(indicator_run)
-	indicator_run.begin_new_streak()
-	await get_tree().process_frame
-
-	_assert(not indicator_run.hud.direction_indicator.visible, "l'indicatore non dovrebbe essere visibile prima che la stanza sia ripulita")
-
-	# Ripulisce la stanza: il portale si attiva ma il giocatore resta
-	# lontano dallo spawn, quindi quasi certamente fuori schermo.
-	_kill_all_room_enemies_of(indicator_run)
-	_assert(indicator_run.room_cleared, "setup del test: la stanza dovrebbe risultare ripulita")
-	await get_tree().process_frame
-
-	_assert(indicator_run.hud.direction_indicator.visible, "l'indicatore dovrebbe comparire quando il portale è attivo e fuori schermo")
-
-	var player_pos: Vector2 = indicator_run.player.global_position
-	var expected_angle: float = (indicator_run.exit_position - player_pos).angle()
-	var angle_diff: float = abs(wrapf(indicator_run.hud.direction_indicator.rotation - expected_angle, -PI, PI))
-	_assert(angle_diff < 0.01, "l'indicatore non punta nella direzione corretta (differenza %.3f rad)" % angle_diff)
-
-	# Se il giocatore è già dove si trova il portale, l'indicatore deve
-	# nascondersi: il portale è per forza a schermo.
-	indicator_run.player.global_position = indicator_run.exit_position
-	await get_tree().process_frame
-	_assert(not indicator_run.hud.direction_indicator.visible, "l'indicatore non dovrebbe essere visibile quando il portale è già a schermo")
-
-	# Attraversando il portale la stanza avanza e il portale si disattiva:
-	# l'indicatore deve sparire di nuovo.
-	indicator_run._physics_process(0.016)
-	await get_tree().process_frame
-	_assert(not indicator_run.hud.direction_indicator.visible, "l'indicatore dovrebbe sparire una volta attraversato il portale")
-
-	print("Indicatore di direzione: OK")
-	indicator_run.queue_free()
-	await get_tree().process_frame
-
 func _test_hud_debug_golden_button() -> void:
 	print("--- Test pulsante debug 'Forza nemico dorato' in HUD ---")
 	var r := Run.new()
@@ -296,8 +257,6 @@ func _test_pause_menu() -> void:
 	_assert(retry_run.player.dash_damage_bonus == 0.0, "setup del test: il danno da scatto dovrebbe partire da 0")
 
 	_kill_all_room_enemies_of(retry_run)
-	retry_run.player.global_position = retry_run.exit_position
-	retry_run._physics_process(0.016)
 	retry_run._on_powerup_selected("lama_rapida")
 	_assert(retry_run.room_number == 2, "setup del test: dopo la scelta si dovrebbe essere alla stanza 2")
 	_assert(retry_run.player.dash_damage_bonus == 6.0, "setup del test: 'Lama Rapida' dovrebbe dare +6 danno da scatto")
@@ -436,7 +395,7 @@ func _test_taming_last_enemy_clears_room() -> void:
 	# L'addomesticamento non passa da _on_enemy_defeated (il bersaglio
 	# resta vivo, come alleato): senza il controllo dedicato in
 	# _convert_enemy_to_ally(), convertire l'ultimo nemico ostile della
-	# stanza lascerebbe il portale disattivato per sempre.
+	# stanza non consegnerebbe mai la ricompensa.
 	var solo_run := Run.new()
 	add_child(solo_run)
 	solo_run.begin_new_streak()
@@ -455,9 +414,9 @@ func _test_taming_last_enemy_clears_room() -> void:
 	_assert(not solo_run.room_cleared, "setup del test: la stanza non dovrebbe risultare ripulita prima dell'addomesticamento")
 	solo_run._on_tame_requested()
 	_assert(last_enemy.is_ally, "l'unico nemico della stanza dovrebbe diventare alleato")
-	_assert(solo_run.room_cleared, "addomesticare l'ultimo nemico ostile dovrebbe ripulire la stanza (portale attivo)")
+	_assert(solo_run.room_cleared, "addomesticare l'ultimo nemico ostile dovrebbe ripulire la stanza (ricompensa consegnata)")
 
-	print("Addomesticare l'ultimo nemico: OK (portale attivato)")
+	print("Addomesticare l'ultimo nemico: OK (ricompensa consegnata)")
 	solo_run.queue_free()
 	await get_tree().process_frame
 
@@ -465,8 +424,8 @@ func _test_ally_kill_clears_room() -> void:
 	print("--- Test regressione: un'uccisione dell'alleato deve ripulire la stanza ---")
 	# Quando è l'alleato (non lo scatto del giocatore) a finire l'ultimo
 	# nemico ostile, Run non lo saprebbe mai senza il segnale Enemy.ally_kill
-	# collegato in _convert_enemy_to_ally(): il portale resterebbe spento
-	# per sempre. Qui il nemico viene finito per davvero, via fisica reale.
+	# collegato in _convert_enemy_to_ally(): la ricompensa non verrebbe mai
+	# consegnata. Qui il nemico viene finito per davvero, via fisica reale.
 	var kill_run := Run.new()
 	add_child(kill_run)
 	kill_run.begin_new_streak()
@@ -504,9 +463,9 @@ func _test_ally_kill_clears_room() -> void:
 			break
 
 	_assert(not last_hostile.alive, "setup del test: l'alleato dovrebbe aver finito l'ultimo nemico ostile")
-	_assert(kill_run.room_cleared, "un'uccisione dell'alleato dovrebbe ripulire la stanza (portale attivo)")
+	_assert(kill_run.room_cleared, "un'uccisione dell'alleato dovrebbe ripulire la stanza (ricompensa consegnata)")
 
-	print("Uccisione dell'alleato: OK (portale attivato)")
+	print("Uccisione dell'alleato: OK (ricompensa consegnata)")
 	kill_run.queue_free()
 	await get_tree().process_frame
 
@@ -615,7 +574,7 @@ func _test_ranged_ally_keeps_behavior() -> void:
 	var final_dist: float = ranged_ally.global_position.distance_to(hostile.global_position)
 	print("Distanza finale alleato<->bersaglio: ", final_dist)
 	_assert(final_dist > 100.0, "l'alleato \"ranged\" si è avvicinato a distanza di mischia invece di sparare da lontano")
-	_assert(ranged_run.room_cleared, "un'uccisione a distanza dell'alleato dovrebbe ripulire la stanza (portale attivo)")
+	_assert(ranged_run.room_cleared, "un'uccisione a distanza dell'alleato dovrebbe ripulire la stanza (ricompensa consegnata)")
 
 	print("Comportamento a distanza dell'alleato: OK")
 	ranged_run.queue_free()
@@ -844,9 +803,11 @@ func _test_maze_integration() -> void:
 	# percorrere. Si verifica quindi la distanza sul grafo, non quella
 	# euclidea (già verificata a parte in _test_maze_grid).
 	var spawn_pos: Vector2 = maze_run.player.global_position
-	var exit_path_len: int = maze_run.current_maze.get_path(spawn_pos, maze_run.exit_position).size()
+	var farthest_cell: Vector2i = maze_run.current_maze.find_farthest_cell(maze_run.current_maze.world_to_cell(spawn_pos))
+	var farthest_pos: Vector2 = maze_run.current_maze.cell_center(farthest_cell.x, farthest_cell.y)
+	var farthest_path_len: int = maze_run.current_maze.get_path(spawn_pos, farthest_pos).size()
 	var min_expected_hops: int = (maze_run.MAZE_COLS + maze_run.MAZE_ROWS) / 2
-	_assert(exit_path_len >= min_expected_hops, "l'uscita è troppo vicina allo spawn lungo il percorso (%d celle, attese almeno %d)" % [exit_path_len, min_expected_hops])
+	_assert(farthest_path_len >= min_expected_hops, "il punto più lontano dallo spawn è troppo vicino lungo il percorso (%d celle, attese almeno %d)" % [farthest_path_len, min_expected_hops])
 
 	var bounds: Rect2 = maze_run.current_maze.total_bounds()
 	_assert(maze_run.player.camera.limit_left == int(bounds.position.x), "il limite sinistro della camera non combacia col labirinto")
@@ -882,8 +843,6 @@ func _test_maze_integration() -> void:
 	# aperta (niente labirinto) ma resta più grande dello schermo.
 	for i in range(5):
 		maze_run._debug_kill_all()
-		maze_run.player.global_position = maze_run.exit_position
-		maze_run._physics_process(0.016)
 		if maze_run.powerup_choice_screen.visible:
 			maze_run._on_powerup_selected(GameData.get_regular_powerup_pool()[0].id)
 	_assert(maze_run.room_number == 6, "non si è arrivati alla sala del boss (stanza %d)" % maze_run.room_number)
@@ -892,7 +851,7 @@ func _test_maze_integration() -> void:
 	var boss_bounds: Rect2 = maze_run.arena_rect
 	_assert(boss_bounds.size.x > 1280.0 or boss_bounds.size.y > 720.0, "la sala del boss non è più grande della finestra di gioco (%s)" % boss_bounds.size)
 
-	print("Integrazione labirinto: OK (uscita a %d celle di percorso dallo spawn, sala boss %s)" % [exit_path_len, boss_bounds.size])
+	print("Integrazione labirinto: OK (punto più lontano a %d celle di percorso dallo spawn, sala boss %s)" % [farthest_path_len, boss_bounds.size])
 	maze_run.queue_free()
 	await get_tree().process_frame
 
@@ -1102,17 +1061,11 @@ func _test_real_dash_collision() -> void:
 func _clear_five_rooms_to_boss() -> void:
 	for i in range(1, 6):
 		_kill_all_room_enemies()
+		# La ricompensa viene consegnata subito alla pulizia della stanza,
+		# senza dover raggiungere alcun punto: la schermata di scelta deve
+		# comparire immediatamente dopo l'ultimo nemico sconfitto.
 		_assert(run.room_cleared, "la stanza %d non risulta ripulita" % run.room_number)
-		run.player.global_position = run.exit_position
-		run._physics_process(0.016)
 		_assert(run.powerup_choice_screen.visible, "schermata scelta potenziamento non mostrata (stanza %d)" % i)
-		# Regressione: restare fermi nel portale non deve rigenerare la
-		# scelta del potenziamento ad ogni frame (il portale si disattiva
-		# subito dopo il primo trigger).
-		_assert(not run.room_cleared, "il portale non si è disattivato dopo il primo utilizzo (stanza %d)" % i)
-		for j in range(5):
-			run._physics_process(0.016)
-			_assert(not run.room_cleared, "il portale ha ri-generato la scelta mentre il giocatore restava fermo (stanza %d)" % i)
 		var choice: Dictionary = GameData.get_regular_powerup_pool()[0]
 		run._on_powerup_selected(choice.id)
 

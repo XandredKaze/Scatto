@@ -288,7 +288,7 @@ func _ally_resolve_combat() -> void:
 				# saprebbe mai (ascolta solo enemy_defeated del Player, per
 				# lo scatto), quindi senza questo segnale una stanza il cui
 				# ultimo nemico viene finito da un alleato invece che dallo
-				# scatto resterebbe bloccata per sempre, portale escluso.
+				# scatto non consegnerebbe mai la ricompensa.
 				ally_kill.emit(area)
 		if area.can_deal_contact_damage():
 			take_damage(area.damage)

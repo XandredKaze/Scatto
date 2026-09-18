@@ -16,9 +16,6 @@ extends Node2D
 
 var arena_size := Vector2(1280, 720)
 var wall_margin := 48.0
-var exit_active := false
-var exit_position := Vector2.ZERO
-var exit_radius := 28.0
 
 var maze: MazeGrid = null:
 	set(value):
@@ -51,9 +48,6 @@ func _draw() -> void:
 		_draw_maze()
 	else:
 		_draw_open_arena()
-	if exit_active:
-		draw_circle(exit_position, exit_radius, Color(0.4, 0.88, 0.76, 0.35))
-		draw_arc(exit_position, exit_radius, 0.0, TAU, 24, Color(0.4, 0.88, 0.76, 0.8), 2.0)
 
 func _draw_open_arena() -> void:
 	draw_rect(Rect2(Vector2.ZERO, arena_size), Color8(18, 16, 15))
@@ -71,12 +65,6 @@ func _draw_maze() -> void:
 		var outline: PackedVector2Array = poly.duplicate()
 		outline.append(poly[0])
 		draw_polyline(outline, ROCK_EDGE_COLOR, 2.0, true)
-
-func set_exit_active(active: bool) -> void:
-	if exit_active == active:
-		return
-	exit_active = active
-	queue_redraw()
 
 # --- Geometria della grotta (generata una volta per stanza) -------------------------------------------------
 

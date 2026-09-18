@@ -24,7 +24,6 @@ const WALL_THICKNESS := 34.0
 # giocatore invece di mostrare l'intera sala in un colpo solo.
 const BOSS_ARENA_SIZE := Vector2(1920, 1080)
 const WALL_MARGIN := 48.0
-const EXIT_RADIUS := 28.0
 const SHOCKWAVE_RADIUS := 70.0
 const SHOCKWAVE_RATIO := 0.4
 # Addomesticamento: rende alleato un nemico comune nelle vicinanze (non
@@ -43,7 +42,6 @@ var run_start_snapshot: Dictionary = {}
 
 var current_maze: MazeGrid = null
 var arena_rect: Rect2
-var exit_position: Vector2
 var rng := RandomNumberGenerator.new()
 var allies: Array = []
 
@@ -72,7 +70,6 @@ func _ready() -> void:
 func _build_scene_tree() -> void:
 	arena_visual = ArenaVisual.new()
 	arena_visual.wall_margin = WALL_MARGIN
-	arena_visual.exit_radius = EXIT_RADIUS
 	add_child(arena_visual)
 
 	player_container = Node2D.new()
@@ -164,12 +161,8 @@ func _generate_room(n: int) -> void:
 	arena_rect = Rect2()
 
 	var spawn_cell := Vector2i(0, MAZE_ROWS - 1)
-	var exit_cell := maze.find_farthest_cell(spawn_cell)
-	exit_position = maze.cell_center(exit_cell.x, exit_cell.y)
 
 	arena_visual.maze = maze
-	arena_visual.exit_position = exit_position
-	arena_visual.set_exit_active(false)
 	arena_visual.queue_redraw()
 
 	player.maze = maze
@@ -255,11 +248,6 @@ func _random_enemy_point(maze: MazeGrid, excluded_cells: Array) -> Vector2:
 
 # --- Combattimento e progressione -------------------------------------------------
 
-func _physics_process(_delta: float) -> void:
-	if room_cleared and current_boss == null and room_number <= 5 and player != null and player.alive:
-		if player.global_position.distance_to(exit_position) <= EXIT_RADIUS:
-			_on_room_exit()
-
 func _on_enemy_defeated(entity) -> void:
 	var is_boss: bool = entity is Boss
 	var entity_id: String = entity.enemy_id if entity is Enemy else entity.boss_id
@@ -307,8 +295,12 @@ func _check_room_cleared() -> void:
 		if e.alive:
 			return
 	room_cleared = true
-	arena_visual.set_exit_active(true)
-	hud.show_banner("Stanza ripulita! Raggiungi il portale.", 2.5)
+	# La ricompensa viene consegnata subito, senza dover raggiungere un
+	# punto della stanza: non appena l'ultimo nemico ostile cade, si
+	# passa direttamente alla scelta del potenziamento.
+	var choices := _roll_powerup_choices(3)
+	powerup_choice_screen.show()
+	powerup_choice_screen.show_choices(choices, room_number)
 
 # --- Alleati (addomesticamento) -------------------------------------------------
 
@@ -346,8 +338,8 @@ func _convert_enemy_to_ally(enemy: Enemy) -> void:
 	hud.show_banner("%s si è unito a te!" % enemy.display_name, 2.5)
 	# L'addomesticamento non passa da _on_enemy_defeated (il nemico non è
 	# stato sconfitto, è ancora vivo come alleato): se era l'ultimo nemico
-	# ostile della stanza, va comunque verificato qui, altrimenti il
-	# portale non si attiverebbe mai.
+	# ostile della stanza, va comunque verificato qui, altrimenti la
+	# ricompensa non verrebbe mai consegnata.
 	_check_room_cleared()
 
 func _on_ally_defeated(ally) -> void:
@@ -410,15 +402,6 @@ func _on_boss_defeated(boss) -> void:
 	else:
 		run_complete_screen.continue_btn.grab_focus()
 
-func _on_room_exit() -> void:
-	# Disattiva subito il portale: restare fermi al suo interno non deve
-	# far comparire la scelta del potenziamento ad ogni frame.
-	room_cleared = false
-	arena_visual.set_exit_active(false)
-	var choices := _roll_powerup_choices(3)
-	powerup_choice_screen.show()
-	powerup_choice_screen.show_choices(choices, room_number)
-
 func _roll_powerup_choices(count: int) -> Array:
 	var pool: Array = GameData.get_regular_powerup_pool().duplicate()
 	pool.shuffle()
@@ -454,7 +437,6 @@ func _start_boss_room() -> void:
 
 	arena_visual.maze = null
 	arena_visual.arena_size = BOSS_ARENA_SIZE
-	arena_visual.set_exit_active(false)
 	arena_visual.queue_redraw()
 
 	player.maze = null
