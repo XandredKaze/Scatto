@@ -2,8 +2,11 @@ class_name PowerupChoiceScreen
 extends Control
 
 # Overlay mostrato dopo aver ripulito una stanza (1-5): il giocatore
-# sceglie uno tra 3 potenziamenti casuali (esclusi quelli leggendari,
-# ottenibili solo come bottino garantito).
+# sceglie uno tra 3 potenziamenti casuali. Il pool include anche i
+# leggendari dei boss speciali già sconfitti almeno una volta in
+# precedenza (vedi GameData.get_unlocked_boss_legendary_pool()); quelli
+# non ancora sbloccati restano ottenibili solo come bottino garantito
+# la prima volta che si sconfigge quel boss.
 
 signal powerup_selected(id: String)
 

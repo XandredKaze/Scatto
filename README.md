@@ -32,6 +32,7 @@ Non appena sconfiggi l'ultimo nemico ostile di una stanza, la ricompensa (la sce
 - Dopo aver sconfitto un boss normale puoi scegliere se **tornare all'Hub** (la serie si azzera, ma i progressi restano salvati) oppure **continuare senza tornarci**: mantieni i potenziamenti accumulati e affronti subito una nuova run.
 - Se vinci **3 run consecutive senza mai tornare all'Hub**, il boss della terza run è sostituito dalla sua variante speciale corrotta (più potente, con una mossa esclusiva in più e un potenziamento leggendario garantito). **Sconfiggere un boss speciale conclude la partita**: resta disponibile solo "Torna all'Hub".
 - Morire in qualsiasi momento interrompe la serie e riporta all'Hub.
+- Ogni boss speciale sconfitto **almeno una volta** (in qualsiasi run precedente, non solo quella corrente) sblocca per sempre il suo potenziamento leggendario nel pool delle scelte casuali di fine stanza: da quel momento in poi può ricomparire anche senza dover sconfiggere di nuovo quel boss, oltre a restare comunque un bottino garantito la prima volta.
 
 ### Nemico dorato
 

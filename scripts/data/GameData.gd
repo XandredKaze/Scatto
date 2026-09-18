@@ -151,6 +151,24 @@ static func get_powerup(id: String) -> Dictionary:
 static func get_regular_powerup_pool() -> Array:
 	return POWERUPS.filter(func(p): return not p.has("dropped_only_by"))
 
+# Potenziamenti leggendari dei boss speciali già sconfitti almeno una
+# volta (bestiario persistente, non nella run corrente): una volta
+# dimostrato di poterli battere, il loro bottino può ricomparire come
+# scelta casuale di fine stanza in run successive, oltre che come
+# bottino garantito la prima volta che li si sconfigge. Esclude
+# deliberatamente il Cuore Dorato (bottino dello Strisciante Dorato,
+# non di un boss): "dropped_only_by" punta a "strisciante_dorato", che
+# non è una chiave di BOSSES.
+static func get_unlocked_boss_legendary_pool() -> Array:
+	var result: Array = []
+	for p in POWERUPS:
+		var source: String = p.get("dropped_only_by", "")
+		if source == "" or not BOSSES.has(source):
+			continue
+		if SaveManager.is_enemy_unlocked(source):
+			result.append(p)
+	return result
+
 static func apply_powerup(id: String, player: Node) -> void:
 	match id:
 		"lama_rapida":

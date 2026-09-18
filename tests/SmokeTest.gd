@@ -33,6 +33,7 @@ func run_and_quit() -> void:
 	await _test_ally_kill_clears_room()
 	await _test_shockwave_ignores_allies()
 	await _test_ranged_ally_keeps_behavior()
+	await _test_unlocked_boss_legendary_in_reward_pool()
 
 	SaveManager.reset_all()
 
@@ -579,6 +580,52 @@ func _test_ranged_ally_keeps_behavior() -> void:
 	print("Comportamento a distanza dell'alleato: OK")
 	ranged_run.queue_free()
 	await get_tree().process_frame
+
+func _test_unlocked_boss_legendary_in_reward_pool() -> void:
+	print("--- Test regressione: leggendari dei boss sconfitti nel pool ricompense ---")
+	# I leggendari dei boss speciali erano ottenibili solo come bottino
+	# garantito la prima volta che si sconfiggeva quel boss: ora, una
+	# volta sbloccati nel bestiario, devono poter ricomparire anche tra
+	# le 3 scelte casuali di fine stanza in run successive.
+	var previous_bestiary: Dictionary = SaveManager.bestiary.duplicate(true)
+	SaveManager.bestiary = {}
+
+	_assert(GameData.get_unlocked_boss_legendary_pool().is_empty(), "nessun leggendario di boss dovrebbe comparire senza boss sconfitti")
+
+	SaveManager.bestiary["custode_corrotto"] = {"first_defeated_at": 0, "times_defeated": 1}
+	var unlocked: Array = GameData.get_unlocked_boss_legendary_pool()
+	_assert(unlocked.size() == 1 and unlocked[0].id == "benedizione_del_custode", "la Benedizione del Custode dovrebbe sbloccarsi dopo aver sconfitto il Custode Corrotto")
+
+	# Il Cuore Dorato è bottino di un nemico dorato, non di un boss:
+	# anche se sbloccato nel bestiario, non deve mai finire in questo pool.
+	SaveManager.bestiary["strisciante_dorato"] = {"first_defeated_at": 0, "times_defeated": 1}
+	unlocked = GameData.get_unlocked_boss_legendary_pool()
+	_assert(unlocked.size() == 1, "il Cuore Dorato non deve mai comparire nel pool dei leggendari dei boss")
+
+	# Integrazione: con il boss sbloccato, il potenziamento deve poter
+	# comparire davvero tra le 3 scelte di fine stanza generate da Run.
+	# Si ripete il tiro finché non lo si osserva almeno una volta, per
+	# non essere fragili alla casualità dello shuffle.
+	var legend_run := Run.new()
+	add_child(legend_run)
+	legend_run.begin_new_streak()
+	await get_tree().process_frame
+	var seen := false
+	for i in range(200):
+		var choices: Array = legend_run._roll_powerup_choices(3)
+		for c in choices:
+			if c.id == "benedizione_del_custode":
+				seen = true
+				break
+		if seen:
+			break
+	_assert(seen, "la Benedizione del Custode non è mai comparsa tra le scelte di fine stanza in 200 tentativi")
+	legend_run.queue_free()
+	await get_tree().process_frame
+
+	SaveManager.bestiary = previous_bestiary
+	SaveManager.save_data()
+	print("Leggendari dei boss sconfitti nel pool ricompense: OK")
 
 func _kill_all_room_enemies_of(target_run: Run) -> void:
 	for e in target_run.enemy_container.get_children():

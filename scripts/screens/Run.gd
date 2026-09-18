@@ -403,7 +403,13 @@ func _on_boss_defeated(boss) -> void:
 		run_complete_screen.continue_btn.grab_focus()
 
 func _roll_powerup_choices(count: int) -> Array:
+	# I potenziamenti leggendari dei boss speciali già sconfitti almeno
+	# una volta (in qualsiasi run precedente) entrano nello stesso pool
+	# casuale dei potenziamenti comuni/rari, cosí possono ricomparire
+	# come scelta di fine stanza oltre che come bottino garantito la
+	# prima volta che si sconfigge quel boss.
 	var pool: Array = GameData.get_regular_powerup_pool().duplicate()
+	pool.append_array(GameData.get_unlocked_boss_legendary_pool())
 	pool.shuffle()
 	return pool.slice(0, min(count, pool.size()))
 
