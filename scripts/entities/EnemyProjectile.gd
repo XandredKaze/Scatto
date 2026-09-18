@@ -6,6 +6,7 @@ var damage := 6.0
 var velocity := Vector2.ZERO
 var life := 3.0
 var arena_bounds: Rect2 = Rect2()
+var maze: MazeGrid = null
 
 func _ready() -> void:
 	collision_layer = 8
@@ -31,7 +32,10 @@ func _physics_process(delta: float) -> void:
 	if life <= 0.0:
 		queue_free()
 		return
-	if arena_bounds.size != Vector2.ZERO:
+	if maze != null:
+		if not maze.is_position_free(global_position, radius):
+			queue_free()
+	elif arena_bounds.size != Vector2.ZERO:
 		var r: Rect2 = arena_bounds.grow(40.0)
 		if not r.has_point(global_position):
 			queue_free()

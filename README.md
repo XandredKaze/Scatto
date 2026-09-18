@@ -11,6 +11,12 @@ Un roguelike top-down realizzato in **Godot 4.3** in cui l'unico attacco a dispo
 - **Menu e scelta dei potenziamenti**: navigabili anche da controller con lo stick/D-pad, confermando con il tasto A/Croce e tornando indietro con B/Cerchio. Ogni menu (Hub, scelta del potenziamento, archivio, bestiario, tutorial, fine run) mette a fuoco automaticamente l'opzione predefinita, cosí il pad ha sempre un punto di partenza da cui navigare.
 - **Pausa**: `Esc` o il tasto Start/Opzioni del controller, in qualsiasi momento durante una run (tranne sopra un altro menu già aperto, come la scelta del potenziamento). Il menu di pausa offre tre opzioni, navigabili anch'esse da controller: **Riprendi** (torna esattamente da dove eri), **Riprova la run dall'inizio** (rigioca la stanza 1 di questa run con le statistiche che avevi quando l'hai iniziata, senza i potenziamenti presi nel frattempo) e **Torna all'Hub** (abbandona la run e interrompe la serie, come morire).
 
+### Stanze e labirinto
+
+Le stanze 1-5 sono **labirinti generati proceduralmente** (10x8 celle, molto più grandi dello schermo), con corridoi e qualche anello per evitare vicoli ciechi frustranti. La telecamera resta sempre centrata sul giocatore e lo segue ovunque si muova; i nemici della stanza inseguono seguendo un percorso reale attraverso i corridoi, non in linea retta. L'uscita è sempre posizionata nel punto del labirinto più lontano dal tuo ingresso (in numero di corridoi da percorrere, non in linea d'aria).
+
+La **sesta stanza** (il boss) è invece un'unica arena aperta, senza pareti interne, ma comunque più grande dello schermo: lo spazio per schivare gli attacchi del boss non è mai limitato al primo piano visibile.
+
 ### Struttura di una run
 
 - Una run completa consiste nel ripulire **5 stanze** di nemici; dopo ogni stanza scegli uno tra 3 potenziamenti casuali.
@@ -35,7 +41,7 @@ Dall'Hub sono raggiungibili due schermate persistenti (salvate su disco, sopravv
 
 ### Tutorial
 
-Dall'Hub è raggiungibile anche un **Tutorial** che spiega passo per passo i comandi (movimento, scatto, contatto, potenziamenti) e il comportamento dei nemici comuni. Il Custode, il Custode Corrotto e la variante dorata non vengono mai menzionati: restano una scoperta della run.
+Dall'Hub è raggiungibile anche un **Tutorial** che spiega passo per passo i comandi (movimento, scatto, contatto, potenziamenti) e il comportamento dei nemici comuni. I boss, le loro varianti speciali e la variante dorata non vengono mai menzionati: restano una scoperta della run.
 
 ## Aprire il progetto
 
@@ -53,6 +59,7 @@ scenes/Main.tscn              # unica scena "fisica": tutto il resto è costruit
 scripts/
   Main.gd                     # coordina Hub <-> Run
   core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice
+  core/MazeGrid.gd            # labirinto procedurale: generazione, collisione, pathfinding
   autoload/SaveManager.gd     # persistenza (archivio, bestiario, statistiche) su user://
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual

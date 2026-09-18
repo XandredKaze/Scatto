@@ -43,6 +43,8 @@ var alive := true
 var active_powerups: Array = []
 
 var arena_bounds: Rect2 = Rect2()
+var maze: MazeGrid = null
+var camera: Camera2D
 
 func _ready() -> void:
 	collision_layer = 1
@@ -55,6 +57,14 @@ func _ready() -> void:
 	var cs := CollisionShape2D.new()
 	cs.shape = shape
 	add_child(cs)
+
+	# La camera è figlia del giocatore: la sua posizione lo segue sempre,
+	# in modo rigido (nessuno smoothing), qualunque cosa faccia.
+	camera = Camera2D.new()
+	camera.position_smoothing_enabled = false
+	add_child(camera)
+	camera.make_current()
+
 	queue_redraw()
 
 func reset_stats() -> void:
@@ -183,16 +193,17 @@ func _read_input_and_move(delta: float) -> void:
 		var dir: Vector2 = move.normalized() if move != Vector2.ZERO else facing
 		start_dash(dir)
 
+	var move_delta: Vector2
 	if is_dashing:
 		var dist: float = DASH_SPEED * dash_distance_mult
-		position += dash_vector * dist * delta
+		move_delta = dash_vector * dist * delta
 		dash_timer -= delta
 		if dash_timer <= 0.0:
 			end_dash()
 	else:
-		position += move * BASE_SPEED * speed_mult * delta
+		move_delta = move * BASE_SPEED * speed_mult * delta
 
-	_clamp_to_arena()
+	_apply_movement(move_delta)
 
 func _update_timers(delta: float) -> void:
 	if hit_iframe_timer > 0.0:
@@ -202,6 +213,13 @@ func _update_timers(delta: float) -> void:
 		if charge_regen_timer >= dash_cooldown():
 			dash_charges += 1
 			charge_regen_timer = 0.0
+
+func _apply_movement(move_delta: Vector2) -> void:
+	if maze != null:
+		position = maze.resolve_move(position, move_delta, radius)
+	else:
+		position += move_delta
+		_clamp_to_arena()
 
 func _clamp_to_arena() -> void:
 	if arena_bounds.size == Vector2.ZERO:

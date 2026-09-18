@@ -17,6 +17,8 @@ func run_and_quit() -> void:
 	await _test_gamepad_input()
 	await _test_controller_menu_navigation()
 	_test_maze_grid()
+	await _test_maze_integration()
+	await _test_maze_dash_no_tunneling()
 	await _test_all_boss_moves()
 	await _test_boss_signals_wired_in_run()
 	await _test_real_dash_collision()
@@ -469,6 +471,102 @@ func _test_maze_grid() -> void:
 		_assert(maze.world_to_cell(path[i]).distance_to(maze.world_to_cell(path[i + 1])) <= 1.5, "il percorso salta tra celle non adiacenti")
 
 	print("MazeGrid: %d x %d celle, %d segmenti muro, tutte connesse, pathfinding OK" % [maze.cols, maze.rows, maze.wall_rects.size()])
+
+func _test_maze_integration() -> void:
+	print("--- Test integrazione labirinto nel gioco reale (Run) ---")
+	var maze_run := Run.new()
+	add_child(maze_run)
+	maze_run.begin_new_streak()
+
+	_assert(maze_run.current_maze != null, "la stanza 1 dovrebbe generare un labirinto")
+	_assert(maze_run.player.maze == maze_run.current_maze, "il giocatore non è collegato al labirinto della stanza")
+	_assert(maze_run.current_maze.is_position_free(maze_run.player.global_position, maze_run.player.radius), "il giocatore è spawnato dentro un muro")
+
+	# L'uscita è la cella più lontana dallo spawn in numero di passi lungo
+	# i corridoi (BFS), non in linea d'aria: un labirinto tortuoso può
+	# piazzarla vicina in termini di pixel pur essendo lontana da
+	# percorrere. Si verifica quindi la distanza sul grafo, non quella
+	# euclidea (già verificata a parte in _test_maze_grid).
+	var spawn_pos: Vector2 = maze_run.player.global_position
+	var exit_path_len: int = maze_run.current_maze.get_path(spawn_pos, maze_run.exit_position).size()
+	var min_expected_hops: int = (maze_run.MAZE_COLS + maze_run.MAZE_ROWS) / 2
+	_assert(exit_path_len >= min_expected_hops, "l'uscita è troppo vicina allo spawn lungo il percorso (%d celle, attese almeno %d)" % [exit_path_len, min_expected_hops])
+
+	var bounds: Rect2 = maze_run.current_maze.total_bounds()
+	_assert(maze_run.player.camera.limit_left == int(bounds.position.x), "il limite sinistro della camera non combacia col labirinto")
+	_assert(maze_run.player.camera.limit_right == int(bounds.end.x), "il limite destro della camera non combacia col labirinto")
+	_assert(bounds.size.x > 1280.0 and bounds.size.y > 720.0, "il labirinto dovrebbe essere più grande della finestra di gioco (%s)" % bounds.size)
+
+	_assert(maze_run.enemy_container.get_child_count() > 0, "la stanza 1 dovrebbe avere nemici")
+	for e in maze_run.enemy_container.get_children():
+		_assert(e.maze == maze_run.current_maze, "un nemico non è collegato al labirinto della stanza")
+		_assert(maze_run.current_maze.is_position_free(e.global_position, e.radius), "un nemico è spawnato dentro un muro")
+
+	# Un nemico deve muoversi davvero seguendo un percorso reale nel
+	# labirinto (fisica reale su più frame, non restare immobile/bloccato).
+	# Non si verifica che la distanza in linea d'aria diminuisca sempre:
+	# in un labirinto il percorso più breve può richiedere di allontanarsi
+	# temporaneamente per aggirare una parete, quindi la distanza in
+	# linea d'aria non è monotona nel breve periodo. Si verifica invece
+	# che la distanza sul GRAFO del percorso (numero di celle da
+	# attraversare) diminuisca, e che la posizione sia cambiata davvero.
+	var target_enemy = maze_run.enemy_container.get_child(0)
+	var pos_before: Vector2 = target_enemy.global_position
+	var path_len_before: int = maze_run.current_maze.get_path(pos_before, maze_run.player.global_position).size()
+	for i in range(180):
+		await get_tree().physics_frame
+	var pos_after: Vector2 = target_enemy.global_position
+	if target_enemy.alive:
+		var path_len_after: int = maze_run.current_maze.get_path(pos_after, maze_run.player.global_position).size()
+		_assert(pos_after.distance_to(pos_before) > 20.0, "il nemico è rimasto fermo/bloccato nel labirinto per 3s (spostamento %.1f)" % pos_after.distance_to(pos_before))
+		_assert(path_len_after < path_len_before or path_len_after <= 2, "il nemico non si è avvicinato al giocatore lungo il percorso (celle: %d -> %d)" % [path_len_before, path_len_after])
+		_assert(maze_run.current_maze.is_position_free(pos_after, target_enemy.radius), "il nemico ha attraversato un muro")
+
+	# Attraversa le 5 stanze fino alla sala del boss: lí l'arena torna
+	# aperta (niente labirinto) ma resta più grande dello schermo.
+	for i in range(5):
+		maze_run._debug_kill_all()
+		maze_run.player.global_position = maze_run.exit_position
+		maze_run._physics_process(0.016)
+		if maze_run.powerup_choice_screen.visible:
+			maze_run._on_powerup_selected(GameData.get_regular_powerup_pool()[0].id)
+	_assert(maze_run.room_number == 6, "non si è arrivati alla sala del boss (stanza %d)" % maze_run.room_number)
+	_assert(maze_run.current_maze == null, "la sala del boss non dovrebbe avere un labirinto")
+	_assert(maze_run.player.maze == null, "il giocatore non dovrebbe avere un labirinto nella sala del boss")
+	var boss_bounds: Rect2 = maze_run.arena_rect
+	_assert(boss_bounds.size.x > 1280.0 or boss_bounds.size.y > 720.0, "la sala del boss non è più grande della finestra di gioco (%s)" % boss_bounds.size)
+
+	print("Integrazione labirinto: OK (uscita a %d celle di percorso dallo spawn, sala boss %s)" % [exit_path_len, boss_bounds.size])
+	maze_run.queue_free()
+	await get_tree().process_frame
+
+func _test_maze_dash_no_tunneling() -> void:
+	print("--- Test scatto ad alta velocità contro un muro del labirinto ---")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 999
+
+	var maze := MazeGrid.new()
+	maze.generate(6, 6, 160.0, rng)
+
+	var p := Player.new()
+	add_child(p)
+	p.maze = maze
+	# Cella d'angolo (0,0): il muro perimetrale è sempre immediatamente a
+	# nord e a ovest, indipendentemente da come è stato generato il resto
+	# del labirinto, quindi lo scatto verso l'alto lo colpisce di sicuro.
+	p.global_position = maze.cell_center(0, 0)
+	await get_tree().physics_frame
+
+	p.start_dash(Vector2.UP)
+	for i in range(20):
+		await get_tree().physics_frame
+
+	_assert(maze.total_bounds().has_point(p.global_position), "il giocatore è uscito dai confini del labirinto durante lo scatto")
+	_assert(maze.is_position_free(p.global_position, p.radius), "lo scatto ha attraversato un muro del labirinto (tunneling)")
+	print("Scatto contro muro: OK (nessun tunneling, posizione finale %s)" % p.global_position)
+
+	p.queue_free()
+	await get_tree().process_frame
 
 func _test_all_boss_moves() -> void:
 	print("--- Test di ogni mossa di ogni boss (esecuzione diretta e deterministica) ---")

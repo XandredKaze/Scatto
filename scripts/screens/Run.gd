@@ -12,7 +12,14 @@ extends Node2D
 
 signal return_to_hub_requested
 
-const ARENA_SIZE := Vector2(1280, 720)
+# Stanze 1-5: labirinto procedurale, molto più grande dello schermo.
+const MAZE_COLS := 10
+const MAZE_ROWS := 8
+const CELL_SIZE := 160.0
+# Sala del boss (6): arena aperta (niente pareti interne) ma comunque
+# più grande della finestra di gioco, cosí anche lí la camera segue il
+# giocatore invece di mostrare l'intera sala in un colpo solo.
+const BOSS_ARENA_SIZE := Vector2(1920, 1080)
 const WALL_MARGIN := 48.0
 const EXIT_RADIUS := 28.0
 const SHOCKWAVE_RADIUS := 70.0
@@ -25,6 +32,7 @@ var streak_run_index := 0
 var room_cleared := false
 var run_start_snapshot: Dictionary = {}
 
+var current_maze: MazeGrid = null
 var arena_rect: Rect2
 var exit_position: Vector2
 var rng := RandomNumberGenerator.new()
@@ -48,17 +56,12 @@ func _ready() -> void:
 	rng.randomize()
 	debug_mode = OS.get_cmdline_user_args().has("--debug-scatto") or OS.get_cmdline_args().has("--debug-scatto")
 
-	arena_rect = Rect2(Vector2(WALL_MARGIN, WALL_MARGIN), ARENA_SIZE - Vector2(WALL_MARGIN, WALL_MARGIN) * 2.0)
-	exit_position = Vector2(ARENA_SIZE.x / 2.0, WALL_MARGIN + 20.0)
-
 	_build_scene_tree()
 	_spawn_player()
 
 func _build_scene_tree() -> void:
 	arena_visual = ArenaVisual.new()
-	arena_visual.arena_size = ARENA_SIZE
 	arena_visual.wall_margin = WALL_MARGIN
-	arena_visual.exit_position = exit_position
 	arena_visual.exit_radius = EXIT_RADIUS
 	add_child(arena_visual)
 
@@ -102,7 +105,6 @@ func _build_scene_tree() -> void:
 
 func _spawn_player() -> void:
 	player = Player.new()
-	player.arena_bounds = arena_rect
 	player.enemy_defeated.connect(_on_enemy_defeated)
 	player.dash_hit.connect(_on_dash_hit)
 	player.died.connect(_on_player_died)
@@ -141,15 +143,35 @@ func _generate_room(n: int) -> void:
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
-	arena_visual.set_exit_active(false)
-	player.global_position = Vector2(ARENA_SIZE.x / 2.0, ARENA_SIZE.y - WALL_MARGIN - 60.0)
-	player.hit_enemies_this_dash.clear()
 
-	var spawns := _build_room_spawns(n)
+	var maze := MazeGrid.new()
+	maze.generate(MAZE_COLS, MAZE_ROWS, CELL_SIZE, rng)
+	current_maze = maze
+	arena_rect = Rect2()
+
+	var spawn_cell := Vector2i(0, MAZE_ROWS - 1)
+	var exit_cell := maze.find_farthest_cell(spawn_cell)
+	exit_position = maze.cell_center(exit_cell.x, exit_cell.y)
+
+	arena_visual.maze = maze
+	arena_visual.exit_position = exit_position
+	arena_visual.set_exit_active(false)
+	arena_visual.queue_redraw()
+
+	player.maze = maze
+	player.arena_bounds = Rect2()
+	player.global_position = maze.cell_center(spawn_cell.x, spawn_cell.y)
+	player.hit_enemies_this_dash.clear()
+	_configure_camera_limits(maze.total_bounds())
+
+	var excluded_cells: Array = [spawn_cell]
+	excluded_cells.append_array(maze._open_neighbors(spawn_cell))
+
+	var spawns := _build_room_spawns(n, maze, excluded_cells)
 	var has_golden := false
 	for spawn in spawns:
 		var enemy := Enemy.new()
-		enemy.arena_bounds = arena_rect
+		enemy.maze = maze
 		enemy.setup_from_data(spawn.data, spawn.golden)
 		enemy.global_position = spawn.position
 		enemy.spawn_projectile.connect(_on_enemy_spawn_projectile)
@@ -162,7 +184,15 @@ func _generate_room(n: int) -> void:
 	else:
 		hud.show_banner("Stanza %d di 5" % n)
 
-func _build_room_spawns(room_num: int) -> Array:
+func _configure_camera_limits(bounds: Rect2) -> void:
+	if player.camera == null:
+		return
+	player.camera.limit_left = int(bounds.position.x)
+	player.camera.limit_top = int(bounds.position.y)
+	player.camera.limit_right = int(bounds.end.x)
+	player.camera.limit_bottom = int(bounds.end.y)
+
+func _build_room_spawns(room_num: int, maze: MazeGrid, excluded_cells: Array) -> Array:
 	var available: Array = []
 	for key in GameData.ENEMY_TYPES.keys():
 		var data: Dictionary = GameData.ENEMY_TYPES[key]
@@ -184,7 +214,7 @@ func _build_room_spawns(room_num: int) -> Array:
 
 	var spawns: Array = []
 	for t in picks:
-		spawns.append({"data": t, "golden": false, "position": _random_spawn_point()})
+		spawns.append({"data": t, "golden": false, "position": _random_enemy_point(maze, excluded_cells)})
 
 	var golden_triggered := debug_force_golden or rng.randi_range(0, GameData.GOLDEN_CHANCE_DENOMINATOR - 1) == 0
 	debug_force_golden = false
@@ -197,18 +227,15 @@ func _build_room_spawns(room_num: int) -> Array:
 				existing_index = i
 				break
 		if existing_index >= 0:
-			spawns[existing_index] = {"data": golden_data, "golden": true, "position": _random_spawn_point()}
+			spawns[existing_index] = {"data": golden_data, "golden": true, "position": _random_enemy_point(maze, excluded_cells)}
 		else:
-			spawns.append({"data": golden_data, "golden": true, "position": _random_spawn_point()})
+			spawns.append({"data": golden_data, "golden": true, "position": _random_enemy_point(maze, excluded_cells)})
 
 	return spawns
 
-func _random_spawn_point() -> Vector2:
-	var margin := WALL_MARGIN + 40.0
-	return Vector2(
-		rng.randf_range(margin, ARENA_SIZE.x - margin),
-		rng.randf_range(margin + 60.0, ARENA_SIZE.y - margin)
-	)
+func _random_enemy_point(maze: MazeGrid, excluded_cells: Array) -> Vector2:
+	var cell := maze.random_cell(rng, excluded_cells)
+	return maze.cell_center(cell.x, cell.y)
 
 # --- Combattimento e progressione -------------------------------------------------
 
@@ -314,14 +341,25 @@ func _start_boss_room() -> void:
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
+
+	current_maze = null
+	arena_rect = Rect2(Vector2(WALL_MARGIN, WALL_MARGIN), BOSS_ARENA_SIZE - Vector2(WALL_MARGIN, WALL_MARGIN) * 2.0)
+
+	arena_visual.maze = null
+	arena_visual.arena_size = BOSS_ARENA_SIZE
 	arena_visual.set_exit_active(false)
-	player.global_position = Vector2(ARENA_SIZE.x / 2.0, ARENA_SIZE.y - WALL_MARGIN - 60.0)
+	arena_visual.queue_redraw()
+
+	player.maze = null
+	player.arena_bounds = arena_rect
+	player.global_position = Vector2(BOSS_ARENA_SIZE.x / 2.0, BOSS_ARENA_SIZE.y - WALL_MARGIN - 60.0)
 	player.hit_enemies_this_dash.clear()
+	_configure_camera_limits(arena_rect)
 
 	var boss := Boss.new()
 	boss.arena_bounds = arena_rect
 	boss.setup_from_data(data)
-	boss.global_position = Vector2(ARENA_SIZE.x / 2.0, WALL_MARGIN + 90.0)
+	boss.global_position = Vector2(BOSS_ARENA_SIZE.x / 2.0, WALL_MARGIN + 90.0)
 	boss.spawn_projectile.connect(_on_enemy_spawn_projectile)
 	boss.melee_aoe.connect(_on_boss_melee_aoe)
 	boss.summon_requested.connect(_on_boss_summon_requested)
@@ -346,6 +384,7 @@ func _on_boss_summon_requested(enemy_type_id: String, count: int, origin: Vector
 			pos.x = clamp(pos.x, arena_rect.position.x + 20.0, arena_rect.end.x - 20.0)
 			pos.y = clamp(pos.y, arena_rect.position.y + 20.0, arena_rect.end.y - 20.0)
 		var enemy := Enemy.new()
+		enemy.maze = current_maze
 		enemy.arena_bounds = arena_rect
 		enemy.setup_from_data(data, false)
 		enemy.global_position = pos
@@ -354,6 +393,7 @@ func _on_boss_summon_requested(enemy_type_id: String, count: int, origin: Vector
 
 func _on_enemy_spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float) -> void:
 	var proj := EnemyProjectile.new()
+	proj.maze = current_maze
 	proj.arena_bounds = arena_rect
 	proj.setup(pos, dir, speed, dmg)
 	projectile_container.add_child(proj)
