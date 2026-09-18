@@ -83,6 +83,22 @@ func _ready() -> void:
 	boss_bar.show_percentage = false
 	boss_panel.add_child(boss_bar)
 
+	if run != null and run.debug_mode:
+		var debug_spacer := Control.new()
+		debug_spacer.custom_minimum_size = Vector2(0, 10)
+		vbox.add_child(debug_spacer)
+
+		var debug_label := Label.new()
+		debug_label.text = "Debug"
+		debug_label.modulate = Color(1, 0.4, 0.4)
+		vbox.add_child(debug_label)
+
+		var force_golden_btn := Button.new()
+		force_golden_btn.text = "Forza nemico dorato (prossima stanza)"
+		force_golden_btn.custom_minimum_size = Vector2(280, 36)
+		force_golden_btn.pressed.connect(func(): run.debug_force_golden = true)
+		vbox.add_child(force_golden_btn)
+
 	banner_label = Label.new()
 	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_label.set_anchors_preset(Control.PRESET_CENTER_TOP)

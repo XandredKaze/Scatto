@@ -15,24 +15,28 @@ const ENEMY_TYPES := {
 		"hp": 30.0, "speed": 95.0, "damage": 8.0, "radius": 14.0, "color": Color8(127, 174, 86),
 		"behavior": "chase", "contact_cooldown": 0.6,
 		"desc": "Un predatore comune che insegue la sua preda senza sosta.",
+		"tip": "Ti insegue senza sosta: scattagli contro per fermarlo.",
 	},
 	"pungiglione": {
 		"id": "pungiglione", "name": "Pungiglione",
 		"hp": 20.0, "speed": 75.0, "damage": 6.0, "radius": 12.0, "color": Color8(63, 184, 175),
 		"behavior": "ranged", "keep_distance": 190.0, "attack_cooldown": 1.4, "projectile_speed": 260.0,
 		"desc": "Mantiene le distanze e colpisce con dardi velenosi a distanza.",
+		"tip": "Mantiene le distanze e spara dardi: scatta verso di lui per chiudere lo spazio.",
 	},
 	"corazzato": {
 		"id": "corazzato", "name": "Corazzato",
 		"hp": 75.0, "speed": 55.0, "damage": 16.0, "radius": 20.0, "color": Color8(138, 109, 75),
 		"behavior": "chase", "contact_cooldown": 0.8, "min_room": 3,
 		"desc": "Una massa corazzata lenta ma devastante da vicino. Appare dalla terza stanza.",
+		"tip": "Lento ma incassa molti colpi e fa male da vicino: colpiscilo e allontanati.",
 	},
 	"sciame": {
 		"id": "sciame", "name": "Sciame",
 		"hp": 10.0, "speed": 135.0, "damage": 5.0, "radius": 9.0, "color": Color8(201, 107, 176),
 		"behavior": "chase", "contact_cooldown": 0.5, "group_min": 3, "group_max": 5, "min_room": 2,
 		"desc": "Piccole creature veloci che attaccano sempre in gruppo. Appaiono dalla seconda stanza.",
+		"tip": "Veloce e fragile, ma attacca in gruppo: un solo scatto ben piazzato può travolgerne più di uno.",
 	},
 }
 

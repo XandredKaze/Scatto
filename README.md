@@ -28,6 +28,10 @@ Dall'Hub sono raggiungibili due schermate persistenti (salvate su disco, sopravv
 - **Archivio dei Potenziamenti**: elenca tutti i potenziamenti del gioco; quelli mai raccolti restano "???" finché non li ottieni per la prima volta.
 - **Bestiario**: elenca tutti gli avversari (nemici comuni, la variante dorata e i boss); un nemico resta "???" finché non lo sconfiggi per la prima volta.
 
+### Tutorial
+
+Dall'Hub è raggiungibile anche un **Tutorial** che spiega passo per passo i comandi (movimento, scatto, contatto, potenziamenti) e il comportamento dei nemici comuni. Il Custode, il Custode Corrotto e la variante dorata non vengono mai menzionati: restano una scoperta della run.
+
 ## Aprire il progetto
 
 Serve **Godot 4.3** (o successivo, engine `GL Compatibility`). Apri la cartella del repository come progetto dall'editor di Godot e premi Play, oppure da riga di comando:
@@ -48,7 +52,7 @@ scripts/
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
-  ui/                         # Hub, Archivio, Bestiario, scelta potenziamento, fine run, game over, HUD
+  ui/                         # Hub, Archivio, Bestiario, Tutorial, scelta potenziamento, fine run, game over, HUD
 tests/SmokeTest.gd            # test end-to-end eseguibile in headless (vedi sotto)
 ```
 
@@ -69,3 +73,5 @@ Avviando il gioco con l'argomento `--debug-scatto` (es. `godot --path . -- --deb
 - `G`: forza la comparsa di un nemico dorato nella prossima stanza generata.
 - `K`: uccide istantaneamente tutti i nemici della stanza corrente.
 - `B`: salta direttamente alla sala del Custode.
+
+Con `--debug-scatto` attivo, nella HUD compare anche un pulsante **"Forza nemico dorato"**, equivalente al tasto `G` ma cliccabile (utile testando con un controller, dove `G` non è raggiungibile).

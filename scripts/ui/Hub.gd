@@ -9,6 +9,7 @@ signal start_run_requested
 
 var archive_panel: ArchiveScreen
 var bestiary_panel: BestiaryScreen
+var tutorial_panel: TutorialScreen
 var stats_label: Label
 
 func _ready() -> void:
@@ -58,6 +59,12 @@ func _ready() -> void:
 	start_btn.pressed.connect(func(): start_run_requested.emit())
 	vbox.add_child(start_btn)
 
+	var tutorial_btn := Button.new()
+	tutorial_btn.text = "Tutorial"
+	tutorial_btn.custom_minimum_size = Vector2(260, 48)
+	tutorial_btn.pressed.connect(_open_tutorial)
+	vbox.add_child(tutorial_btn)
+
 	var archive_btn := Button.new()
 	archive_btn.text = "Archivio Potenziamenti"
 	archive_btn.custom_minimum_size = Vector2(260, 48)
@@ -105,3 +112,10 @@ func _open_bestiary() -> void:
 		add_child(bestiary_panel)
 	bestiary_panel.refresh()
 	bestiary_panel.show()
+
+func _open_tutorial() -> void:
+	if tutorial_panel == null:
+		tutorial_panel = TutorialScreen.new()
+		tutorial_panel.closed.connect(func(): tutorial_panel.hide())
+		add_child(tutorial_panel)
+	tutorial_panel.show()

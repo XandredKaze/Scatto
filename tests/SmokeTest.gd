@@ -17,6 +17,8 @@ func run_and_quit() -> void:
 	await _test_gamepad_input()
 	await _test_real_dash_collision()
 	await _test_boss_attack_patterns()
+	await _test_tutorial_screen_has_no_spoilers()
+	await _test_hud_debug_golden_button()
 
 	SaveManager.reset_all()
 
@@ -117,6 +119,67 @@ func run_and_quit() -> void:
 
 	print("=== TUTTI I CONTROLLI SUPERATI ===")
 	get_tree().quit()
+
+func _test_tutorial_screen_has_no_spoilers() -> void:
+	print("--- Test Tutorial (nessuna anticipazione su boss/dorato) ---")
+	var tutorial := TutorialScreen.new()
+	add_child(tutorial)
+
+	var texts: Array = []
+	_collect_label_texts(tutorial, texts)
+	_assert(texts.size() > 0, "il tutorial non contiene alcun testo")
+
+	var forbidden := ["custode", "corrotto", "dorat", "boss"]
+	for text in texts:
+		var lowered: String = String(text).to_lower()
+		for word in forbidden:
+			_assert(not lowered.contains(word), "il tutorial rivela '%s' nel testo: %s" % [word, text])
+
+	print("Tutorial: %d etichette, nessuna anticipazione su boss/dorato" % texts.size())
+	tutorial.queue_free()
+	await get_tree().process_frame
+
+func _collect_label_texts(node: Node, out: Array) -> void:
+	if node is Label:
+		out.append(node.text)
+	for child in node.get_children():
+		_collect_label_texts(child, out)
+
+func _test_hud_debug_golden_button() -> void:
+	print("--- Test pulsante debug 'Forza nemico dorato' in HUD ---")
+	var r := Run.new()
+	add_child(r)
+
+	# Verifica negativa: senza debug_mode il pulsante non deve esistere.
+	var normal_button := _find_button_with_text(r.hud, "Forza nemico dorato")
+	_assert(normal_button == null, "il pulsante di debug è presente anche senza modalità debug")
+
+	# Forza debug_mode e ricrea una HUD isolata per verificare il pulsante,
+	# indipendentemente dagli argomenti con cui è stato avviato il processo.
+	r.debug_mode = true
+	var debug_hud := HUD.new()
+	debug_hud.run = r
+	add_child(debug_hud)
+
+	var found_button := _find_button_with_text(debug_hud, "Forza nemico dorato")
+	_assert(found_button != null, "il pulsante di debug 'Forza nemico dorato' non è presente con debug_mode attivo")
+	_assert(not r.debug_force_golden, "debug_force_golden dovrebbe partire disattivato")
+	found_button.pressed.emit()
+	_assert(r.debug_force_golden, "il pulsante di debug non ha impostato debug_force_golden")
+	print("Pulsante debug 'Forza nemico dorato': OK")
+
+	debug_hud.queue_free()
+	r.queue_free()
+	await get_tree().process_frame
+
+func _find_button_with_text(node: Node, text: String) -> Button:
+	if node is Button and String(node.text).contains(text):
+		return node
+	for child in node.get_children():
+		var found := _find_button_with_text(child, text)
+		if found != null:
+			return found
+	return null
 
 func _test_gamepad_input() -> void:
 	print("--- Test input da controller (eventi joypad simulati) ---")
