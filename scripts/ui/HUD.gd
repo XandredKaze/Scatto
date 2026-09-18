@@ -20,6 +20,10 @@ var banner_label: Label
 var banner_timer := 0.0
 var powerup_tray: HBoxContainer
 var _last_powerup_summary := ""
+var direction_indicator: DirectionIndicator
+
+const SCREEN_SIZE := Vector2(1280, 720)
+const INDICATOR_PADDING := 60.0
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -109,6 +113,10 @@ func _ready() -> void:
 	banner_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(banner_label)
 
+	direction_indicator = DirectionIndicator.new()
+	direction_indicator.hide()
+	add_child(direction_indicator)
+
 func show_banner(text: String, duration: float = 2.0) -> void:
 	banner_label.text = text
 	banner_label.modulate.a = 1.0
@@ -146,6 +154,45 @@ func _process(delta: float) -> void:
 		boss_bar.value = run.current_boss.hp
 	else:
 		boss_panel.hide()
+
+	_update_direction_indicator(player)
+
+func _update_direction_indicator(player) -> void:
+	# Visibile solo quando il portale di uscita è attivo (stanza
+	# ripulita) e non è già inquadrato dalla camera, cosí da guidare il
+	# giocatore nel labirinto senza affollare lo schermo quando il
+	# portale è comunque già a vista.
+	var reward_active: bool = run.room_cleared and run.current_boss == null and run.room_number <= 5
+	if not reward_active:
+		direction_indicator.hide()
+		return
+
+	var player_pos: Vector2 = player.global_position
+	var target_pos: Vector2 = run.exit_position
+	var half_screen := SCREEN_SIZE / 2.0
+	var visible_rect := Rect2(player_pos - half_screen, SCREEN_SIZE)
+	if visible_rect.has_point(target_pos):
+		direction_indicator.hide()
+		return
+
+	var to_target: Vector2 = target_pos - player_pos
+	if to_target.length() < 0.001:
+		direction_indicator.hide()
+		return
+
+	direction_indicator.show()
+	var angle := to_target.angle()
+	direction_indicator.rotation = angle
+	direction_indicator.position = _screen_edge_point(angle, half_screen, INDICATOR_PADDING)
+
+func _screen_edge_point(angle: float, half_screen: Vector2, padding: float) -> Vector2:
+	var dir := Vector2(cos(angle), sin(angle))
+	var half_w: float = half_screen.x - padding
+	var half_h: float = half_screen.y - padding
+	var t_x: float = (half_w / abs(dir.x)) if abs(dir.x) > 0.0001 else INF
+	var t_y: float = (half_h / abs(dir.y)) if abs(dir.y) > 0.0001 else INF
+	var t: float = min(t_x, t_y)
+	return half_screen + dir * t
 
 func _update_powerup_tray(player) -> void:
 	var counts := {}

@@ -17,6 +17,8 @@ Le stanze 1-5 sono **labirinti generati proceduralmente** (10x8 celle, molto pi�
 
 La **sesta stanza** (il boss) è invece un'unica arena aperta, senza pareti interne, ma comunque più grande dello schermo: lo spazio per schivare gli attacchi del boss non è mai limitato al primo piano visibile.
 
+Quando una stanza è ripulita e il portale di uscita è attivo, se questo non è inquadrato dalla telecamera compare una **freccia direzionale** sul bordo dello schermo, che ruota per indicare in che direzione si trova il portale nel labirinto. Sparisce non appena il portale rientra nell'inquadratura o si passa alla stanza successiva.
+
 ### Struttura di una run
 
 - Una run completa consiste nel ripulire **5 stanze** di nemici; dopo ogni stanza scegli uno tra 3 potenziamenti casuali.

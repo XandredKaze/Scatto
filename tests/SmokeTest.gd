@@ -26,6 +26,7 @@ func run_and_quit() -> void:
 	await _test_boss_attack_patterns()
 	await _test_tutorial_screen_has_no_spoilers()
 	await _test_hud_debug_golden_button()
+	await _test_direction_indicator()
 	await _test_pause_menu()
 
 	SaveManager.reset_all()
@@ -163,6 +164,44 @@ func _collect_label_texts(node: Node, out: Array) -> void:
 		out.append(node.text)
 	for child in node.get_children():
 		_collect_label_texts(child, out)
+
+func _test_direction_indicator() -> void:
+	print("--- Test indicatore di direzione verso il portale ---")
+	var indicator_run := Run.new()
+	add_child(indicator_run)
+	indicator_run.begin_new_streak()
+	await get_tree().process_frame
+
+	_assert(not indicator_run.hud.direction_indicator.visible, "l'indicatore non dovrebbe essere visibile prima che la stanza sia ripulita")
+
+	# Ripulisce la stanza: il portale si attiva ma il giocatore resta
+	# lontano dallo spawn, quindi quasi certamente fuori schermo.
+	_kill_all_room_enemies_of(indicator_run)
+	_assert(indicator_run.room_cleared, "setup del test: la stanza dovrebbe risultare ripulita")
+	await get_tree().process_frame
+
+	_assert(indicator_run.hud.direction_indicator.visible, "l'indicatore dovrebbe comparire quando il portale è attivo e fuori schermo")
+
+	var player_pos: Vector2 = indicator_run.player.global_position
+	var expected_angle: float = (indicator_run.exit_position - player_pos).angle()
+	var angle_diff: float = abs(wrapf(indicator_run.hud.direction_indicator.rotation - expected_angle, -PI, PI))
+	_assert(angle_diff < 0.01, "l'indicatore non punta nella direzione corretta (differenza %.3f rad)" % angle_diff)
+
+	# Se il giocatore è già dove si trova il portale, l'indicatore deve
+	# nascondersi: il portale è per forza a schermo.
+	indicator_run.player.global_position = indicator_run.exit_position
+	await get_tree().process_frame
+	_assert(not indicator_run.hud.direction_indicator.visible, "l'indicatore non dovrebbe essere visibile quando il portale è già a schermo")
+
+	# Attraversando il portale la stanza avanza e il portale si disattiva:
+	# l'indicatore deve sparire di nuovo.
+	indicator_run._physics_process(0.016)
+	await get_tree().process_frame
+	_assert(not indicator_run.hud.direction_indicator.visible, "l'indicatore dovrebbe sparire una volta attraversato il portale")
+
+	print("Indicatore di direzione: OK")
+	indicator_run.queue_free()
+	await get_tree().process_frame
 
 func _test_hud_debug_golden_button() -> void:
 	print("--- Test pulsante debug 'Forza nemico dorato' in HUD ---")
