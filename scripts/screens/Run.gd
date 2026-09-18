@@ -500,11 +500,14 @@ func _on_boss_summon_requested(enemy_type_id: String, count: int, origin: Vector
 		enemy.spawn_projectile.connect(_on_enemy_spawn_projectile)
 		enemy_container.add_child(enemy)
 
-func _on_enemy_spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float) -> void:
+func _on_enemy_spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool = false) -> void:
 	var proj := EnemyProjectile.new()
 	proj.maze = current_maze
 	proj.arena_bounds = arena_rect
+	proj.is_ally_projectile = is_ally_projectile
 	proj.setup(pos, dir, speed, dmg)
+	if is_ally_projectile:
+		proj.ally_kill.connect(_on_enemy_defeated)
 	projectile_container.add_child(proj)
 
 func _on_player_died() -> void:

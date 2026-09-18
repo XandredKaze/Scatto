@@ -8,9 +8,20 @@ var life := 3.0
 var arena_bounds: Rect2 = Rect2()
 var maze: MazeGrid = null
 
+# I proiettili nemici colpiscono il giocatore tramite la scansione delle
+# proprie aree sovrapposte fatta da Player (i nemici non controllano mai
+# le proprie, collision_mask = 0 di default per Enemy/Boss). Un proiettile
+# sparato da un alleato deve invece colpire un nemico ostile, che non fa
+# mai quella scansione: qui il proiettile stesso, quando is_ally_projectile
+# è vero, si occupa di controllare le proprie sovrapposizioni e infliggere
+# danno al primo bersaglio ostile valido.
+var is_ally_projectile := false
+
+signal ally_kill(defeated: Node)
+
 func _ready() -> void:
 	collision_layer = 8
-	collision_mask = 0
+	collision_mask = (2 | 4) if is_ally_projectile else 0
 	monitoring = true
 	monitorable = true
 	add_to_group("enemy_projectile")
@@ -32,6 +43,8 @@ func _physics_process(delta: float) -> void:
 	if life <= 0.0:
 		queue_free()
 		return
+	if is_ally_projectile and _hit_hostile_target():
+		return
 	if maze != null:
 		if not maze.is_position_free(global_position, radius):
 			queue_free()
@@ -39,6 +52,21 @@ func _physics_process(delta: float) -> void:
 		var r: Rect2 = arena_bounds.grow(40.0)
 		if not r.has_point(global_position):
 			queue_free()
+
+func _hit_hostile_target() -> bool:
+	for area in get_overlapping_areas():
+		if not area.is_in_group("combat_target"):
+			continue
+		if area is Enemy and area.is_ally:
+			continue
+		if not area.alive:
+			continue
+		area.take_damage(damage)
+		if not area.alive:
+			ally_kill.emit(area)
+		queue_free()
+		return true
+	return false
 
 func _draw() -> void:
 	draw_circle(Vector2.ZERO, radius, Color8(224, 102, 63))

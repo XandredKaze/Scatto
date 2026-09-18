@@ -271,6 +271,8 @@ func _resolve_combat() -> void:
 					if take_damage(area.damage):
 						area.trigger_contact()
 			elif area.is_in_group("enemy_projectile"):
+				if area.is_ally_projectile:
+					continue
 				if take_damage(area.damage):
 					area.queue_free()
 

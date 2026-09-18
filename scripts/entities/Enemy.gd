@@ -13,7 +13,7 @@ extends CombatEntity
 # `arena_bounds`. Il percorso è ricalcolato periodicamente, non ad ogni
 # frame, per restare economico anche con molti nemici in campo.
 
-signal spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float)
+signal spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool)
 signal ally_kill(defeated: Node)
 
 var enemy_id := "strisciante"
@@ -101,7 +101,7 @@ func _physics_process_direct(delta: float, player: Node) -> void:
 			attack_timer -= delta
 			if attack_timer <= 0.0:
 				attack_timer = attack_cooldown
-				spawn_projectile.emit(global_position, dir, projectile_speed, damage)
+				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false)
 	_clamp_to_arena()
 
 func _physics_process_maze(delta: float, player: Node) -> void:
@@ -124,7 +124,7 @@ func _physics_process_maze(delta: float, player: Node) -> void:
 			if attack_timer <= 0.0:
 				attack_timer = attack_cooldown
 				var dir: Vector2 = to_player.normalized() if straight_dist > 0.001 else Vector2.ZERO
-				spawn_projectile.emit(global_position, dir, projectile_speed, damage)
+				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false)
 
 func _move_along_path(delta: float, player: Node) -> void:
 	if current_path.size() < 2:
@@ -153,18 +153,60 @@ func _move_along_path(delta: float, player: Node) -> void:
 # --- Comportamento da alleato -------------------------------------------------
 
 func _physics_process_ally(delta: float, player: Node) -> void:
+	# Mantiene lo stesso comportamento avuto da nemico: un tipo "ranged"
+	# resta un alleato di supporto a distanza (mantiene le distanze e
+	# spara), un "chase" resta un alleato da mischia (si avvicina e
+	# colpisce a contatto). _ally_resolve_combat() gestisce il contatto
+	# per entrambi, esattamente come un nemico ostile può sempre colpire
+	# per contatto il giocatore anche se il suo comportamento primario è
+	# "ranged".
 	var hostile := _find_nearest_hostile(ALLY_ENGAGE_RADIUS)
+	if behavior == "ranged":
+		_ally_behavior_ranged(delta, player, hostile)
+	else:
+		_ally_behavior_chase(delta, player, hostile)
+	_ally_resolve_combat()
+
+func _ally_behavior_chase(delta: float, player: Node, hostile: Node) -> void:
 	var dest_pos: Vector2 = hostile.global_position if hostile != null else player.global_position
 	var stop_distance: float = (radius + hostile.radius - 4.0) if hostile != null else ALLY_FOLLOW_DISTANCE
-	if global_position.distance_to(dest_pos) > stop_distance:
-		if maze != null:
-			_ally_move_along_maze(delta, dest_pos)
-		else:
-			var to_dest: Vector2 = dest_pos - global_position
-			var dir: Vector2 = to_dest.normalized() if to_dest.length() > 0.001 else Vector2.ZERO
-			global_position += dir * speed * delta
-			_clamp_to_arena()
-	_ally_resolve_combat()
+	_ally_move_toward(delta, dest_pos, stop_distance)
+
+func _ally_behavior_ranged(delta: float, player: Node, hostile: Node) -> void:
+	if hostile == null:
+		_ally_move_toward(delta, player.global_position, ALLY_FOLLOW_DISTANCE)
+		return
+	var dist: float = global_position.distance_to(hostile.global_position)
+	if dist > keep_distance + 15.0:
+		_ally_move_toward(delta, hostile.global_position, keep_distance)
+	elif dist < keep_distance - 15.0:
+		_ally_move_away_from(delta, hostile.global_position)
+	attack_timer -= delta
+	if attack_timer <= 0.0:
+		attack_timer = attack_cooldown
+		var to_target: Vector2 = hostile.global_position - global_position
+		var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
+		spawn_projectile.emit(global_position, dir, projectile_speed, damage, true)
+
+func _ally_move_toward(delta: float, dest_pos: Vector2, stop_distance: float) -> void:
+	if global_position.distance_to(dest_pos) <= stop_distance:
+		return
+	if maze != null:
+		_ally_move_along_maze(delta, dest_pos)
+	else:
+		var to_dest: Vector2 = dest_pos - global_position
+		var dir: Vector2 = to_dest.normalized() if to_dest.length() > 0.001 else Vector2.ZERO
+		global_position += dir * speed * delta
+		_clamp_to_arena()
+
+func _ally_move_away_from(delta: float, threat_pos: Vector2) -> void:
+	var away: Vector2 = global_position - threat_pos
+	var dir: Vector2 = away.normalized() if away.length() > 0.001 else Vector2.ZERO
+	if maze != null:
+		global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
+	else:
+		global_position += dir * speed * delta
+		_clamp_to_arena()
 
 func _find_nearest_hostile(max_radius: float) -> Node:
 	var nearest: Node = null
@@ -221,6 +263,13 @@ func _ally_resolve_combat() -> void:
 		if area == self:
 			continue
 		if area.is_in_group("enemy_projectile"):
+			if area.is_ally_projectile:
+				# Un proiettile alleato (anche il proprio, appena sparato
+				# e ancora sovrapposto a sé stessi) non deve mai ferire
+				# un alleato: senza questo controllo un alleato "ranged"
+				# distruggerebbe il proprio colpo nel momento stesso in
+				# cui lo spara.
+				continue
 			take_damage(area.damage)
 			area.queue_free()
 			continue

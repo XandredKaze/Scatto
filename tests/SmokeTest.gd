@@ -33,6 +33,7 @@ func run_and_quit() -> void:
 	await _test_taming_last_enemy_clears_room()
 	await _test_ally_kill_clears_room()
 	await _test_shockwave_ignores_allies()
+	await _test_ranged_ally_keeps_behavior()
 
 	SaveManager.reset_all()
 
@@ -546,6 +547,78 @@ func _test_shockwave_ignores_allies() -> void:
 
 	print("Onda d'urto: OK (alleati ignorati)")
 	sw_run.queue_free()
+	await get_tree().process_frame
+
+func _test_ranged_ally_keeps_behavior() -> void:
+	print("--- Test regressione: un alleato \"ranged\" mantiene mira e distanza da nemico ---")
+	# Un nemico comune convertito in alleato deve mantenere lo stesso
+	# comportamento avuto da ostile: il Pungiglione è "ranged" (mantiene
+	# le distanze e spara), quindi da alleato non deve diventare un
+	# lottatore da mischia che cammina fino al contatto.
+	var ranged_run := Run.new()
+	add_child(ranged_run)
+	ranged_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in ranged_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	# Anche senza .maze sui due nemici, _on_enemy_spawn_projectile assegna
+	# comunque proj.maze = current_maze: il proiettile dell'alleato
+	# verrebbe distrutto da un muro reale lungo la traiettoria pur avendo
+	# scelto un movimento diretto per alleato e bersaglio. Azzerato qui,
+	# solo per questo test isolato del comportamento a distanza.
+	ranged_run.current_maze = null
+
+	# Il nemico ostile va aggiunto PRIMA di addomesticare l'alleato: se il
+	# Pungiglione fosse l'unico nemico presente, l'addomesticamento stesso
+	# ripulirebbe già la stanza (fix precedente), mascherando qui il
+	# comportamento a distanza che si vuole verificare. Niente labirinto
+	# per nessuno dei due (maze lasciato a null, movimento diretto): con
+	# la mappa reale il percorso tra due punti puó essere molto più lungo
+	# della distanza in linea d'aria (un vicolo cieco da aggirare), il che
+	# renderebbe il tempo di viaggio imprevedibile e il test fragile.
+	var hostile := Enemy.new()
+	hostile.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	hostile.hp = 1.0
+	hostile.max_hp = 1.0
+	ranged_run.enemy_container.add_child(hostile)
+
+	var ranged_ally := Enemy.new()
+	ranged_ally.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
+	ranged_ally.global_position = ranged_run.player.global_position
+	# A differenza dello spawn reale (_generate_room collega sempre
+	# spawn_projectile a _on_enemy_spawn_projectile), qui il nemico è
+	# aggiunto a mano: senza questo collegamento il proiettile a distanza
+	# dell'alleato non verrebbe mai creato.
+	ranged_ally.spawn_projectile.connect(ranged_run._on_enemy_spawn_projectile)
+	ranged_run.enemy_container.add_child(ranged_ally)
+	ranged_run.player.global_position = ranged_ally.global_position
+	ranged_run._on_tame_requested()
+	_assert(ranged_ally.is_ally, "setup del test: il Pungiglione dovrebbe diventare alleato")
+	_assert(ranged_ally.behavior == "ranged", "setup del test: il comportamento originale dovrebbe restare \"ranged\"")
+	_assert(not ranged_run.room_cleared, "setup del test: la stanza non dovrebbe risultare ripulita prima del colpo")
+
+	# attack_timer parte da un valore casuale (randf() * attack_cooldown,
+	# vedi Enemy._ready()): azzerato qui per rendere deterministico il
+	# momento del primo colpo, altrimenti il test sarebbe fragile a
+	# seconda di quanto tempo resta prima del budget di frame sottostante.
+	ranged_ally.attack_timer = 0.0
+	hostile.global_position = ranged_ally.global_position + Vector2(220.0, 0.0)
+	for i in range(150):
+		await get_tree().physics_frame
+		if not hostile.alive:
+			break
+
+	_assert(not hostile.alive, "l'alleato a distanza non ha mai finito il nemico ostile")
+	var final_dist: float = ranged_ally.global_position.distance_to(hostile.global_position)
+	print("Distanza finale alleato<->bersaglio: ", final_dist)
+	_assert(final_dist > 100.0, "l'alleato \"ranged\" si è avvicinato a distanza di mischia invece di sparare da lontano")
+	_assert(ranged_run.room_cleared, "un'uccisione a distanza dell'alleato dovrebbe ripulire la stanza (portale attivo)")
+
+	print("Comportamento a distanza dell'alleato: OK")
+	ranged_run.queue_free()
 	await get_tree().process_frame
 
 func _kill_all_room_enemies_of(target_run: Run) -> void:
