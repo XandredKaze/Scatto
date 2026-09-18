@@ -19,6 +19,7 @@ func run_and_quit() -> void:
 	_test_maze_grid()
 	await _test_maze_integration()
 	await _test_maze_dash_no_tunneling()
+	await _test_maze_enemy_closes_final_gap()
 	await _test_all_boss_moves()
 	await _test_boss_signals_wired_in_run()
 	await _test_real_dash_collision()
@@ -538,6 +539,55 @@ func _test_maze_integration() -> void:
 
 	print("Integrazione labirinto: OK (uscita a %d celle di percorso dallo spawn, sala boss %s)" % [exit_path_len, boss_bounds.size])
 	maze_run.queue_free()
+	await get_tree().process_frame
+
+func _test_maze_enemy_closes_final_gap() -> void:
+	print("--- Test regressione: il nemico non deve bloccarsi vicino al giocatore nel labirinto ---")
+	# Bug reale trovato in gioco: MazeGrid.get_path() porta il nemico al
+	# CENTRO della cella del giocatore, non alla sua posizione esatta.
+	# Una volta nella stessa cella, get_path() restituisce un percorso di
+	# un solo punto (o nessuno): senza un fallback, _move_along_path si
+	# limitava a un return e il nemico restava fermo per sempre, anche
+	# se il giocatore non era esattamente al centro della cella (cosa
+	# che succede quasi sempre, dato che si muove di continuo).
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var maze := MazeGrid.new()
+	maze.generate(6, 6, 160.0, rng)
+
+	var p := Player.new()
+	add_child(p)
+	p.maze = maze
+	# Il giocatore è vicino a un angolo della cella (0,0), non al centro:
+	# esattamente la situazione che prima faceva bloccare il nemico.
+	p.global_position = maze.cell_center(0, 0) + Vector2(50.0, 50.0)
+
+	var e := Enemy.new()
+	e.maze = maze
+	e.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	add_child(e)
+	# Il nemico parte già nella stessa cella del giocatore, dal lato
+	# opposto: get_path() tra i due restituisce subito un solo punto.
+	e.global_position = maze.cell_center(0, 0) + Vector2(-50.0, -50.0)
+	await get_tree().physics_frame
+
+	var dist_start: float = e.global_position.distance_to(p.global_position)
+	var frozen_frames := 0
+	var last_pos: Vector2 = e.global_position
+	for i in range(180):
+		await get_tree().physics_frame
+		if e.global_position.distance_to(last_pos) < 0.01:
+			frozen_frames += 1
+		last_pos = e.global_position
+
+	var dist_end: float = e.global_position.distance_to(p.global_position)
+	print("Distanza nemico->giocatore: %.1f -> %.1f (frame fermi: %d/180)" % [dist_start, dist_end, frozen_frames])
+	_assert(dist_end < 40.0, "il nemico dovrebbe aver raggiunto il giocatore nella stessa cella (distanza finale %.1f)" % dist_end)
+	_assert(frozen_frames < 150, "il nemico è rimasto fermo per quasi tutto il test (%d/180 frame)" % frozen_frames)
+	print("Chiusura del divario finale nel labirinto: OK")
+
+	e.queue_free()
+	p.queue_free()
 	await get_tree().process_frame
 
 func _test_maze_dash_no_tunneling() -> void:

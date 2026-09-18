@@ -100,18 +100,28 @@ func _physics_process_maze(delta: float, player: Node) -> void:
 
 	match behavior:
 		"chase":
-			_move_along_path(delta)
+			_move_along_path(delta, player)
 		"ranged":
 			if straight_dist > keep_distance + 15.0:
-				_move_along_path(delta)
+				_move_along_path(delta, player)
 			attack_timer -= delta
 			if attack_timer <= 0.0:
 				attack_timer = attack_cooldown
 				var dir: Vector2 = to_player.normalized() if straight_dist > 0.001 else Vector2.ZERO
 				spawn_projectile.emit(global_position, dir, projectile_speed, damage)
 
-func _move_along_path(delta: float) -> void:
+func _move_along_path(delta: float, player: Node) -> void:
 	if current_path.size() < 2:
+		# Il percorso ha un solo punto (o nessuno) quando nemico e
+		# giocatore sono nella stessa cella del labirinto: lí dentro non
+		# può esserci una parete di mezzo, quindi si chiude la distanza
+		# in linea retta invece di restare fermi in attesa di un
+		# percorso che non arriverà mai (la cella di destinazione, non
+		# il punto esatto del giocatore, è già stata raggiunta).
+		var to_player: Vector2 = player.global_position - global_position
+		if to_player.length() > 0.001:
+			var dir: Vector2 = to_player.normalized()
+			global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
 		return
 	if path_target_index >= current_path.size():
 		path_target_index = current_path.size() - 1
