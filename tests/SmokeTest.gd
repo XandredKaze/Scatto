@@ -44,7 +44,13 @@ func run_and_quit() -> void:
 	_assert(run.run_complete_screen.visible, "schermata di fine run non mostrata")
 	_assert(run.streak_run_index == 1, "streak_run_index atteso 1, trovato %d" % run.streak_run_index)
 
+	# Regressione: il boss sconfitto non deve restare a schermo (nodo
+	# non rimosso) quando si continua senza tornare all'Hub.
+	await get_tree().process_frame
+	_assert(run.boss_container.get_child_count() == 0, "il boss sconfitto è rimasto nella scena dopo la vittoria")
+
 	run._on_continue_pressed()
+	_assert(run.boss_container.get_child_count() == 0, "il boss sconfitto è ancora presente dopo aver iniziato la nuova run")
 	_assert(run.streak_run_index == 2, "streak_run_index atteso 2, trovato %d" % run.streak_run_index)
 	_clear_five_rooms_to_boss()
 	_assert(not run.current_boss.is_special, "il boss della run 2 non dovrebbe essere speciale")

@@ -124,6 +124,7 @@ func _start_run_common() -> void:
 func _generate_room(n: int) -> void:
 	_clear_container(enemy_container)
 	_clear_container(projectile_container)
+	_clear_container(boss_container)
 	room_cleared = false
 	arena_visual.set_exit_active(false)
 	player.global_position = Vector2(ARENA_SIZE.x / 2.0, ARENA_SIZE.y - WALL_MARGIN - 60.0)
@@ -251,6 +252,7 @@ func _on_boss_defeated(boss) -> void:
 	SaveManager.record_run_won(streak_run_index)
 	var was_special: bool = boss.is_special
 	current_boss = null
+	boss.queue_free()
 	run_complete_screen.show_summary(streak_run_index, was_special)
 	run_complete_screen.show()
 
@@ -288,6 +290,7 @@ func _start_boss_room() -> void:
 
 	_clear_container(enemy_container)
 	_clear_container(projectile_container)
+	_clear_container(boss_container)
 	room_cleared = false
 	arena_visual.set_exit_active(false)
 	player.global_position = Vector2(ARENA_SIZE.x / 2.0, ARENA_SIZE.y - WALL_MARGIN - 60.0)
