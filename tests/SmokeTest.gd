@@ -1106,7 +1106,15 @@ func _test_controller_menu_navigation() -> void:
 	await get_tree().process_frame
 
 func _test_hub_subpanel_navigation() -> void:
-	print("--- Test regressione: navigazione da controller nei sottomenu dell'Hub (Archivio/Bestiario/Tutorial) ---")
+	print("--- Test regressione: Archivio/Bestiario/Tutorial si scorrono senza spostare il focus ---")
+	# La navigazione a focus tra le righe (basata sulla posizione a
+	# schermo dei controlli) si è rivelata inaffidabile/confusa da
+	# controller in questi pannelli: niente più righe navigabili. Lo
+	# stick/D-pad su/giù scorre direttamente la vista leggendo
+	# move_up/move_down (la stessa azione, con binding joypad già
+	# verificati, usata per muovere il giocatore in game), senza mai
+	# toccare il focus: l'unico controllo selezionabile resta Chiudi, che
+	# quindi non può mai "saltare" altrove.
 	var nav_hub := Hub.new()
 	add_child(nav_hub)
 	await get_tree().process_frame
@@ -1115,39 +1123,34 @@ func _test_hub_subpanel_navigation() -> void:
 	# Aprendo un pannello sopra l'Hub, i suoi pulsanti (nascosti solo
 	# visivamente dallo sfondo opaco del pannello, ma ancora nell'albero)
 	# non devono restare candidati per la risoluzione del focus da
-	# tastiera/controller: altrimenti, scorrendo oltre l'ultimo controllo
-	# navigabile del pannello, il focus "sconfinerebbe" sul menù sottostante.
+	# tastiera/controller.
 	nav_hub._open_archive()
 	await get_tree().process_frame
 	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_NONE, "i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
 	_assert(nav_hub.tutorial_btn.focus_mode == Control.FOCUS_NONE and nav_hub.archive_btn.focus_mode == Control.FOCUS_NONE and nav_hub.bestiary_btn.focus_mode == Control.FOCUS_NONE, "tutti i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
 	_assert(nav_hub.archive_panel.list_box.get_child_count() > 1, "setup del test: l'archivio dovrebbe elencare almeno due potenziamenti")
 	for row in nav_hub.archive_panel.list_box.get_children():
-		_assert(row.focus_mode == Control.FOCUS_ALL, "una riga dell'archivio non è navigabile da tastiera/controller: il D-pad/stick non avrebbe nulla su cui scorrere")
-	# Regressione: il pulsante Chiudi sta SOTTO l'elenco. Dargli il focus
-	# iniziale (come faceva questo screen prima della correzione) fa sí
-	# che "giù" da lí non entri nell'elenco dall'alto, ma salti al primo
-	# controllo che si trova geometricamente sotto di lui — con l'elenco
-	# non ancora scorso, è l'ULTIMA riga, non la prima. Il focus iniziale
-	# deve quindi partire dalla prima riga, cosí "giù" scorre l'elenco in
-	# ordine naturale dall'alto.
-	_assert(nav_hub.archive_panel.list_box.get_child(0).has_focus(), "all'apertura dell'Archivio il focus dovrebbe partire dalla prima riga dell'elenco, non da Chiudi")
+		_assert(row.focus_mode == Control.FOCUS_NONE, "una riga dell'archivio non dovrebbe essere selezionabile: solo Chiudi deve poter avere il focus")
+	_assert(nav_hub.archive_panel.close_btn.has_focus(), "all'apertura dell'Archivio il focus dovrebbe essere su Chiudi (l'unico controllo selezionabile)")
 
-	# Una singola pressione giù (evento reale, non simulato via codice)
-	# deve muovere il focus alla riga SUCCESSIVA, non farlo saltare
-	# all'ultima riga o al pulsante Chiudi: è esattamente il
-	# comportamento "non riesco a scorrere l'elenco" segnalato.
-	var down := InputEventJoypadButton.new()
-	down.button_index = JOY_BUTTON_DPAD_DOWN
-	down.pressed = true
-	Input.parse_input_event(down)
+	# Tenendo giù lo stick sinistro/D-pad (evento reale, non un metodo
+	# chiamato direttamente) la vista deve scorrere, ma il focus deve
+	# restare su Chiudi: non c'è nessun elenco di controlli da attraversare.
+	var scroll_before: float = nav_hub.archive_panel.scroll.scroll_vertical
+	var stick := InputEventJoypadMotion.new()
+	stick.axis = JOY_AXIS_LEFT_Y
+	stick.axis_value = 1.0
+	Input.parse_input_event(stick)
+	for i in range(20):
+		await get_tree().physics_frame
+	var scroll_after: float = nav_hub.archive_panel.scroll.scroll_vertical
+	_assert(scroll_after > scroll_before, "tenendo lo stick giù la vista dell'Archivio dovrebbe scorrere (scroll_vertical: %s -> %s)" % [scroll_before, scroll_after])
+	_assert(nav_hub.archive_panel.close_btn.has_focus(), "il focus dovrebbe restare su Chiudi mentre si scorre la vista, non spostarsi altrove")
+	var stick_release := InputEventJoypadMotion.new()
+	stick_release.axis = JOY_AXIS_LEFT_Y
+	stick_release.axis_value = 0.0
+	Input.parse_input_event(stick_release)
 	await get_tree().process_frame
-	var down_up := InputEventJoypadButton.new()
-	down_up.button_index = JOY_BUTTON_DPAD_DOWN
-	down_up.pressed = false
-	Input.parse_input_event(down_up)
-	await get_tree().process_frame
-	_assert(nav_hub.archive_panel.list_box.get_child(1).has_focus(), "una pressione giù dovrebbe muovere il focus alla seconda riga dell'elenco, in ordine, non altrove")
 
 	# Il tasto B/Cerchio del controller deve chiudere il pannello (come
 	# documentato in README), non solo il click sul pulsante Chiudi.
@@ -1167,37 +1170,27 @@ func _test_hub_subpanel_navigation() -> void:
 	_assert(nav_hub.start_btn.has_focus(), "il focus dovrebbe tornare su 'Inizia Run' dopo aver chiuso l'Archivio")
 
 	# Stessa verifica, più rapida (chiusura diretta via segnale), per
-	# Bestiario e Tutorial: righe navigabili e ripristino del focus dell'Hub.
+	# Bestiario e Tutorial.
 	nav_hub._open_bestiary()
 	await get_tree().process_frame
 	_assert(nav_hub.bestiary_panel.list_box.get_child_count() > 0, "setup del test: il bestiario dovrebbe elencare almeno una voce")
 	for row in nav_hub.bestiary_panel.list_box.get_children():
-		_assert(row.focus_mode == Control.FOCUS_ALL, "una riga del bestiario non è navigabile da tastiera/controller")
-	_assert(nav_hub.bestiary_panel.list_box.get_child(0).has_focus(), "all'apertura del Bestiario il focus dovrebbe partire dalla prima riga dell'elenco, non da Chiudi")
+		_assert(row.focus_mode == Control.FOCUS_NONE, "una riga del bestiario non dovrebbe essere selezionabile")
+	_assert(nav_hub.bestiary_panel.close_btn.has_focus(), "all'apertura del Bestiario il focus dovrebbe essere su Chiudi")
 	nav_hub.bestiary_panel.closed.emit()
 	await get_tree().process_frame
 	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Bestiario")
 
 	nav_hub._open_tutorial()
 	await get_tree().process_frame
-	var tutorial_rows := _find_focusable_rows(nav_hub.tutorial_panel)
-	_assert(tutorial_rows.size() > 0, "nessuna riga navigabile da tastiera/controller trovata nel Tutorial")
-	_assert(nav_hub.tutorial_panel.steps_box.get_child(0).has_focus(), "all'apertura del Tutorial il focus dovrebbe partire dal primo passo dei Comandi, non da Chiudi")
+	_assert(nav_hub.tutorial_panel.close_btn.has_focus(), "all'apertura del Tutorial il focus dovrebbe essere su Chiudi")
 	nav_hub.tutorial_panel.closed.emit()
 	await get_tree().process_frame
 	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Tutorial")
 
-	print("Navigazione nei sottomenu dell'Hub: OK (righe navigabili, nessuna fuoriuscita del focus sul menù sottostante, chiusura con B/Cerchio)")
+	print("Scorrimento senza spostare il focus nei sottomenu dell'Hub: OK")
 	nav_hub.queue_free()
 	await get_tree().process_frame
-
-func _find_focusable_rows(node: Node) -> Array:
-	var found: Array = []
-	if node is PanelContainer and node.focus_mode == Control.FOCUS_ALL:
-		found.append(node)
-	for child in node.get_children():
-		found.append_array(_find_focusable_rows(child))
-	return found
 
 func _action_has_joypad_button(action: String, button: JoyButton) -> bool:
 	for event in InputMap.action_get_events(action):

@@ -4,11 +4,23 @@ extends Control
 # Archivio dei potenziamenti: elenca ogni potenziamento del gioco.
 # Quelli mai raccolti sono mostrati come "???" finché non vengono
 # sbloccati per la prima volta (SaveManager.archive).
+#
+# L'elenco NON richiede di spostare il focus tra le righe per essere
+# scorso (la navigazione a focus tra i controlli, gestita dal motore in
+# base alla posizione a schermo, si è rivelata inaffidabile/confusa da
+# controller in questo contesto): lo stick sinistro/D-pad su/giù scorre
+# direttamente la vista, leggendo la stessa azione di movimento (move_up/
+# move_down) già usata in game, senza toccare il sistema di focus.
+# L'unico controllo selezionabile resta "Chiudi", che quindi non può mai
+# "saltare" altrove.
 
 signal closed
 
+const SCROLL_SPEED := 700.0
+
 var list_box: VBoxContainer
 var close_btn: Button
+var scroll: ScrollContainer
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -31,7 +43,7 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size", 28)
 	panel.add_child(title)
 
-	var scroll := ScrollContainer.new()
+	scroll = ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 490)
 	panel.add_child(scroll)
 
@@ -46,25 +58,17 @@ func _ready() -> void:
 	close_btn.pressed.connect(func(): closed.emit())
 	panel.add_child(close_btn)
 
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	var dir := Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
+	if dir != 0.0:
+		scroll.scroll_vertical += int(dir * SCROLL_SPEED * delta)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
 		closed.emit()
 		get_viewport().set_input_as_handled()
-
-# Il pulsante Chiudi sta sotto l'elenco scorrevole: dandogli il focus
-# iniziale, "giù" da lì non entra nell'elenco dall'alto come ci si
-# aspetterebbe, ma salta al primo controllo navigabile che si trova
-# geometricamente sotto di lui — che con l'elenco non ancora scorso
-# è l'ULTIMA riga, non la prima (la risoluzione automatica del focus
-# ignora l'ordine logico della lista, guarda solo le posizioni a schermo).
-# Partire dalla prima riga rende invece "giù" un attraversamento naturale
-# dall'alto verso il basso, con "giù" dall'ultima riga che arriva
-# comunque a Chiudi.
-func focus_first_item() -> void:
-	if list_box.get_child_count() > 0:
-		list_box.get_child(0).grab_focus()
-	else:
-		close_btn.grab_focus()
 
 func refresh() -> void:
 	for c in list_box.get_children():
@@ -72,11 +76,11 @@ func refresh() -> void:
 	for entry in GameData.POWERUPS:
 		var unlocked: bool = SaveManager.is_powerup_unlocked(entry.id)
 		list_box.add_child(_build_row(entry, unlocked))
+	scroll.scroll_vertical = 0
 
 func _build_row(entry: Dictionary, unlocked: bool) -> Control:
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", _row_style())
-	_make_row_focusable(row)
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 16)
@@ -114,20 +118,3 @@ func _row_style() -> StyleBoxFlat:
 	sb.content_margin_top = 8.0
 	sb.content_margin_bottom = 8.0
 	return sb
-
-func _row_focus_style() -> StyleBoxFlat:
-	var sb := _row_style()
-	sb.border_color = Color(0.4, 0.88, 0.76)
-	sb.set_border_width_all(2)
-	return sb
-
-# Rende la riga selezionabile da tastiera/controller (altrimenti, con
-# nessun controllo navigabile nell'elenco, il D-pad/stick non avrebbe
-# nulla su cui scorrere all'interno dello ScrollContainer): PanelContainer
-# non disegna da solo un riquadro di focus come i Button, quindi lo si
-# simula scambiando lo stylebox "panel" quando il focus entra/esce. Lo
-# ScrollContainer segue automaticamente il controllo con il focus.
-func _make_row_focusable(row: Control) -> void:
-	row.focus_mode = Control.FOCUS_ALL
-	row.focus_entered.connect(func(): row.add_theme_stylebox_override("panel", _row_focus_style()))
-	row.focus_exited.connect(func(): row.add_theme_stylebox_override("panel", _row_style()))

@@ -111,7 +111,7 @@ func _open_archive() -> void:
 	archive_panel.refresh()
 	archive_panel.show()
 	_set_menu_focusable(false)
-	archive_panel.focus_first_item()
+	archive_panel.close_btn.grab_focus()
 
 func _open_bestiary() -> void:
 	if bestiary_panel == null:
@@ -121,7 +121,7 @@ func _open_bestiary() -> void:
 	bestiary_panel.refresh()
 	bestiary_panel.show()
 	_set_menu_focusable(false)
-	bestiary_panel.focus_first_item()
+	bestiary_panel.close_btn.grab_focus()
 
 func _open_tutorial() -> void:
 	if tutorial_panel == null:
@@ -130,7 +130,7 @@ func _open_tutorial() -> void:
 		add_child(tutorial_panel)
 	tutorial_panel.show()
 	_set_menu_focusable(false)
-	tutorial_panel.focus_first_item()
+	tutorial_panel.focus_close_button()
 
 # Mentre un pannello (Archivio/Bestiario/Tutorial) è aperto sopra l'Hub,
 # i pulsanti dell'Hub restano nell'albero (nascosti solo visivamente
