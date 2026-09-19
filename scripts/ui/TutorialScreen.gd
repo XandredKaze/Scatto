@@ -9,6 +9,7 @@ extends Control
 signal closed
 
 var close_btn: Button
+var steps_box: VBoxContainer
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -39,7 +40,7 @@ func _ready() -> void:
 	scroll.add_child(content)
 
 	content.add_child(_build_section_title("Comandi"))
-	var steps_box := VBoxContainer.new()
+	steps_box = VBoxContainer.new()
 	steps_box.add_theme_constant_override("separation", 6)
 	content.add_child(steps_box)
 	for step in _steps():
@@ -69,6 +70,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
 		closed.emit()
 		get_viewport().set_input_as_handled()
+
+# Il pulsante Chiudi sta sotto tutto il contenuto scorrevole: dandogli il
+# focus iniziale, "giù" da lì non entra nel contenuto dall'alto come ci
+# si aspetterebbe, ma salta al primo controllo navigabile che si trova
+# geometricamente sotto di lui — che con il contenuto non ancora scorso
+# è l'ULTIMA riga, non la prima (la risoluzione automatica del focus
+# ignora l'ordine logico, guarda solo le posizioni a schermo). Partire
+# dal primo passo dei Comandi rende invece "giù" un attraversamento
+# naturale dall'alto verso il basso, con "giù" dall'ultima riga che
+# arriva comunque a Chiudi.
+func focus_first_item() -> void:
+	if steps_box.get_child_count() > 0:
+		steps_box.get_child(0).grab_focus()
+	else:
+		close_btn.grab_focus()
 
 func _steps() -> Array:
 	return [

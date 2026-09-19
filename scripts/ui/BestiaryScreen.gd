@@ -58,6 +58,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		closed.emit()
 		get_viewport().set_input_as_handled()
 
+# Il pulsante Chiudi sta sotto l'elenco scorrevole: dandogli il focus
+# iniziale, "giù" da lì non entra nell'elenco dall'alto come ci si
+# aspetterebbe, ma salta al primo controllo navigabile che si trova
+# geometricamente sotto di lui — che con l'elenco non ancora scorso è
+# l'ULTIMA riga, non la prima (la risoluzione automatica del focus
+# ignora l'ordine logico della lista, guarda solo le posizioni a
+# schermo). Partire dalla prima riga rende invece "giù" un
+# attraversamento naturale dall'alto verso il basso, con "giù"
+# dall'ultima riga che arriva comunque a Chiudi.
+func focus_first_item() -> void:
+	if list_box.get_child_count() > 0:
+		list_box.get_child(0).grab_focus()
+	else:
+		close_btn.grab_focus()
+
 func refresh() -> void:
 	for c in list_box.get_children():
 		c.queue_free()

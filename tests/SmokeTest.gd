@@ -1121,10 +1121,33 @@ func _test_hub_subpanel_navigation() -> void:
 	await get_tree().process_frame
 	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_NONE, "i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
 	_assert(nav_hub.tutorial_btn.focus_mode == Control.FOCUS_NONE and nav_hub.archive_btn.focus_mode == Control.FOCUS_NONE and nav_hub.bestiary_btn.focus_mode == Control.FOCUS_NONE, "tutti i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
-	_assert(nav_hub.archive_panel.close_btn.has_focus(), "il pulsante Chiudi dell'Archivio non ha il focus all'apertura")
-	_assert(nav_hub.archive_panel.list_box.get_child_count() > 0, "setup del test: l'archivio dovrebbe elencare almeno un potenziamento")
+	_assert(nav_hub.archive_panel.list_box.get_child_count() > 1, "setup del test: l'archivio dovrebbe elencare almeno due potenziamenti")
 	for row in nav_hub.archive_panel.list_box.get_children():
 		_assert(row.focus_mode == Control.FOCUS_ALL, "una riga dell'archivio non è navigabile da tastiera/controller: il D-pad/stick non avrebbe nulla su cui scorrere")
+	# Regressione: il pulsante Chiudi sta SOTTO l'elenco. Dargli il focus
+	# iniziale (come faceva questo screen prima della correzione) fa sí
+	# che "giù" da lí non entri nell'elenco dall'alto, ma salti al primo
+	# controllo che si trova geometricamente sotto di lui — con l'elenco
+	# non ancora scorso, è l'ULTIMA riga, non la prima. Il focus iniziale
+	# deve quindi partire dalla prima riga, cosí "giù" scorre l'elenco in
+	# ordine naturale dall'alto.
+	_assert(nav_hub.archive_panel.list_box.get_child(0).has_focus(), "all'apertura dell'Archivio il focus dovrebbe partire dalla prima riga dell'elenco, non da Chiudi")
+
+	# Una singola pressione giù (evento reale, non simulato via codice)
+	# deve muovere il focus alla riga SUCCESSIVA, non farlo saltare
+	# all'ultima riga o al pulsante Chiudi: è esattamente il
+	# comportamento "non riesco a scorrere l'elenco" segnalato.
+	var down := InputEventJoypadButton.new()
+	down.button_index = JOY_BUTTON_DPAD_DOWN
+	down.pressed = true
+	Input.parse_input_event(down)
+	await get_tree().process_frame
+	var down_up := InputEventJoypadButton.new()
+	down_up.button_index = JOY_BUTTON_DPAD_DOWN
+	down_up.pressed = false
+	Input.parse_input_event(down_up)
+	await get_tree().process_frame
+	_assert(nav_hub.archive_panel.list_box.get_child(1).has_focus(), "una pressione giù dovrebbe muovere il focus alla seconda riga dell'elenco, in ordine, non altrove")
 
 	# Il tasto B/Cerchio del controller deve chiudere il pannello (come
 	# documentato in README), non solo il click sul pulsante Chiudi.
@@ -1150,6 +1173,7 @@ func _test_hub_subpanel_navigation() -> void:
 	_assert(nav_hub.bestiary_panel.list_box.get_child_count() > 0, "setup del test: il bestiario dovrebbe elencare almeno una voce")
 	for row in nav_hub.bestiary_panel.list_box.get_children():
 		_assert(row.focus_mode == Control.FOCUS_ALL, "una riga del bestiario non è navigabile da tastiera/controller")
+	_assert(nav_hub.bestiary_panel.list_box.get_child(0).has_focus(), "all'apertura del Bestiario il focus dovrebbe partire dalla prima riga dell'elenco, non da Chiudi")
 	nav_hub.bestiary_panel.closed.emit()
 	await get_tree().process_frame
 	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Bestiario")
@@ -1158,6 +1182,7 @@ func _test_hub_subpanel_navigation() -> void:
 	await get_tree().process_frame
 	var tutorial_rows := _find_focusable_rows(nav_hub.tutorial_panel)
 	_assert(tutorial_rows.size() > 0, "nessuna riga navigabile da tastiera/controller trovata nel Tutorial")
+	_assert(nav_hub.tutorial_panel.steps_box.get_child(0).has_focus(), "all'apertura del Tutorial il focus dovrebbe partire dal primo passo dei Comandi, non da Chiudi")
 	nav_hub.tutorial_panel.closed.emit()
 	await get_tree().process_frame
 	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Tutorial")
