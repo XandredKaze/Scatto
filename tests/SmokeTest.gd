@@ -16,6 +16,7 @@ func run_and_quit() -> void:
 
 	await _test_gamepad_input()
 	await _test_controller_menu_navigation()
+	await _test_hub_subpanel_navigation()
 	_test_maze_grid()
 	await _test_maze_integration()
 	await _test_maze_dash_no_tunneling()
@@ -1103,6 +1104,75 @@ func _test_controller_menu_navigation() -> void:
 	print("Navigazione menu da controller: OK (binding e focus iniziale verificati)")
 	choice_screen.queue_free()
 	await get_tree().process_frame
+
+func _test_hub_subpanel_navigation() -> void:
+	print("--- Test regressione: navigazione da controller nei sottomenu dell'Hub (Archivio/Bestiario/Tutorial) ---")
+	var nav_hub := Hub.new()
+	add_child(nav_hub)
+	await get_tree().process_frame
+	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "setup del test: i pulsanti dell'Hub dovrebbero essere navigabili prima di aprire un pannello")
+
+	# Aprendo un pannello sopra l'Hub, i suoi pulsanti (nascosti solo
+	# visivamente dallo sfondo opaco del pannello, ma ancora nell'albero)
+	# non devono restare candidati per la risoluzione del focus da
+	# tastiera/controller: altrimenti, scorrendo oltre l'ultimo controllo
+	# navigabile del pannello, il focus "sconfinerebbe" sul menù sottostante.
+	nav_hub._open_archive()
+	await get_tree().process_frame
+	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_NONE, "i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
+	_assert(nav_hub.tutorial_btn.focus_mode == Control.FOCUS_NONE and nav_hub.archive_btn.focus_mode == Control.FOCUS_NONE and nav_hub.bestiary_btn.focus_mode == Control.FOCUS_NONE, "tutti i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
+	_assert(nav_hub.archive_panel.close_btn.has_focus(), "il pulsante Chiudi dell'Archivio non ha il focus all'apertura")
+	_assert(nav_hub.archive_panel.list_box.get_child_count() > 0, "setup del test: l'archivio dovrebbe elencare almeno un potenziamento")
+	for row in nav_hub.archive_panel.list_box.get_children():
+		_assert(row.focus_mode == Control.FOCUS_ALL, "una riga dell'archivio non è navigabile da tastiera/controller: il D-pad/stick non avrebbe nulla su cui scorrere")
+
+	# Il tasto B/Cerchio del controller deve chiudere il pannello (come
+	# documentato in README), non solo il click sul pulsante Chiudi.
+	var cancel_down := InputEventJoypadButton.new()
+	cancel_down.button_index = JOY_BUTTON_B
+	cancel_down.pressed = true
+	Input.parse_input_event(cancel_down)
+	await get_tree().process_frame
+	var cancel_up := InputEventJoypadButton.new()
+	cancel_up.button_index = JOY_BUTTON_B
+	cancel_up.pressed = false
+	Input.parse_input_event(cancel_up)
+	await get_tree().process_frame
+
+	_assert(not nav_hub.archive_panel.visible, "il tasto B/Cerchio del controller dovrebbe chiudere l'Archivio")
+	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso l'Archivio")
+	_assert(nav_hub.start_btn.has_focus(), "il focus dovrebbe tornare su 'Inizia Run' dopo aver chiuso l'Archivio")
+
+	# Stessa verifica, più rapida (chiusura diretta via segnale), per
+	# Bestiario e Tutorial: righe navigabili e ripristino del focus dell'Hub.
+	nav_hub._open_bestiary()
+	await get_tree().process_frame
+	_assert(nav_hub.bestiary_panel.list_box.get_child_count() > 0, "setup del test: il bestiario dovrebbe elencare almeno una voce")
+	for row in nav_hub.bestiary_panel.list_box.get_children():
+		_assert(row.focus_mode == Control.FOCUS_ALL, "una riga del bestiario non è navigabile da tastiera/controller")
+	nav_hub.bestiary_panel.closed.emit()
+	await get_tree().process_frame
+	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Bestiario")
+
+	nav_hub._open_tutorial()
+	await get_tree().process_frame
+	var tutorial_rows := _find_focusable_rows(nav_hub.tutorial_panel)
+	_assert(tutorial_rows.size() > 0, "nessuna riga navigabile da tastiera/controller trovata nel Tutorial")
+	nav_hub.tutorial_panel.closed.emit()
+	await get_tree().process_frame
+	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Tutorial")
+
+	print("Navigazione nei sottomenu dell'Hub: OK (righe navigabili, nessuna fuoriuscita del focus sul menù sottostante, chiusura con B/Cerchio)")
+	nav_hub.queue_free()
+	await get_tree().process_frame
+
+func _find_focusable_rows(node: Node) -> Array:
+	var found: Array = []
+	if node is PanelContainer and node.focus_mode == Control.FOCUS_ALL:
+		found.append(node)
+	for child in node.get_children():
+		found.append_array(_find_focusable_rows(child))
+	return found
 
 func _action_has_joypad_button(action: String, button: JoyButton) -> bool:
 	for event in InputMap.action_get_events(action):

@@ -17,7 +17,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Color8(10, 11, 15, 255)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.position = Vector2.ZERO
+	bg.size = get_viewport_rect().size
 	add_child(bg)
 
 	var vbox := VBoxContainer.new()

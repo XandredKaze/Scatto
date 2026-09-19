@@ -12,6 +12,9 @@ var bestiary_panel: BestiaryScreen
 var tutorial_panel: TutorialScreen
 var stats_label: Label
 var start_btn: Button
+var tutorial_btn: Button
+var archive_btn: Button
+var bestiary_btn: Button
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -19,7 +22,8 @@ func _ready() -> void:
 
 	var bg := ColorRect.new()
 	bg.color = Color8(13, 14, 18)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.position = Vector2.ZERO
+	bg.size = get_viewport_rect().size
 	add_child(bg)
 
 	var vbox := VBoxContainer.new()
@@ -60,19 +64,19 @@ func _ready() -> void:
 	start_btn.pressed.connect(func(): start_run_requested.emit())
 	vbox.add_child(start_btn)
 
-	var tutorial_btn := Button.new()
+	tutorial_btn = Button.new()
 	tutorial_btn.text = "Tutorial"
 	tutorial_btn.custom_minimum_size = Vector2(260, 48)
 	tutorial_btn.pressed.connect(_open_tutorial)
 	vbox.add_child(tutorial_btn)
 
-	var archive_btn := Button.new()
+	archive_btn = Button.new()
 	archive_btn.text = "Archivio Potenziamenti"
 	archive_btn.custom_minimum_size = Vector2(260, 48)
 	archive_btn.pressed.connect(_open_archive)
 	vbox.add_child(archive_btn)
 
-	var bestiary_btn := Button.new()
+	bestiary_btn = Button.new()
 	bestiary_btn.text = "Bestiario"
 	bestiary_btn.custom_minimum_size = Vector2(260, 48)
 	bestiary_btn.pressed.connect(_open_bestiary)
@@ -102,25 +106,43 @@ func _add_spacer(container: Control, h: int) -> void:
 func _open_archive() -> void:
 	if archive_panel == null:
 		archive_panel = ArchiveScreen.new()
-		archive_panel.closed.connect(func(): archive_panel.hide(); start_btn.grab_focus())
+		archive_panel.closed.connect(func(): archive_panel.hide(); _set_menu_focusable(true); start_btn.grab_focus())
 		add_child(archive_panel)
 	archive_panel.refresh()
 	archive_panel.show()
+	_set_menu_focusable(false)
 	archive_panel.close_btn.grab_focus()
 
 func _open_bestiary() -> void:
 	if bestiary_panel == null:
 		bestiary_panel = BestiaryScreen.new()
-		bestiary_panel.closed.connect(func(): bestiary_panel.hide(); start_btn.grab_focus())
+		bestiary_panel.closed.connect(func(): bestiary_panel.hide(); _set_menu_focusable(true); start_btn.grab_focus())
 		add_child(bestiary_panel)
 	bestiary_panel.refresh()
 	bestiary_panel.show()
+	_set_menu_focusable(false)
 	bestiary_panel.close_btn.grab_focus()
 
 func _open_tutorial() -> void:
 	if tutorial_panel == null:
 		tutorial_panel = TutorialScreen.new()
-		tutorial_panel.closed.connect(func(): tutorial_panel.hide(); start_btn.grab_focus())
+		tutorial_panel.closed.connect(func(): tutorial_panel.hide(); _set_menu_focusable(true); start_btn.grab_focus())
 		add_child(tutorial_panel)
 	tutorial_panel.show()
+	_set_menu_focusable(false)
 	tutorial_panel.close_btn.grab_focus()
+
+# Mentre un pannello (Archivio/Bestiario/Tutorial) è aperto sopra l'Hub,
+# i pulsanti dell'Hub restano nell'albero (nascosti solo visivamente
+# dallo sfondo opaco del pannello) e quindi continuerebbero a essere
+# candidati validi per la risoluzione automatica del focus da
+# tastiera/controller: scorrendo verso il basso nel pannello, una volta
+# finiti i controlli navigabili al suo interno, il focus "sconfinerebbe"
+# sui pulsanti dell'Hub sottostante. Disattivarli temporaneamente evita
+# la fuoriuscita.
+func _set_menu_focusable(enabled: bool) -> void:
+	var mode: Control.FocusMode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
+	start_btn.focus_mode = mode
+	tutorial_btn.focus_mode = mode
+	archive_btn.focus_mode = mode
+	bestiary_btn.focus_mode = mode

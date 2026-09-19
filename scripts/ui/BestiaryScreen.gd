@@ -13,10 +13,18 @@ var close_btn: Button
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	# Sfondo completamente opaco: la schermata sottostante (Hub) non deve
-	# trasparire e mescolarsi con il testo del bestiario.
+	# trasparire e mescolarsi con il testo del bestiario. Deliberatamente
+	# senza set_anchors_preset(FULL_RECT): nel frame in cui questo nodo
+	# viene creato il ridimensionamento via anchor non ha ancora effetto,
+	# lasciando bg con size (0, 0) e quindi invisibile (bug osservato su
+	# tutte le schermate overlay di questo tipo, con il contenuto
+	# sottostante che trasparisce nei punti non coperti dal resto del
+	# pannello) — posizione e size fissate qui a mano evitano il problema,
+	# dato che il viewport di questo progetto ha dimensioni fisse.
 	var bg := ColorRect.new()
 	bg.color = Color8(10, 11, 15, 255)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.position = Vector2.ZERO
+	bg.size = get_viewport_rect().size
 	add_child(bg)
 
 	var panel := VBoxContainer.new()
@@ -45,6 +53,11 @@ func _ready() -> void:
 	close_btn.pressed.connect(func(): closed.emit())
 	panel.add_child(close_btn)
 
+func _unhandled_input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		closed.emit()
+		get_viewport().set_input_as_handled()
+
 func refresh() -> void:
 	for c in list_box.get_children():
 		c.queue_free()
@@ -69,6 +82,7 @@ func _all_entries() -> Array:
 func _build_row(entry: Dictionary, unlocked: bool) -> Control:
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", _row_style())
+	_make_row_focusable(row)
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 16)
@@ -101,3 +115,20 @@ func _row_style() -> StyleBoxFlat:
 	sb.content_margin_top = 8.0
 	sb.content_margin_bottom = 8.0
 	return sb
+
+func _row_focus_style() -> StyleBoxFlat:
+	var sb := _row_style()
+	sb.border_color = Color(0.4, 0.88, 0.76)
+	sb.set_border_width_all(2)
+	return sb
+
+# Rende la riga selezionabile da tastiera/controller (altrimenti, con
+# nessun controllo navigabile nell'elenco, il D-pad/stick non avrebbe
+# nulla su cui scorrere all'interno dello ScrollContainer): PanelContainer
+# non disegna da solo un riquadro di focus come i Button, quindi lo si
+# simula scambiando lo stylebox "panel" quando il focus entra/esce. Lo
+# ScrollContainer segue automaticamente il controllo con il focus.
+func _make_row_focusable(row: Control) -> void:
+	row.focus_mode = Control.FOCUS_ALL
+	row.focus_entered.connect(func(): row.add_theme_stylebox_override("panel", _row_focus_style()))
+	row.focus_exited.connect(func(): row.add_theme_stylebox_override("panel", _row_style()))

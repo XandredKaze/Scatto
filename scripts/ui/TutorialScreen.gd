@@ -14,7 +14,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Color8(10, 11, 15, 255)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.position = Vector2.ZERO
+	bg.size = get_viewport_rect().size
 	add_child(bg)
 
 	var panel := VBoxContainer.new()
@@ -64,6 +65,11 @@ func _ready() -> void:
 	close_btn.pressed.connect(func(): closed.emit())
 	panel.add_child(close_btn)
 
+func _unhandled_input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		closed.emit()
+		get_viewport().set_input_as_handled()
+
 func _steps() -> Array:
 	return [
 		{"n": 1, "title": "Movimento", "text": "WASD o frecce direzionali, oppure lo stick sinistro/D-pad di un controller."},
@@ -85,6 +91,7 @@ func _build_section_title(text: String) -> Label:
 func _build_step_row(n: int, step_title: String, text: String) -> Control:
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", _row_style())
+	_make_row_focusable(row)
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 16)
@@ -118,6 +125,7 @@ func _build_step_row(n: int, step_title: String, text: String) -> Control:
 func _build_enemy_row(entry: Dictionary) -> Control:
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", _row_style())
+	_make_row_focusable(row)
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 16)
@@ -146,6 +154,7 @@ func _build_enemy_row(entry: Dictionary) -> Control:
 func _build_ability_row(enemy_entry: Dictionary, ability_entry: Dictionary) -> Control:
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", _row_style())
+	_make_row_focusable(row)
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 16)
@@ -181,3 +190,20 @@ func _row_style() -> StyleBoxFlat:
 	sb.content_margin_top = 8.0
 	sb.content_margin_bottom = 8.0
 	return sb
+
+func _row_focus_style() -> StyleBoxFlat:
+	var sb := _row_style()
+	sb.border_color = Color(0.4, 0.88, 0.76)
+	sb.set_border_width_all(2)
+	return sb
+
+# Rende la riga selezionabile da tastiera/controller (altrimenti, con
+# nessun controllo navigabile nell'elenco, il D-pad/stick non avrebbe
+# nulla su cui scorrere all'interno dello ScrollContainer): PanelContainer
+# non disegna da solo un riquadro di focus come i Button, quindi lo si
+# simula scambiando lo stylebox "panel" quando il focus entra/esce. Lo
+# ScrollContainer segue automaticamente il controllo con il focus.
+func _make_row_focusable(row: Control) -> void:
+	row.focus_mode = Control.FOCUS_ALL
+	row.focus_entered.connect(func(): row.add_theme_stylebox_override("panel", _row_focus_style()))
+	row.focus_exited.connect(func(): row.add_theme_stylebox_override("panel", _row_style()))
