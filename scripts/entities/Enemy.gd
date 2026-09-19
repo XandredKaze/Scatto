@@ -26,6 +26,12 @@ var attack_cooldown := 1.4
 var projectile_speed := 260.0
 var is_golden := false
 var guaranteed_drop := ""
+# Valori originali del tipo, da cui si ricalcolano i bonus da alleato
+# (Run._apply_ally_buffs): applicare i moltiplicatori sempre alla base
+# evita che raccogliere due volte lo stesso potenziamento li componga in
+# modo esponenziale.
+var base_max_hp := 30.0
+var base_damage := 8.0
 
 var attack_timer := 0.0
 var arena_bounds: Rect2 = Rect2()
@@ -63,6 +69,18 @@ func setup_from_data(data: Dictionary, golden: bool) -> void:
 	projectile_speed = data.get("projectile_speed", 260.0)
 	guaranteed_drop = data.get("guaranteed_drop", "")
 	is_golden = golden
+	base_max_hp = max_hp
+	base_damage = damage
+
+# Riapplica i moltiplicatori da potenziamento a questo alleato, partendo
+# sempre dai valori base del tipo. La quota di vita attuale viene
+# conservata, cosí un alleato ferito non si cura di colpo raccogliendo
+# Pelle Coriacea (né perde vita se il moltiplicatore cala).
+func apply_ally_buffs(hp_mult: float, damage_mult: float) -> void:
+	var ratio: float = (hp / max_hp) if max_hp > 0.0 else 1.0
+	max_hp = base_max_hp * hp_mult
+	hp = max_hp * ratio
+	damage = base_damage * damage_mult
 
 func _ready() -> void:
 	collision_layer = 2

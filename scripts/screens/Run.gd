@@ -44,6 +44,8 @@ const SLAM_DAMAGE := 16.0
 const SWARM_COUNT := 6
 const SWARM_SPEED := 300.0
 const SWARM_DAMAGE := 6.0
+# Vita restituita dal potenziamento "Vincolo Vitale" alla caduta di un alleato.
+const VINCOLO_VITALE_HEAL := 30.0
 
 var player: Player
 var current_boss: Boss = null
@@ -280,6 +282,7 @@ func _on_enemy_defeated(entity) -> void:
 	var drop_id: String = entity.guaranteed_drop
 	if drop_id != "":
 		player.apply_powerup(drop_id)
+		_refresh_ally_buffs()
 		SaveManager.unlock_powerup(drop_id)
 		hud.show_banner("Bottino raro: %s!" % GameData.get_powerup(drop_id).name, 2.5)
 	elif first_bestiary:
@@ -365,8 +368,11 @@ func _convert_enemy_to_ally(enemy: Enemy) -> void:
 	enemy.defeated.connect(_on_ally_defeated.bind(enemy))
 	enemy.ally_kill.connect(_on_enemy_defeated)
 	allies.append(enemy)
+	enemy.apply_ally_buffs(player.ally_hp_mult, player.ally_damage_mult)
 	SaveManager.unlock_enemy(enemy.enemy_id)
 	_sync_granted_ability()
+	if player.has_richiamo_primordiale:
+		player.special_attack_cooldowns.clear()
 	var ability_name: String = GameData.ALLY_SPECIAL_ATTACKS[enemy.enemy_id].name
 	var has_twin: bool = allies.any(func(a): return a != enemy and is_instance_valid(a) and a.alive and a.enemy_id == enemy.enemy_id)
 	var banner_text: String
@@ -388,6 +394,18 @@ func _on_ally_defeated(ally) -> void:
 		ally.queue_free()
 	_sync_granted_ability()
 	hud.show_banner("Il tuo alleato %s è caduto in battaglia." % fallen_name, 2.5)
+	if player.has_vincolo_vitale:
+		player.heal(VINCOLO_VITALE_HEAL)
+		player.tame_cooldown_timer = 0.0
+		hud.show_banner("Vincolo Vitale: il sacrificio di %s ti ridà forze." % fallen_name, 2.5)
+
+# Riallinea vita e danno di ogni alleato vivo ai moltiplicatori attuali
+# del giocatore: serve dopo ogni potenziamento raccolto, dato che gli
+# alleati possono essere già al seguito da diverse stanze.
+func _refresh_ally_buffs() -> void:
+	for a in allies:
+		if is_instance_valid(a) and a.alive:
+			a.apply_ally_buffs(player.ally_hp_mult, player.ally_damage_mult)
 
 func _clear_allies() -> void:
 	for a in allies:
@@ -424,28 +442,33 @@ func _sync_granted_ability() -> void:
 func _on_special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2, empowered: bool = false) -> void:
 	if not GameData.ENEMY_TYPES.has(ability_id):
 		return
+	# "Anima del Branco" rende potenziato ogni attacco speciale, anche
+	# quando l'alleato che lo concede è uno solo.
+	if player != null and player.always_empowered:
+		empowered = true
+	var power: float = player.special_damage_mult if player != null else 1.0
 	var theme_color: Color = GameData.ENEMY_TYPES[ability_id].color
 	match ability_id:
 		"strisciante":
-			var dmg: float = LUNGE_DAMAGE * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
+			var dmg: float = LUNGE_DAMAGE * power * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
 			var target_pos: Vector2 = origin + dir * LUNGE_OFFSET
 			_damage_hostiles_in_radius(target_pos, LUNGE_RADIUS, dmg)
 			_spawn_special_effect(SpecialAttackEffect.Kind.SLASH, theme_color, LUNGE_RADIUS * 1.6, 0.22, target_pos, dir)
 		"pungiglione":
-			_on_enemy_spawn_projectile(origin, dir, DART_SPEED, DART_DAMAGE, true, theme_color)
+			_on_enemy_spawn_projectile(origin, dir, DART_SPEED, DART_DAMAGE * power, true, theme_color)
 			if empowered:
 				var spread_dir: Vector2 = dir.rotated(GameData.EMPOWERED_DART_SPREAD)
-				_on_enemy_spawn_projectile(origin, spread_dir, DART_SPEED, DART_DAMAGE, true, theme_color)
+				_on_enemy_spawn_projectile(origin, spread_dir, DART_SPEED, DART_DAMAGE * power, true, theme_color)
 			_spawn_special_effect(SpecialAttackEffect.Kind.RING, theme_color, 26.0, 0.15, origin)
 		"corazzato":
-			var dmg: float = SLAM_DAMAGE * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
+			var dmg: float = SLAM_DAMAGE * power * (GameData.EMPOWERED_DAMAGE_MULT if empowered else 1.0)
 			_damage_hostiles_in_radius(origin, SLAM_RADIUS, dmg)
 			_spawn_special_effect(SpecialAttackEffect.Kind.RING, theme_color, SLAM_RADIUS, 0.35, origin)
 		"sciame":
 			var count: int = GameData.EMPOWERED_SWARM_COUNT if empowered else SWARM_COUNT
 			for i in range(count):
 				var angle: float = TAU * float(i) / float(count)
-				_on_enemy_spawn_projectile(origin, Vector2(cos(angle), sin(angle)), SWARM_SPEED, SWARM_DAMAGE, true, theme_color)
+				_on_enemy_spawn_projectile(origin, Vector2(cos(angle), sin(angle)), SWARM_SPEED, SWARM_DAMAGE * power, true, theme_color)
 			_spawn_special_effect(SpecialAttackEffect.Kind.RING, theme_color, 50.0, 0.2, origin)
 		_:
 			return
@@ -525,10 +548,17 @@ func _roll_powerup_choices(count: int) -> Array:
 	# resta un colpo di fortuna raro, non una scelta alla pari delle altre.
 	var pool: Array = GameData.get_regular_powerup_pool().duplicate()
 	pool.append_array(GameData.get_unlocked_boss_legendary_pool())
+	# Con alleati al seguito lo scatto non esiste più: offrire un
+	# potenziamento che agisce solo su di esso sarebbe una scelta sprecata,
+	# quindi quelli marcati "needs_dash" restano fuori dal tiro finché non
+	# si torna senza alleati (o non si raccoglie Vincolo Spezzato).
+	if not player.has_dash():
+		pool = pool.filter(func(p): return not p.get("needs_dash", false))
 	return GameData.weighted_pick_without_replacement(pool, count, rng)
 
 func _on_powerup_selected(id: String) -> void:
 	player.apply_powerup(id)
+	_refresh_ally_buffs()
 	SaveManager.unlock_powerup(id)
 	powerup_choice_screen.hide()
 	_advance_after_room_clear()

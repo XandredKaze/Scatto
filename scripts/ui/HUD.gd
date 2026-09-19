@@ -168,6 +168,10 @@ func _process(delta: float) -> void:
 
 	streak_label.text = "Run consecutive senza Hub: %d" % run.streak_run_index
 
+	# Le cariche di scatto hanno senso solo finché lo scatto esiste: con
+	# alleati al seguito la riga sparisce del tutto invece di mostrare
+	# pallini per un attacco non più disponibile.
+	dash_pips.visible = player.has_dash()
 	_sync_dash_pips(player.max_dash_charges, player.dash_charges)
 	_update_powerup_tray(player)
 	ally_label.text = "Alleati: %d / %d" % [run.allies.size(), Run.MAX_ALLIES]
@@ -178,8 +182,14 @@ func _process(delta: float) -> void:
 		var label: Label = special_attack_labels[i]
 		var pip: ColorRect = special_attack_pips[i]
 		if ability_id == "":
-			label.text = "%s: nessuno" % SPECIAL_ATTACK_KEYS[i]
-			pip.color = Color(0.25, 0.27, 0.33)
+			# Pulsante libero: esegue lo scatto, ma solo finché il giocatore
+			# non ha alleati (addomesticare lo toglie da entrambi i pulsanti).
+			if player.has_dash():
+				label.text = "%s: Scatto" % SPECIAL_ATTACK_KEYS[i]
+				pip.color = Color(0.4, 0.88, 0.76) if player.can_dash() else Color(0.25, 0.27, 0.33)
+			else:
+				label.text = "%s: nessuno" % SPECIAL_ATTACK_KEYS[i]
+				pip.color = Color(0.25, 0.27, 0.33)
 		else:
 			var ability: Dictionary = GameData.ALLY_SPECIAL_ATTACKS[ability_id]
 			var name_text: String = ability.name

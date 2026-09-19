@@ -44,6 +44,12 @@ func _draw() -> void:
 			draw_arc(c, r + 4.0, 0.0, TAU, 20, Color8(244, 196, 48, 200), 1.5)
 		"shield":
 			_draw_shield(c, r)
+		"paw":
+			_draw_paw(c, r)
+		"fang":
+			_draw_fang(c, r)
+		"link":
+			_draw_link(c, r)
 		_:
 			draw_circle(c, r, icon_color)
 
@@ -105,6 +111,26 @@ func _draw_flame(c: Vector2, r: float) -> void:
 		c + Vector2(-r * 0.6, -r * 0.1),
 	])
 	draw_colored_polygon(points, icon_color)
+
+func _draw_paw(c: Vector2, r: float) -> void:
+	draw_circle(c + Vector2(0, r * 0.35), r * 0.55, icon_color)
+	for i in range(3):
+		var angle: float = PI + PI * 0.25 * float(i + 1)
+		draw_circle(c + Vector2(cos(angle), sin(angle)) * r * 0.7, r * 0.22, icon_color)
+
+func _draw_fang(c: Vector2, r: float) -> void:
+	for side in [-1.0, 1.0]:
+		var points := PackedVector2Array([
+			c + Vector2(side * r * 0.65, -r * 0.7),
+			c + Vector2(side * r * 0.15, -r * 0.7),
+			c + Vector2(side * r * 0.4, r * 0.85),
+		])
+		draw_colored_polygon(points, icon_color)
+
+func _draw_link(c: Vector2, r: float) -> void:
+	# Anello spezzato: due archi che non si chiudono, per "Vincolo Spezzato".
+	draw_arc(c + Vector2(-r * 0.35, 0), r * 0.55, PI * 0.35, TAU - PI * 0.35, 18, icon_color, 3.0)
+	draw_arc(c + Vector2(r * 0.35, 0), r * 0.55, -PI * 0.65, PI * 0.65, 18, icon_color, 3.0)
 
 func _draw_shield(c: Vector2, r: float) -> void:
 	var points := PackedVector2Array([

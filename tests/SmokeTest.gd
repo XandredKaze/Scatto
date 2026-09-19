@@ -37,6 +37,8 @@ func run_and_quit() -> void:
 	await _test_unlocked_boss_legendary_in_reward_pool()
 	await _test_legendary_rarity_weighting()
 	await _test_ally_grants_special_attack()
+	await _test_dash_traded_for_ally_attacks()
+	await _test_ally_powerups()
 	await _test_ally_special_attack_empowered_duplicate()
 	await _test_ally_special_attack_effects()
 	await _test_special_attack_visual_effects()
@@ -748,6 +750,197 @@ func _test_ally_grants_special_attack() -> void:
 	grant_run.queue_free()
 	await get_tree().process_frame
 
+func _test_dash_traded_for_ally_attacks() -> void:
+	print("--- Test regressione: lo scatto sta sui pulsanti d'attacco e sparisce con il primo alleato ---")
+	var trade_run := Run.new()
+	add_child(trade_run)
+	trade_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in trade_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	# Come negli altri test sugli alleati: un'esca lontana tiene la stanza
+	# "non ripulita", altrimenti il giocatore verrebbe congelato.
+	var decoy := Enemy.new()
+	decoy.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	decoy.global_position = trade_run.player.global_position + Vector2(600.0, 600.0)
+	trade_run.enemy_container.add_child(decoy)
+
+	var p: Player = trade_run.player
+	_assert(p.has_dash(), "senza alleati il giocatore dovrebbe avere lo scatto")
+	_assert(p.can_dash(), "senza alleati lo scatto dovrebbe essere utilizzabile")
+
+	# Pulsante d'attacco libero -> scatto, con un evento joypad reale sul
+	# dorsale destro (R1), non chiamando start_dash() a mano.
+	var press := InputEventJoypadButton.new()
+	press.device = 0
+	press.button_index = JOY_BUTTON_RIGHT_SHOULDER
+	press.pressed = true
+	Input.parse_input_event(press)
+	for i in range(10):
+		if p.is_dashing:
+			break
+		await get_tree().physics_frame
+	_assert(p.is_dashing, "con gli slot liberi il dorsale destro dovrebbe eseguire lo scatto")
+	var release := InputEventJoypadButton.new()
+	release.device = 0
+	release.button_index = JOY_BUTTON_RIGHT_SHOULDER
+	release.pressed = false
+	Input.parse_input_event(release)
+	# Lo scatto dura alcuni frame: si attende che finisca davvero, altrimenti
+	# i controlli seguenti vedrebbero ancora attivo QUESTO scatto.
+	for i in range(30):
+		if not p.is_dashing:
+			break
+		await get_tree().physics_frame
+	_assert(not p.is_dashing, "setup del test: lo scatto iniziale non è terminato")
+
+	var ally := Enemy.new()
+	ally.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	ally.global_position = p.global_position
+	trade_run.enemy_container.add_child(ally)
+	trade_run._on_tame_requested()
+	_assert(p.granted_ability_ids[0] == "strisciante", "setup del test: l'alleato dovrebbe occupare il primo slot")
+	_assert(not p.has_dash(), "con un alleato al seguito lo scatto non dovrebbe più esistere")
+	_assert(not p.can_dash(), "con un alleato al seguito lo scatto non dovrebbe essere utilizzabile")
+	_assert(p.granted_ability_ids[1] == "", "il secondo slot dovrebbe restare vuoto con un solo alleato")
+	_assert(not p.can_use_special_attack(1), "il secondo pulsante dovrebbe restare inattivo, non tornare a scattare")
+
+	# Un pulsante libero non deve più scattare mentre c'è un alleato.
+	p.dash_charges = p.max_dash_charges
+	var press_free := InputEventJoypadButton.new()
+	press_free.device = 0
+	press_free.button_index = JOY_BUTTON_LEFT_SHOULDER
+	press_free.pressed = true
+	Input.parse_input_event(press_free)
+	for i in range(6):
+		await get_tree().physics_frame
+	_assert(not p.is_dashing, "il pulsante libero non deve scattare finché si ha un alleato")
+	var release_free := InputEventJoypadButton.new()
+	release_free.device = 0
+	release_free.button_index = JOY_BUTTON_LEFT_SHOULDER
+	release_free.pressed = false
+	Input.parse_input_event(release_free)
+	await get_tree().physics_frame
+
+	# Le scelte di fine stanza non devono più proporre potenziamenti che
+	# agiscono solo sullo scatto, finché lo scatto non c'è.
+	var dashless_offers: Array = []
+	for i in range(200):
+		dashless_offers.append_array(trade_run._roll_powerup_choices(3))
+	for offer in dashless_offers:
+		_assert(not offer.get("needs_dash", false), "senza scatto non dovrebbe essere offerto il potenziamento da solo scatto '%s'" % offer.id)
+
+	# Caduto l'alleato, lo scatto torna.
+	ally.take_damage(99999.0)
+	await get_tree().process_frame
+	_assert(p.has_dash(), "perso l'ultimo alleato lo scatto dovrebbe tornare disponibile")
+
+	# "Vincolo Spezzato": lo scatto resta anche con un alleato al seguito.
+	var keeper := Enemy.new()
+	keeper.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	keeper.global_position = p.global_position
+	trade_run.enemy_container.add_child(keeper)
+	p.apply_powerup("vincolo_spezzato")
+	trade_run._on_tame_requested()
+	_assert(p.granted_ability_ids[0] == "corazzato", "setup del test: il secondo alleato dovrebbe essere stato addomesticato")
+	_assert(p.has_dash(), "con Vincolo Spezzato lo scatto dovrebbe restare anche con un alleato")
+
+	print("Scatto barattato con gli attacchi degli alleati: OK")
+	trade_run.queue_free()
+	await get_tree().process_frame
+
+func _test_ally_powerups() -> void:
+	print("--- Test regressione: i potenziamenti dedicati ad alleati e attacchi speciali ---")
+	var pw_run := Run.new()
+	add_child(pw_run)
+	pw_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in pw_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+
+	var decoy := Enemy.new()
+	decoy.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	decoy.global_position = pw_run.player.global_position + Vector2(600.0, 600.0)
+	pw_run.enemy_container.add_child(decoy)
+
+	var p: Player = pw_run.player
+	var base_tame: float = p.tame_cooldown()
+	var base_special: float = p.special_attack_cooldown()
+
+	p.apply_powerup("richiamo_rapido")
+	_assert(p.tame_cooldown() < base_tame, "Richiamo Rapido dovrebbe ridurre il recupero dell'addomesticamento")
+	p.apply_powerup("eco_selvaggia")
+	_assert(p.special_attack_cooldown() < base_special, "Eco Selvaggia dovrebbe ridurre il recupero degli attacchi speciali")
+
+	p.apply_powerup("passo_del_predatore")
+	var solo_speed: float = p.current_speed_mult()
+	_assert(is_equal_approx(solo_speed, p.speed_mult), "Passo del Predatore non dovrebbe dare velocità extra senza alleati")
+
+	# Bonus applicati a un alleato addomesticato DOPO averli raccolti.
+	p.apply_powerup("pelle_coriacea")
+	p.apply_powerup("istinto_di_branco")
+	var base_data: Dictionary = GameData.ENEMY_TYPES["strisciante"]
+	var ally := Enemy.new()
+	ally.setup_from_data(base_data, false)
+	ally.global_position = p.global_position
+	pw_run.enemy_container.add_child(ally)
+	pw_run._on_tame_requested()
+	_assert(ally.is_ally, "setup del test: il nemico dovrebbe essere diventato alleato")
+	_assert(ally.max_hp > float(base_data.hp), "Pelle Coriacea dovrebbe aver aumentato la vita massima dell'alleato (%.1f vs %.1f)" % [ally.max_hp, float(base_data.hp)])
+	_assert(ally.damage > float(base_data.damage), "Istinto di Branco dovrebbe aver aumentato il danno dell'alleato (%.1f vs %.1f)" % [ally.damage, float(base_data.damage)])
+	_assert(p.current_speed_mult() > p.speed_mult, "Passo del Predatore dovrebbe dare velocità extra con un alleato al seguito")
+
+	# Un potenziamento raccolto DOPO deve raggiungere anche gli alleati già
+	# al seguito, ricalcolando sempre dai valori base (niente accumulo
+	# esponenziale raccogliendolo due volte).
+	var hp_after_first: float = ally.max_hp
+	pw_run._on_powerup_selected("pelle_coriacea")
+	_assert(ally.max_hp > hp_after_first, "un potenziamento raccolto dopo dovrebbe aggiornare anche gli alleati già al seguito")
+	_assert(is_equal_approx(ally.max_hp, float(base_data.hp) * p.ally_hp_mult), "la vita dell'alleato dovrebbe essere ricalcolata dal valore base per il moltiplicatore corrente")
+
+	# "Vincolo Vitale": la caduta di un alleato cura e azzera il recupero.
+	p.apply_powerup("vincolo_vitale")
+	p.hp = 10.0
+	p.tame_cooldown_timer = 9.0
+	ally.take_damage(99999.0)
+	await get_tree().process_frame
+	_assert(p.hp > 10.0, "Vincolo Vitale dovrebbe curare alla caduta di un alleato")
+	_assert(p.tame_cooldown_timer == 0.0, "Vincolo Vitale dovrebbe azzerare il recupero dell'addomesticamento")
+
+	# "Anima del Branco": l'attacco speciale è sempre potenziato. Si osserva
+	# dal numero di proiettili dello Sciame, che in versione potenziata ne
+	# spara EMPOWERED_SWARM_COUNT invece di SWARM_COUNT.
+	p.apply_powerup("anima_del_branco")
+	for c in pw_run.projectile_container.get_children():
+		c.queue_free()
+	await get_tree().process_frame
+	pw_run._on_special_attack_requested("sciame", p.global_position, Vector2.RIGHT, false)
+	_assert(pw_run.projectile_container.get_child_count() == GameData.EMPOWERED_SWARM_COUNT, "con Anima del Branco lo Sciame dovrebbe sparare %d proiettili anche senza alleato gemello, trovati %d" % [GameData.EMPOWERED_SWARM_COUNT, pw_run.projectile_container.get_child_count()])
+
+	# "Zanne Affilate": più danno negli attacchi speciali.
+	var target := Enemy.new()
+	target.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	target.global_position = p.global_position
+	pw_run.enemy_container.add_child(target)
+	var hp_before: float = target.hp
+	pw_run._on_special_attack_requested("corazzato", p.global_position, Vector2.RIGHT, false)
+	var plain_damage: float = hp_before - target.hp
+	target.hp = target.max_hp
+	p.apply_powerup("zanne_affilate")
+	hp_before = target.hp
+	pw_run._on_special_attack_requested("corazzato", p.global_position, Vector2.RIGHT, false)
+	var buffed_damage: float = hp_before - target.hp
+	_assert(buffed_damage > plain_damage, "Zanne Affilate dovrebbe aumentare il danno dell'attacco speciale (%.1f vs %.1f)" % [buffed_damage, plain_damage])
+
+	print("Potenziamenti di alleati e attacchi speciali: OK")
+	pw_run.queue_free()
+	await get_tree().process_frame
+
 func _test_ally_special_attack_empowered_duplicate() -> void:
 	print("--- Test regressione: 2 alleati dello stesso tipo condividono uno slot potenziato ---")
 	var dup_run := Run.new()
@@ -1207,7 +1400,8 @@ func _action_has_key(action: String, key: Key) -> bool:
 func _test_gamepad_input() -> void:
 	print("--- Test input da controller (eventi joypad simulati) ---")
 	_assert(InputMap.has_action("move_right"), "l'azione move_right non è stata registrata")
-	_assert(InputMap.has_action("dash"), "l'azione dash non è stata registrata")
+	_assert(InputMap.has_action("special_attack"), "l'azione special_attack non è stata registrata")
+	_assert(not InputMap.has_action("dash"), "non deve più esistere un'azione dash dedicata: lo scatto vive sui pulsanti d'attacco")
 
 	var p := Player.new()
 	p.arena_bounds = Rect2(Vector2(48, 48), Vector2(1184, 624))
@@ -1234,7 +1428,7 @@ func _test_gamepad_input() -> void:
 
 	var btn := InputEventJoypadButton.new()
 	btn.device = 0
-	btn.button_index = JOY_BUTTON_A
+	btn.button_index = JOY_BUTTON_RIGHT_SHOULDER
 	btn.pressed = true
 	Input.parse_input_event(btn)
 	# parse_input_event accoda l'evento al prossimo ciclo di input del
@@ -1245,12 +1439,12 @@ func _test_gamepad_input() -> void:
 		if p.is_dashing:
 			break
 		await get_tree().physics_frame
-	_assert(p.is_dashing, "il tasto A del controller non ha attivato lo scatto")
-	print("Input da controller (stick + tasto A): OK")
+	_assert(p.is_dashing, "il dorsale destro (R1/RB) del controller non ha attivato lo scatto")
+	print("Input da controller (stick + dorsale destro): OK")
 
 	var btn_release := InputEventJoypadButton.new()
 	btn_release.device = 0
-	btn_release.button_index = JOY_BUTTON_A
+	btn_release.button_index = JOY_BUTTON_RIGHT_SHOULDER
 	btn_release.pressed = false
 	Input.parse_input_event(btn_release)
 

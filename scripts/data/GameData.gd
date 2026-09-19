@@ -139,18 +139,33 @@ const BOSSES := {
 	},
 }
 
+# "needs_dash": il potenziamento agisce solo sullo scatto, quindi non
+# viene nemmeno offerto tra le scelte di fine stanza a chi lo scatto non
+# ce l'ha più (cioè a chi ha alleati al seguito, vedi Player.has_dash() e
+# Run._roll_powerup_choices). Resta comunque valido se già raccolto: se
+# tutti gli alleati cadono, lo scatto — e i suoi potenziamenti — tornano.
 const POWERUPS := [
-	{"id": "lama_rapida", "name": "Lama Rapida", "rarity": "common", "icon": "sword", "desc": "+6 danno da scatto."},
+	{"id": "lama_rapida", "name": "Lama Rapida", "rarity": "common", "icon": "sword", "needs_dash": true, "desc": "+6 danno da scatto."},
 	{"id": "passo_veloce", "name": "Passo Veloce", "rarity": "common", "icon": "boot", "desc": "+15% velocità di movimento."},
-	{"id": "scatto_lungo", "name": "Scatto Lungo", "rarity": "common", "icon": "arrow", "desc": "+25% distanza dello scatto."},
+	{"id": "scatto_lungo", "name": "Scatto Lungo", "rarity": "common", "icon": "arrow", "needs_dash": true, "desc": "+25% distanza dello scatto."},
 	{"id": "cuore_di_ferro", "name": "Cuore di Ferro", "rarity": "common", "icon": "heart", "desc": "+25 punti vita massimi."},
-	{"id": "scatto_fulmine", "name": "Scatto Fulmine", "rarity": "rare", "icon": "bolt", "desc": "-20% tempo di recupero dello scatto."},
-	{"id": "scatto_fantasma", "name": "Scatto Fantasma", "rarity": "rare", "icon": "ghost", "desc": "+0.15s di invulnerabilità dopo lo scatto."},
-	{"id": "doppio_scatto", "name": "Doppio Scatto", "rarity": "rare", "icon": "double", "desc": "Aggiunge una carica di scatto."},
-	{"id": "contrattacco", "name": "Contrattacco", "rarity": "rare", "icon": "cycle", "desc": "Un'uccisione con lo scatto restituisce subito una carica di scatto."},
-	{"id": "furia", "name": "Furia", "rarity": "rare", "icon": "flame", "desc": "Più sei ferito, più danno infligge il tuo scatto (fino a +50%)."},
+	{"id": "zanne_affilate", "name": "Zanne Affilate", "rarity": "common", "icon": "sword", "desc": "+15% danno degli attacchi speciali degli alleati."},
+	{"id": "richiamo_rapido", "name": "Richiamo Rapido", "rarity": "common", "icon": "cycle", "desc": "-20% tempo di recupero dell'addomesticamento."},
+	{"id": "pelle_coriacea", "name": "Pelle Coriacea", "rarity": "common", "icon": "shield", "desc": "+35% vita massima degli alleati."},
+	{"id": "istinto_di_branco", "name": "Istinto di Branco", "rarity": "common", "icon": "fang", "desc": "+30% danno inflitto dagli alleati in combattimento."},
+	{"id": "scatto_fulmine", "name": "Scatto Fulmine", "rarity": "rare", "icon": "bolt", "needs_dash": true, "desc": "-20% tempo di recupero dello scatto."},
+	{"id": "scatto_fantasma", "name": "Scatto Fantasma", "rarity": "rare", "icon": "ghost", "needs_dash": true, "desc": "+0.15s di invulnerabilità dopo lo scatto."},
+	{"id": "doppio_scatto", "name": "Doppio Scatto", "rarity": "rare", "icon": "double", "needs_dash": true, "desc": "Aggiunge una carica di scatto."},
+	{"id": "contrattacco", "name": "Contrattacco", "rarity": "rare", "icon": "cycle", "needs_dash": true, "desc": "Un'uccisione con lo scatto restituisce subito una carica di scatto."},
+	{"id": "furia", "name": "Furia", "rarity": "rare", "icon": "flame", "needs_dash": true, "desc": "Più sei ferito, più danno infligge il tuo scatto (fino a +50%)."},
+	{"id": "eco_selvaggia", "name": "Eco Selvaggia", "rarity": "rare", "icon": "bolt", "desc": "-25% tempo di recupero degli attacchi speciali degli alleati."},
+	{"id": "vincolo_vitale", "name": "Vincolo Vitale", "rarity": "rare", "icon": "heart", "desc": "Quando un alleato cade recuperi 30 vita e l'addomesticamento torna subito pronto."},
+	{"id": "passo_del_predatore", "name": "Passo del Predatore", "rarity": "rare", "icon": "boot", "desc": "+25% velocità di movimento mentre hai almeno un alleato."},
+	{"id": "richiamo_primordiale", "name": "Richiamo Primordiale", "rarity": "rare", "icon": "paw", "desc": "Addomesticare un nemico azzera il tempo di recupero di tutti gli attacchi speciali."},
+	{"id": "vincolo_spezzato", "name": "Vincolo Spezzato", "rarity": "legendary", "icon": "link", "desc": "Conservi lo scatto anche mentre hai alleati al seguito."},
+	{"id": "anima_del_branco", "name": "Anima del Branco", "rarity": "legendary", "icon": "paw", "desc": "Gli attacchi speciali degli alleati sono sempre nella versione potenziata."},
 	{"id": "cuore_dorato", "name": "Cuore Dorato", "rarity": "legendary", "icon": "heart_gold", "desc": "Bottino di uno Strisciante Dorato. +40 vita massima e +10 danno da scatto.", "dropped_only_by": "strisciante_dorato"},
-	{"id": "benedizione_del_custode", "name": "Benedizione del Custode", "rarity": "legendary", "icon": "shield", "desc": "Concessa dal Custode Corrotto. Lo scatto genera un'onda d'urto che danneggia i nemici vicini.", "dropped_only_by": "custode_corrotto"},
+	{"id": "benedizione_del_custode", "name": "Benedizione del Custode", "rarity": "legendary", "icon": "shield", "needs_dash": true, "desc": "Concessa dal Custode Corrotto. Lo scatto genera un'onda d'urto che danneggia i nemici vicini.", "dropped_only_by": "custode_corrotto"},
 	{"id": "corazza_di_magma", "name": "Corazza di Magma", "rarity": "legendary", "icon": "flame", "desc": "Bottino del Colosso Corrotto. +80 vita massima e +8 danno da scatto.", "dropped_only_by": "colosso_corrotto"},
 	{"id": "velo_spettrale", "name": "Velo Spettrale", "rarity": "legendary", "icon": "ghost", "desc": "Bottino dello Spettro Corrotto. +25% velocità di movimento e +0.2s di invulnerabilità extra dopo lo scatto.", "dropped_only_by": "spettro_corrotto"},
 ]
@@ -266,6 +281,26 @@ static func apply_powerup(id: String, player: Node) -> void:
 			player.has_contrattacco = true
 		"furia":
 			player.has_furia = true
+		"zanne_affilate":
+			player.special_damage_mult += 0.15
+		"richiamo_rapido":
+			player.tame_cooldown_mult *= 0.8
+		"pelle_coriacea":
+			player.ally_hp_mult += 0.35
+		"istinto_di_branco":
+			player.ally_damage_mult += 0.3
+		"eco_selvaggia":
+			player.special_cooldown_mult *= 0.75
+		"vincolo_vitale":
+			player.has_vincolo_vitale = true
+		"passo_del_predatore":
+			player.pack_speed_bonus += 0.25
+		"richiamo_primordiale":
+			player.has_richiamo_primordiale = true
+		"vincolo_spezzato":
+			player.keeps_dash_with_allies = true
+		"anima_del_branco":
+			player.always_empowered = true
 		"cuore_dorato":
 			player.max_hp += 40.0
 			player.hp += 40.0

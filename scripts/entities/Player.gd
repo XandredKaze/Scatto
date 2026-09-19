@@ -1,9 +1,22 @@
 class_name Player
 extends Area2D
 
-# L'unico attacco del giocatore è lo scatto: muoversi con WASD/frecce,
-# scattare con Spazio o Shift. Durante lo scatto il giocatore è invulnerabile
-# e infligge danno a ogni nemico attraversato (una sola volta per scatto).
+# Il giocatore ha due soli pulsanti d'attacco (E/R1 e Q/L1) e ciò che
+# fanno dipende da quanti alleati ha al seguito:
+#
+# - nessun alleato: entrambi i pulsanti eseguono lo SCATTO, l'attacco base.
+#   Durante lo scatto il giocatore è invulnerabile e infligge danno a ogni
+#   nemico attraversato (una sola volta per scatto).
+# - almeno un alleato: lo scatto non è più disponibile su nessun pulsante.
+#   Ogni alleato vivo occupa un pulsante con il proprio attacco speciale;
+#   il pulsante eventualmente rimasto libero resta inattivo finché non
+#   arriva il secondo alleato.
+#
+# Addomesticare è quindi una rinuncia: si baratta l'attacco base (e la sua
+# invulnerabilità) per gli attacchi speciali degli alleati. Se tutti gli
+# alleati cadono, lo scatto torna disponibile. L'unica eccezione è il
+# potenziamento leggendario "Vincolo Spezzato" (keeps_dash_with_allies).
+#
 # Fuori dallo scatto, il contatto con un nemico danneggia il giocatore.
 
 signal dash_hit(target: Node, damage: float)
@@ -21,8 +34,11 @@ const HIT_IFRAME := 0.8
 const KNOCKBACK := 20.0
 const TAME_COOLDOWN := 14.0
 const SPECIAL_ATTACK_COOLDOWN := 6.0
-# Un'azione di input per alleato vivo (fino a MAX_ALLIES = 2), cosí ogni
-# attacco speciale concesso resta utilizzabile in modo indipendente.
+# I due soli pulsanti d'attacco del giocatore (E/R1 e Q/L1): un pulsante
+# per alleato vivo (fino a MAX_ALLIES = 2), cosí ogni attacco speciale
+# concesso resta utilizzabile in modo indipendente. Un pulsante senza
+# alleato esegue lo scatto, ma solo finché non si ha alcun alleato
+# (vedi has_dash()).
 const SPECIAL_ATTACK_ACTIONS := ["special_attack", "special_attack_2"]
 
 var radius := 14.0
@@ -37,6 +53,20 @@ var extra_iframes := 0.0
 var has_contrattacco := false
 var has_furia := false
 var has_shockwave := false
+# Potenziamenti legati agli alleati e ai loro attacchi speciali: sono
+# l'altra metà dell'arsenale ora che addomesticare toglie lo scatto.
+var special_damage_mult := 1.0
+var special_cooldown_mult := 1.0
+var tame_cooldown_mult := 1.0
+var ally_hp_mult := 1.0
+var ally_damage_mult := 1.0
+var pack_speed_bonus := 0.0
+var has_vincolo_vitale := false
+var has_richiamo_primordiale := false
+var always_empowered := false
+# "Vincolo Spezzato": unica eccezione alla regola per cui un alleato
+# toglie lo scatto.
+var keeps_dash_with_allies := false
 
 var max_hp := 100.0
 var hp := 100.0
@@ -103,6 +133,16 @@ func reset_stats() -> void:
 	has_contrattacco = false
 	has_furia = false
 	has_shockwave = false
+	special_damage_mult = 1.0
+	special_cooldown_mult = 1.0
+	tame_cooldown_mult = 1.0
+	ally_hp_mult = 1.0
+	ally_damage_mult = 1.0
+	pack_speed_bonus = 0.0
+	has_vincolo_vitale = false
+	has_richiamo_primordiale = false
+	always_empowered = false
+	keeps_dash_with_allies = false
 	max_hp = 100.0
 	hp = 100.0
 	facing = Vector2.UP
@@ -127,6 +167,16 @@ func snapshot_stats() -> Dictionary:
 		"has_contrattacco": has_contrattacco,
 		"has_furia": has_furia,
 		"has_shockwave": has_shockwave,
+		"special_damage_mult": special_damage_mult,
+		"special_cooldown_mult": special_cooldown_mult,
+		"tame_cooldown_mult": tame_cooldown_mult,
+		"ally_hp_mult": ally_hp_mult,
+		"ally_damage_mult": ally_damage_mult,
+		"pack_speed_bonus": pack_speed_bonus,
+		"has_vincolo_vitale": has_vincolo_vitale,
+		"has_richiamo_primordiale": has_richiamo_primordiale,
+		"always_empowered": always_empowered,
+		"keeps_dash_with_allies": keeps_dash_with_allies,
 		"max_hp": max_hp,
 		"hp": hp,
 		"active_powerups": active_powerups.duplicate(),
@@ -144,6 +194,16 @@ func restore_stats(snapshot: Dictionary) -> void:
 	has_contrattacco = snapshot.has_contrattacco
 	has_furia = snapshot.has_furia
 	has_shockwave = snapshot.has_shockwave
+	special_damage_mult = snapshot.special_damage_mult
+	special_cooldown_mult = snapshot.special_cooldown_mult
+	tame_cooldown_mult = snapshot.tame_cooldown_mult
+	ally_hp_mult = snapshot.ally_hp_mult
+	ally_damage_mult = snapshot.ally_damage_mult
+	pack_speed_bonus = snapshot.pack_speed_bonus
+	has_vincolo_vitale = snapshot.has_vincolo_vitale
+	has_richiamo_primordiale = snapshot.has_richiamo_primordiale
+	always_empowered = snapshot.always_empowered
+	keeps_dash_with_allies = snapshot.keeps_dash_with_allies
 	max_hp = snapshot.max_hp
 	hp = snapshot.hp
 	active_powerups = snapshot.active_powerups.duplicate()
@@ -160,6 +220,30 @@ func restore_stats(snapshot: Dictionary) -> void:
 func dash_cooldown() -> float:
 	return BASE_DASH_COOLDOWN * dash_cooldown_mult
 
+func tame_cooldown() -> float:
+	return TAME_COOLDOWN * tame_cooldown_mult
+
+func special_attack_cooldown() -> float:
+	return SPECIAL_ATTACK_COOLDOWN * special_cooldown_mult
+
+# Almeno un alleato vivo al seguito: basta guardare gli slot d'abilità,
+# che Run tiene sincronizzati con gli alleati vivi (_sync_granted_ability).
+func has_ally() -> bool:
+	for ability_id in granted_ability_ids:
+		if ability_id != "":
+			return true
+	return false
+
+# Lo scatto esiste solo finché non si ha alcun alleato: addomesticare lo
+# toglie, perdere tutti gli alleati lo restituisce.
+func has_dash() -> bool:
+	return keeps_dash_with_allies or not has_ally()
+
+# Velocità effettiva: "Passo del Predatore" rende più veloci solo mentre
+# si ha almeno un alleato (cioè proprio quando manca lo scatto).
+func current_speed_mult() -> float:
+	return speed_mult + (pack_speed_bonus if has_ally() else 0.0)
+
 func dash_damage() -> float:
 	var dmg := BASE_DASH_DAMAGE + dash_damage_bonus
 	if has_furia:
@@ -171,7 +255,7 @@ func is_invulnerable() -> bool:
 	return is_dashing or hit_iframe_timer > 0.0
 
 func can_dash() -> bool:
-	return dash_charges > 0 and not is_dashing and alive and not frozen
+	return has_dash() and dash_charges > 0 and not is_dashing and alive and not frozen
 
 func can_tame() -> bool:
 	return tame_cooldown_timer <= 0.0 and alive and not frozen
@@ -245,19 +329,23 @@ func _read_input_and_move(delta: float) -> void:
 	if move.length() > 0.0:
 		facing = move.normalized()
 
-	if Input.is_action_just_pressed("dash") and can_dash():
-		var dir: Vector2 = move.normalized() if move != Vector2.ZERO else facing
-		start_dash(dir)
-
 	if Input.is_action_just_pressed("tame") and can_tame():
-		tame_cooldown_timer = TAME_COOLDOWN
+		tame_cooldown_timer = tame_cooldown()
 		tame_requested.emit()
 
+	# Ogni pulsante d'attacco lancia l'abilità dell'alleato che lo occupa;
+	# se è libero esegue lo scatto, che però esiste solo finché non si ha
+	# alcun alleato (can_dash() -> has_dash()).
 	for slot in range(SPECIAL_ATTACK_ACTIONS.size()):
-		if Input.is_action_just_pressed(SPECIAL_ATTACK_ACTIONS[slot]) and can_use_special_attack(slot):
-			var ability_id: String = granted_ability_ids[slot]
-			special_attack_cooldowns[ability_id] = SPECIAL_ATTACK_COOLDOWN
-			special_attack_requested.emit(ability_id, global_position, facing, special_attack_empowered[slot])
+		if not Input.is_action_just_pressed(SPECIAL_ATTACK_ACTIONS[slot]):
+			continue
+		var ability_id: String = granted_ability_ids[slot]
+		if ability_id != "":
+			if can_use_special_attack(slot):
+				special_attack_cooldowns[ability_id] = special_attack_cooldown()
+				special_attack_requested.emit(ability_id, global_position, facing, special_attack_empowered[slot])
+		elif can_dash():
+			start_dash(move.normalized() if move != Vector2.ZERO else facing)
 
 	var move_delta: Vector2
 	if is_dashing:
@@ -267,7 +355,7 @@ func _read_input_and_move(delta: float) -> void:
 		if dash_timer <= 0.0:
 			end_dash()
 	else:
-		move_delta = move * BASE_SPEED * speed_mult * delta
+		move_delta = move * BASE_SPEED * current_speed_mult() * delta
 
 	_apply_movement(move_delta)
 
