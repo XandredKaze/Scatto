@@ -86,6 +86,8 @@ var boss_container: Node2D
 var projectile_container: Node2D
 var effect_container: Node2D
 var arena_visual: ArenaVisual
+var blood_decals: BloodDecals
+var vignette: Vignette
 var music_player: AudioStreamPlayer
 var ui_layer: CanvasLayer
 var hud: HUD
@@ -105,6 +107,10 @@ func _build_scene_tree() -> void:
 	arena_visual = ArenaVisual.new()
 	arena_visual.wall_margin = WALL_MARGIN
 	add_child(arena_visual)
+
+	# Il sangue sta sopra il pavimento ma sotto chiunque lo versi.
+	blood_decals = BloodDecals.new()
+	add_child(blood_decals)
 
 	player_container = Node2D.new()
 	add_child(player_container)
@@ -127,6 +133,12 @@ func _build_scene_tree() -> void:
 
 	ui_layer = CanvasLayer.new()
 	add_child(ui_layer)
+
+	# Per prima sul livello dell'interfaccia: l'oscuramento ai bordi
+	# riguarda la scena di gioco, non la HUD e i menu, che devono restare
+	# perfettamente leggibili sopra di esso.
+	vignette = Vignette.new()
+	ui_layer.add_child(vignette)
 
 	hud = HUD.new()
 	hud.run = self
@@ -154,11 +166,16 @@ func _build_scene_tree() -> void:
 	pause_screen.retry_pressed.connect(_retry_run)
 	ui_layer.add_child(pause_screen)
 
+	# Ogni schermata appesa al CanvasLayer è una radice a sé per
+	# l'ereditarietà del tema: va servita una per una.
+	Palette.apply_theme(ui_layer, true)
+
 func _spawn_player() -> void:
 	player = Player.new()
 	player.enemy_defeated.connect(_on_enemy_defeated)
 	player.dash_hit.connect(_on_dash_hit)
 	player.died.connect(_on_player_died)
+	player.hurt.connect(_on_player_hurt)
 	player.tame_requested.connect(_on_tame_requested)
 	player.special_attack_requested.connect(_on_special_attack_requested)
 	player_container.add_child(player)
@@ -209,6 +226,8 @@ func _generate_room(n: int) -> void:
 	var spawn_cell := Vector2i(0, MAZE_ROWS - 1)
 
 	arena_visual.maze = maze
+	# Ogni stanza è un luogo nuovo: il sangue della precedente non la segue.
+	blood_decals.clear_all()
 	arena_visual.queue_redraw()
 
 	player.maze = maze
@@ -296,6 +315,9 @@ func _random_enemy_point(maze: MazeGrid, excluded_cells: Array) -> Vector2:
 
 func _on_enemy_defeated(entity) -> void:
 	var is_boss: bool = entity is Boss
+	# La morte lascia il segno più vistoso: è il sangue che si accumula a
+	# terra a raccontare quanto è costata la stanza.
+	blood_decals.splatter(entity.global_position, 2.0 if is_boss else 1.0)
 	var entity_id: String = entity.enemy_id if entity is Enemy else entity.boss_id
 	var first_bestiary := SaveManager.unlock_enemy(entity_id)
 
@@ -318,7 +340,11 @@ func _on_enemy_defeated(entity) -> void:
 	else:
 		_check_room_cleared()
 
+func _on_player_hurt(pos: Vector2) -> void:
+	blood_decals.splatter(pos, 0.45, Palette.BLOOD_BRIGHT)
+
 func _on_dash_hit(target, damage: float) -> void:
+	blood_decals.splatter(target.global_position, 0.5)
 	if not player.has_shockwave:
 		return
 	_damage_hostiles_in_radius(target.global_position, SHOCKWAVE_RADIUS, damage * SHOCKWAVE_RATIO, target)
@@ -335,6 +361,7 @@ func _damage_hostiles_in_radius(center: Vector2, radius: float, damage: float, e
 			if other is Enemy and other.is_ally:
 				continue
 			if center.distance_to(other.global_position) <= radius:
+				blood_decals.splatter(other.global_position, 0.35)
 				other.take_damage(damage)
 				if not other.alive:
 					_on_enemy_defeated(other)
@@ -617,6 +644,7 @@ func _start_boss_room() -> void:
 	arena_rect = Rect2(Vector2(WALL_MARGIN, WALL_MARGIN), BOSS_ARENA_SIZE - Vector2(WALL_MARGIN, WALL_MARGIN) * 2.0)
 
 	arena_visual.maze = null
+	blood_decals.clear_all()
 	arena_visual.arena_size = BOSS_ARENA_SIZE
 	arena_visual.queue_redraw()
 

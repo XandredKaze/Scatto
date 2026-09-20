@@ -12,28 +12,28 @@ const RARITY_LEGENDARY := "legendary"
 const ENEMY_TYPES := {
 	"strisciante": {
 		"id": "strisciante", "name": "Strisciante", "common": true,
-		"hp": 30.0, "speed": 95.0, "damage": 8.0, "radius": 14.0, "color": Color8(127, 174, 86),
+		"hp": 30.0, "speed": 95.0, "damage": 8.0, "radius": 14.0, "color": Color8(104, 44, 52),
 		"behavior": "chase", "contact_cooldown": 0.6,
 		"desc": "Un predatore comune che insegue la sua preda senza sosta.",
 		"tip": "Ti insegue senza sosta: scattagli contro per fermarlo.",
 	},
 	"pungiglione": {
 		"id": "pungiglione", "name": "Pungiglione",
-		"hp": 20.0, "speed": 75.0, "damage": 6.0, "radius": 12.0, "color": Color8(63, 184, 175),
+		"hp": 20.0, "speed": 75.0, "damage": 6.0, "radius": 12.0, "color": Color8(72, 102, 126),
 		"behavior": "ranged", "keep_distance": 190.0, "attack_cooldown": 1.4, "projectile_speed": 260.0,
 		"desc": "Mantiene le distanze e colpisce con dardi velenosi a distanza.",
 		"tip": "Mantiene le distanze e spara dardi: scatta verso di lui per chiudere lo spazio.",
 	},
 	"corazzato": {
 		"id": "corazzato", "name": "Corazzato",
-		"hp": 75.0, "speed": 55.0, "damage": 16.0, "radius": 20.0, "color": Color8(138, 109, 75),
+		"hp": 75.0, "speed": 55.0, "damage": 16.0, "radius": 20.0, "color": Color8(112, 94, 74),
 		"behavior": "chase", "contact_cooldown": 0.8, "min_room": 3,
 		"desc": "Una massa corazzata lenta ma devastante da vicino. Appare dalla terza stanza.",
 		"tip": "Lento ma incassa molti colpi e fa male da vicino: colpiscilo e allontanati.",
 	},
 	"sciame": {
 		"id": "sciame", "name": "Sciame",
-		"hp": 10.0, "speed": 135.0, "damage": 5.0, "radius": 9.0, "color": Color8(201, 107, 176),
+		"hp": 10.0, "speed": 135.0, "damage": 5.0, "radius": 9.0, "color": Color8(126, 58, 104),
 		"behavior": "chase", "contact_cooldown": 0.5, "group_min": 3, "group_max": 5, "min_room": 2,
 		"desc": "Piccole creature veloci che attaccano sempre in gruppo. Appaiono dalla seconda stanza.",
 		"tip": "Veloce e fragile, ma attacca in gruppo: un solo scatto ben piazzato può travolgerne più di uno.",
@@ -109,42 +109,42 @@ const BOSS_ARCHETYPES := ["custode", "colosso", "spettro"]
 const BOSSES := {
 	"custode": {
 		"id": "custode", "name": "Custode", "hp": 320.0, "speed": 65.0, "radius": 34.0,
-		"damage": 18.0, "color": Color8(106, 76, 147),
+		"damage": 18.0, "color": Color8(58, 42, 82),
 		"attacks": ["charge", "burst"], "special_attacks": ["volley"],
 		"desc": "Il guardiano che veglia sulla sesta stanza di ogni run. Alterna cariche dirette a raffiche di proiettili in cerchio.",
 	},
 	"custode_corrotto": {
 		"id": "custode_corrotto", "name": "Custode Corrotto", "special": true,
 		"hp": 480.0, "speed": 75.0, "radius": 38.0, "damage": 24.0,
-		"color": Color8(58, 13, 43), "glow": Color8(255, 45, 85),
+		"color": Color8(48, 10, 30), "glow": Color8(255, 62, 118),
 		"attacks": ["charge", "burst"], "special_attacks": ["volley"],
 		"guaranteed_drop": "benedizione_del_custode",
 		"desc": "Una versione corrotta del Custode, risvegliata solo da chi incatena tre vittorie senza mai tornare all'Hub. Aggiunge una raffica di proiettili mirati.",
 	},
 	"colosso": {
 		"id": "colosso", "name": "Colosso di Pietra", "hp": 420.0, "speed": 45.0, "radius": 40.0,
-		"damage": 20.0, "color": Color8(120, 100, 80),
+		"damage": 20.0, "color": Color8(74, 66, 58),
 		"attacks": ["slam", "cono"], "special_attacks": ["richiamo"],
 		"desc": "Una massa di roccia lenta ma devastante: colpisce il terreno intorno a sé e scaglia detriti in un cono.",
 	},
 	"colosso_corrotto": {
 		"id": "colosso_corrotto", "name": "Colosso Corrotto", "special": true,
 		"hp": 620.0, "speed": 50.0, "radius": 44.0, "damage": 27.0,
-		"color": Color8(50, 20, 15), "glow": Color8(255, 120, 40),
+		"color": Color8(44, 18, 14), "glow": Color8(255, 116, 72),
 		"attacks": ["slam", "cono"], "special_attacks": ["richiamo"],
 		"guaranteed_drop": "corazza_di_magma",
 		"desc": "Una versione corrotta del Colosso: oltre a colpo al suolo e detriti, richiama sciami di creature in suo aiuto.",
 	},
 	"spettro": {
 		"id": "spettro", "name": "Spettro Errante", "hp": 260.0, "speed": 85.0, "radius": 28.0,
-		"damage": 14.0, "color": Color8(150, 180, 220),
+		"damage": 14.0, "color": Color8(92, 112, 138),
 		"attacks": ["teletrasporto", "raffica"], "special_attacks": ["raffica_ampia"],
 		"desc": "Una presenza inafferrabile che si teletrasporta accanto alla preda e colpisce a distanza con raffiche rapide.",
 	},
 	"spettro_corrotto": {
 		"id": "spettro_corrotto", "name": "Spettro Corrotto", "special": true,
 		"hp": 380.0, "speed": 95.0, "radius": 30.0, "damage": 18.0,
-		"color": Color8(60, 40, 110), "glow": Color8(140, 80, 255),
+		"color": Color8(44, 30, 78), "glow": Color8(154, 104, 255),
 		"attacks": ["teletrasporto", "raffica"], "special_attacks": ["raffica_ampia"],
 		"guaranteed_drop": "velo_spettrale",
 		"desc": "Una versione corrotta dello Spettro: la sua raffica diventa una tempesta di proiettili quasi impossibile da schivare del tutto.",
@@ -187,9 +187,9 @@ static func rarity_color(rarity: String) -> Color:
 		"legendary":
 			return Color8(244, 196, 48)
 		"rare":
-			return Color8(122, 162, 247)
+			return Color8(124, 150, 196)
 		_:
-			return Color8(200, 200, 205)
+			return Color8(196, 191, 192)
 
 # Pesi relativi per l'estrazione casuale delle scelte di fine stanza: un
 # comune è 3 volte più probabile di un raro, un raro 4 volte più

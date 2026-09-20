@@ -28,7 +28,7 @@ func _ready() -> void:
 	hide()
 
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 255)
+	bg.color = Palette.UI_BG
 	bg.position = Vector2.ZERO
 	bg.size = get_viewport_rect().size
 	add_child(bg)

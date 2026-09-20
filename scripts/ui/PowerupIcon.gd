@@ -40,8 +40,8 @@ func _draw() -> void:
 		"flame":
 			_draw_flame(c, r)
 		"heart_gold":
-			_draw_heart(c, r, Color8(244, 196, 48))
-			draw_arc(c, r + 4.0, 0.0, TAU, 20, Color8(244, 196, 48, 200), 1.5)
+			_draw_heart(c, r, Palette.GOLD)
+			draw_arc(c, r + 4.0, 0.0, TAU, 20, Palette.with_alpha(Palette.GOLD, 0.78), 1.5)
 		"shield":
 			_draw_shield(c, r)
 		"paw":

@@ -34,7 +34,7 @@ func _ready() -> void:
 	# pannello) — posizione e size fissate qui a mano evitano il problema,
 	# dato che il viewport di questo progetto ha dimensioni fisse.
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 255)
+	bg.color = Palette.UI_BG
 	bg.position = Vector2.ZERO
 	bg.size = get_viewport_rect().size
 	add_child(bg)
@@ -112,7 +112,7 @@ func _build_row(entry: Dictionary, unlocked: bool) -> Control:
 	var tag_text := (" [%s]" % tag) if tag != "" else ""
 	name_label.text = (entry.name + tag_text) if unlocked else ("???" + tag_text)
 	name_label.custom_minimum_size = Vector2(280, 0)
-	name_label.modulate = Color(1, 1, 1) if unlocked else Color(0.4, 0.4, 0.45)
+	name_label.modulate = Color(1, 1, 1) if unlocked else Palette.STEEL_DIM
 	hbox.add_child(name_label)
 
 	var desc_label := Label.new()
@@ -120,14 +120,14 @@ func _build_row(entry: Dictionary, unlocked: bool) -> Control:
 	desc_label.custom_minimum_size = Vector2(460, 0)
 	desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	desc_label.modulate = Color(0.85, 0.85, 0.88) if unlocked else Color(0.35, 0.35, 0.4)
+	desc_label.modulate = Palette.BONE if unlocked else Palette.STEEL_DIM
 	hbox.add_child(desc_label)
 
 	return row
 
 func _row_style() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color8(24, 26, 33, 255)
+	sb.bg_color = Palette.UI_BG_SOFT
 	sb.set_corner_radius_all(6)
 	sb.content_margin_left = 14.0
 	sb.content_margin_right = 14.0

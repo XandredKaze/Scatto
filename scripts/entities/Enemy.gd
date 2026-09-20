@@ -354,8 +354,46 @@ func _clamp_to_arena() -> void:
 	global_position.y = clamp(global_position.y, arena_bounds.position.y + radius, arena_bounds.end.y - radius)
 
 func _draw() -> void:
+	# Lo schieramento si legge dal colore del profilo luminoso, prima
+	# ancora che da qualunque altro dettaglio: cremisi se ostile,
+	# acciaio freddo se alleato, oro se dorato.
+	rim_color = current_rim_color()
+	_draw_limbs()
 	super._draw()
+
 	if is_golden:
-		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24, Color(0.96, 0.77, 0.19), 2.0)
+		draw_arc(Vector2.ZERO, radius + 7.0, 0.0, TAU, 28, Palette.with_alpha(Palette.GOLD, 0.75), 2.0)
 	if is_ally:
-		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24, Color(0.4, 0.88, 0.76), 3.0)
+		# Marchio del legame: il segno sopra la testa dell'alleato, che
+		# lo distingue a colpo d'occhio anche in mezzo alla mischia.
+		var top := Vector2(0.0, -radius - 6.0)
+		draw_line(top + Vector2(-5.0, 0.0), top + Vector2(5.0, 0.0), Palette.STEEL, 2.0)
+		draw_line(top + Vector2(0.0, -4.0), top + Vector2(0.0, 4.0), Palette.STEEL, 2.0)
+
+# Cremisi se ostile, acciaio freddo se alleato, oro se dorato. È una
+# funzione a sé e non due righe dentro _draw perché lo schieramento di
+# una creatura è un'informazione di gioco, verificabile senza dover
+# disegnare nulla.
+func current_rim_color() -> Color:
+	if is_ally:
+		return Palette.RIM_ALLY
+	if is_golden:
+		return Palette.RIM_GOLDEN
+	return Palette.RIM_HOSTILE
+
+# Arti sottili e scuri che si allungano dal corpo, come le creature
+# striscianti del riferimento estetico. Ondeggiano lentamente: basta
+# questo a togliere alle creature l'aria di dischetti fermi.
+func _draw_limbs() -> void:
+	var phase: float = float(Time.get_ticks_msec()) * 0.0022 + float(get_instance_id() % 628) * 0.01
+	var count: int = 4 if radius < 18.0 else 6
+	for i in range(count):
+		var base_angle: float = TAU * float(i) / float(count) + PI * 0.25
+		var angle: float = base_angle + sin(phase + float(i)) * 0.16
+		var dir: Vector2 = Vector2.RIGHT.rotated(angle)
+		var length: float = radius * (2.1 + 0.16 * sin(phase * 1.7 + float(i) * 2.0))
+		var knee: Vector2 = dir.rotated(-0.35) * (length * 0.55)
+		var limb := PackedVector2Array([Vector2.ZERO, knee, dir * length])
+		draw_polyline(limb, color.lerp(Palette.VOID, 0.25), 3.0, true)
+		draw_polyline(limb, Palette.with_alpha(rim_color, 0.22), 1.0, true)
+		draw_circle(dir * length, 1.8, Palette.with_alpha(rim_color, 0.45))

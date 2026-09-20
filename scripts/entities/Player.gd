@@ -23,6 +23,10 @@ signal dash_hit(target: Node, damage: float)
 signal enemy_defeated(target: Node)
 signal tame_requested
 signal special_attack_requested(ability_id: String, origin: Vector2, dir: Vector2, empowered: bool)
+# Emesso ogni volta che un colpo va effettivamente a segno sul giocatore
+# (non quando viene assorbito da invulnerabilità o iframe): Run lo usa
+# per lasciare sangue a terra nel punto esatto in cui è stato colpito.
+signal hurt(pos: Vector2)
 signal died
 
 const BASE_SPEED := 220.0
@@ -299,6 +303,7 @@ func take_damage(amount: float) -> bool:
 		return false
 	hp = clamp(hp - amount, 0.0, max_hp)
 	hit_iframe_timer = HIT_IFRAME
+	hurt.emit(global_position)
 	if hp <= 0.0:
 		alive = false
 		died.emit()
@@ -423,11 +428,73 @@ func _resolve_combat() -> void:
 				if take_damage(area.damage):
 					area.queue_free()
 
+# Il giocatore è la figura incappucciata dal mantello cremisi del
+# riferimento estetico: corpo scuro, volto pallido, lama d'acciaio e,
+# durante lo scatto, la falce di luce del colpo. È l'unica figura della
+# scena col rosso pieno addosso, cosí resta sempre individuabile in
+# mezzo alle creature.
 func _draw() -> void:
-	var body_color := Color(0.95, 0.95, 0.96)
-	if hit_iframe_timer > 0.0 and not is_dashing:
-		body_color.a = 0.5
+	var alpha: float = 0.55 if (hit_iframe_timer > 0.0 and not is_dashing) else 1.0
+	_draw_ground_shadow()
 	if is_dashing:
-		draw_circle(Vector2.ZERO, radius + 4.0, Color(0.4, 0.88, 0.76, 0.35))
-	draw_circle(Vector2.ZERO, radius, body_color)
-	draw_circle(facing * (radius + 6.0), 3.0, Color(0.4, 0.88, 0.76))
+		_draw_dash_trail()
+	_draw_cloak(alpha)
+	_draw_blade(alpha)
+	if is_dashing:
+		_draw_crescent()
+
+func _draw_ground_shadow() -> void:
+	draw_set_transform(Vector2(0.0, radius * 0.68), 0.0, Vector2(1.0, 0.4))
+	draw_circle(Vector2.ZERO, radius * 1.2, Palette.SHADOW)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+func _draw_cloak(alpha: float) -> void:
+	# Mantello a campana: base larga, spalle strette, testa piccola. È la
+	# silhouette della figura del riferimento, ed è ciò che rende il
+	# giocatore riconoscibile anche a colpo d'occhio nella mischia.
+	var r: float = radius
+	var skirt := PackedVector2Array([
+		Vector2(-r * 0.5, -r * 0.15),
+		Vector2(r * 0.5, -r * 0.15),
+		Vector2(r * 1.3, r * 1.1),
+		Vector2(-r * 1.3, r * 1.1),
+	])
+	draw_colored_polygon(skirt, Palette.with_alpha(Palette.BLOOD, alpha))
+	# Piega in ombra sul fondo del mantello: dà volume alla stoffa.
+	var hem := PackedVector2Array([
+		Vector2(-r * 0.95, r * 0.55),
+		Vector2(r * 0.95, r * 0.55),
+		Vector2(r * 1.3, r * 1.1),
+		Vector2(-r * 1.3, r * 1.1),
+	])
+	draw_colored_polygon(hem, Palette.with_alpha(Palette.BLOOD_DEEP, alpha))
+	# Orlo illuminato: la stessa luce cremisi che tiene insieme la scena.
+	draw_line(Vector2(-r * 1.3, r * 1.1), Vector2(r * 1.3, r * 1.1), Palette.with_alpha(Palette.EMBER, alpha * 0.8), 2.0)
+
+	# Cappuccio e volto pallido.
+	draw_circle(Vector2(0.0, -r * 0.55), r * 0.62, Palette.with_alpha(Palette.VOID, alpha))
+	draw_circle(Vector2(0.0, -r * 0.5), r * 0.34, Palette.with_alpha(Palette.BONE, alpha))
+	draw_arc(Vector2(0.0, -r * 0.55), r * 0.62, PI, TAU, 20, Palette.with_alpha(Palette.EMBER, alpha * 0.5), 1.5, true)
+
+func _draw_blade(alpha: float) -> void:
+	var dir: Vector2 = facing.normalized() if facing.length() > 0.001 else Vector2.RIGHT
+	var grip: Vector2 = dir * (radius * 0.5) + Vector2(0.0, radius * 0.1)
+	draw_line(grip, grip + dir * (radius * 1.35), Palette.with_alpha(Palette.STEEL, alpha), 2.0)
+
+# Scia dello scatto: allunga la figura all'indietro, cosí lo scatto si
+# legge come uno spostamento fulmineo e non come un teletrasporto.
+func _draw_dash_trail() -> void:
+	var dir: Vector2 = facing.normalized() if facing.length() > 0.001 else Vector2.RIGHT
+	for i in range(3):
+		var back: Vector2 = -dir * (float(i + 1) * radius * 0.7)
+		draw_circle(back, radius * (0.8 - float(i) * 0.2), Palette.with_alpha(Palette.BLOOD, 0.22 - float(i) * 0.06))
+
+# La falce di luce del colpo: l'arco bianco-acciaio che nel riferimento
+# segna il fendente appena portato.
+func _draw_crescent() -> void:
+	var dir: Vector2 = facing.normalized() if facing.length() > 0.001 else Vector2.RIGHT
+	var angle: float = dir.angle()
+	var center: Vector2 = dir * (radius * 0.35)
+	draw_arc(center, radius * 2.1, angle - 1.0, angle + 1.0, 32, Palette.with_alpha(Palette.BONE, 0.9), 6.0, true)
+	draw_arc(center, radius * 2.55, angle - 0.7, angle + 0.7, 24, Palette.with_alpha(Palette.STEEL, 0.55), 3.0, true)
+	draw_arc(center, radius * 1.7, angle - 0.55, angle + 0.55, 20, Palette.with_alpha(Palette.BONE, 0.35), 2.0, true)

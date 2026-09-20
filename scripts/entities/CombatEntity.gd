@@ -21,6 +21,10 @@ var max_hp := 30.0
 var damage := 8.0
 var contact_cooldown := 0.6
 var color := Color(0.5, 0.68, 0.34)
+# Colore del profilo luminoso: è ciò che rende leggibile una creatura
+# quasi nera su una pietra quasi nera, ed è anche l'unico segnale di
+# schieramento (cremisi = ostile, acciaio = alleato, oro = dorato).
+var rim_color: Color = Palette.RIM_HOSTILE
 
 var hp := 0.0
 var alive := true
@@ -108,18 +112,49 @@ func _process(delta: float) -> void:
 		contact_timer -= delta
 	queue_redraw()
 
+# Le creature si disegnano come nel riferimento estetico: una massa
+# scura, un volto pallido e un profilo luminoso. Il colore proprio della
+# specie resta riconoscibile, ma cupo: a dare la lettura immediata sono
+# la silhouette e il bordo illuminato, non il riempimento.
 func _draw() -> void:
-	var draw_color := color
+	_draw_ground_shadow()
+	var body: Color = color.lerp(Palette.VOID, 0.55)
 	if hit_flash > 0.0:
-		draw_color = Color(1, 1, 1)
-	draw_circle(Vector2.ZERO, radius, draw_color)
+		body = Palette.BONE
+	# Alone: la creatura sembra emettere la propria poca luce.
+	draw_circle(Vector2.ZERO, radius + 6.0, Palette.with_alpha(rim_color, 0.07))
+	draw_circle(Vector2.ZERO, radius, body)
+	# Il profilo va tenuto basso: deve staccare la creatura dal fondo,
+	# non trasformarla in un anello al neon.
+	draw_arc(Vector2.ZERO, radius - 1.0, 0.0, TAU, 28, Palette.with_alpha(rim_color, 0.5), 1.5, true)
+	_draw_pale_face()
 	_draw_hp_bar()
+
+# Ombra schiacciata a terra: stacca la creatura dal pavimento e le dà
+# peso, come nelle scene isometriche di riferimento.
+func _draw_ground_shadow() -> void:
+	draw_set_transform(Vector2(0.0, radius * 0.62), 0.0, Vector2(1.0, 0.42))
+	draw_circle(Vector2.ZERO, radius * 1.15, Palette.SHADOW)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# Il volto pallido: la macchia chiara che, nel riferimento, è l'unica
+# parte riconoscibile di creature altrimenti in ombra.
+func _draw_pale_face() -> void:
+	var face_center := Vector2(0.0, -radius * 0.22)
+	var face_radius: float = radius * 0.44
+	draw_circle(face_center, face_radius, Palette.BONE_DIM)
+	draw_circle(face_center + Vector2(0.0, -face_radius * 0.12), face_radius * 0.78, Palette.BONE)
+	var eye_dx: float = face_radius * 0.38
+	var eye_r: float = max(1.0, face_radius * 0.18)
+	draw_circle(face_center + Vector2(-eye_dx, 0.0), eye_r, Palette.VOID)
+	draw_circle(face_center + Vector2(eye_dx, 0.0), eye_r, Palette.VOID)
 
 func _draw_hp_bar() -> void:
 	if max_hp <= 0.0:
 		return
 	var w := radius * 2.0
 	var ratio: float = clamp(hp / max_hp, 0.0, 1.0)
-	var top_left := Vector2(-w / 2.0, -radius - 10.0)
-	draw_rect(Rect2(top_left, Vector2(w, 5)), Color(0, 0, 0, 0.5))
-	draw_rect(Rect2(top_left, Vector2(w * ratio, 5)), Color(0.4, 0.88, 0.76))
+	var top_left := Vector2(-w / 2.0, -radius - 11.0)
+	draw_rect(Rect2(top_left - Vector2(1, 1), Vector2(w + 2, 6)), Palette.with_alpha(Palette.VOID, 0.8))
+	draw_rect(Rect2(top_left, Vector2(w, 4)), Palette.with_alpha(Palette.STONE, 0.9))
+	draw_rect(Rect2(top_left, Vector2(w * ratio, 4)), rim_color)

@@ -51,6 +51,11 @@ func run_and_quit() -> void:
 	_test_special_attack_key_bindings()
 	await _test_settings_screen()
 	await _test_hub_settings_and_quit_entries()
+	await _test_crypt_ui_theme()
+	await _test_vignette_below_hud()
+	await _test_blood_decals()
+	await _test_arena_visual_geometry()
+	_test_creature_rim_colors()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
 	await _test_boss_defeat_freezes_player_and_clears_projectiles()
 
@@ -2343,3 +2348,176 @@ func _assert(condition: bool, message: String) -> void:
 	if not condition:
 		printerr("FALLITO: " + message)
 		get_tree().quit(1)
+
+# --- Stile estetico: la cripta -----------------------------------------------
+
+func _test_crypt_ui_theme() -> void:
+	print("--- Test estetica: il tema della cripta arriva a tutte le schermate ---")
+	# L'ereditarietà del tema in Godot passa solo per Control e Window:
+	# un Node2D o un CanvasLayer lungo la strada la interrompe. Senza
+	# questo controllo il gioco tornerebbe in silenzio al tema grigio
+	# predefinito di Godot, e nessun altro test se ne accorgerebbe.
+	var hub := Hub.new()
+	Palette.apply_theme(hub)
+	add_child(hub)
+	await get_tree().process_frame
+
+	var hub_button: Button = _find_first_button(hub)
+	_assert(hub_button != null, "setup del test: l'Hub dovrebbe avere almeno un pulsante")
+	var hub_box: StyleBox = hub_button.get_theme_stylebox("normal", "Button")
+	_assert(hub_box is StyleBoxFlat, "i pulsanti dell'Hub non usano il tema del gioco")
+	_assert(hub_box.bg_color.is_equal_approx(Palette.UI_BG_SOFT), "i pulsanti dell'Hub non hanno il fondo scuro della cripta")
+	hub.queue_free()
+	await get_tree().process_frame
+
+	var themed_run := Run.new()
+	add_child(themed_run)
+	themed_run.begin_new_streak()
+	await get_tree().process_frame
+
+	var hud_bar: ProgressBar = themed_run.hud.hp_bar
+	var fill: StyleBox = hud_bar.get_theme_stylebox("fill", "ProgressBar")
+	_assert(fill is StyleBoxFlat, "la barra della vita non usa il tema del gioco")
+	_assert(fill.bg_color.is_equal_approx(Palette.BLOOD), "la barra della vita dovrebbe essere cremisi")
+
+	var pause_button: Button = _find_first_button(themed_run.pause_screen)
+	_assert(pause_button != null, "setup del test: il menu di pausa dovrebbe avere almeno un pulsante")
+	_assert(pause_button.get_theme_stylebox("normal", "Button").bg_color.is_equal_approx(Palette.UI_BG_SOFT), "il menu di pausa non eredita il tema del gioco")
+
+	themed_run.queue_free()
+	await get_tree().process_frame
+	print("Tema della cripta: OK")
+
+func _find_first_button(node: Node) -> Button:
+	for child in node.get_children():
+		if child is Button:
+			return child
+		var found: Button = _find_first_button(child)
+		if found != null:
+			return found
+	return null
+
+func _test_vignette_below_hud() -> void:
+	print("--- Test estetica: oscuramento ai bordi sotto l'interfaccia ---")
+	var vig_run := Run.new()
+	add_child(vig_run)
+	vig_run.begin_new_streak()
+	await get_tree().process_frame
+
+	_assert(vig_run.vignette != null, "la run dovrebbe avere l'oscuramento ai bordi")
+	_assert(vig_run.vignette.get_parent() == vig_run.ui_layer, "l'oscuramento va sul livello dell'interfaccia, non nel mondo di gioco")
+	# Deve stare sotto HUD e menu: quei nodi vanno letti senza velo sopra.
+	_assert(
+		vig_run.ui_layer.get_children().find(vig_run.vignette) < vig_run.ui_layer.get_children().find(vig_run.hud),
+		"l'oscuramento non deve coprire la HUD"
+	)
+	_assert(vig_run.vignette.mouse_filter == Control.MOUSE_FILTER_IGNORE, "l'oscuramento non deve intercettare il mouse")
+	vig_run.queue_free()
+	await get_tree().process_frame
+	print("Oscuramento ai bordi: OK")
+
+func _test_blood_decals() -> void:
+	print("--- Test estetica: il sangue resta a terra e cambia con la stanza ---")
+	var blood_run := Run.new()
+	add_child(blood_run)
+	blood_run.begin_new_streak()
+	await get_tree().process_frame
+
+	var decals: BloodDecals = blood_run.blood_decals
+	_assert(decals != null, "la run dovrebbe avere il livello del sangue")
+	_assert(decals.get_parent() == blood_run, "il sangue va nel mondo di gioco, non sull'interfaccia")
+	decals.clear_all()
+
+	# Un nemico ucciso deve lasciare il segno dove è caduto.
+	var victim = _spawn_follower(blood_run, blood_run.player.global_position + Vector2(80, 0))
+	await get_tree().process_frame
+	var before: int = decals.mark_count()
+	victim.take_damage(victim.max_hp)
+	blood_run._on_enemy_defeated(victim)
+	_assert(decals.mark_count() > before, "la morte di un nemico dovrebbe lasciare sangue a terra")
+
+	# Anche il giocatore colpito sanguina.
+	var after_kill: int = decals.mark_count()
+	blood_run.player.hit_iframe_timer = 0.0
+	blood_run.player.take_damage(5.0)
+	_assert(decals.mark_count() > after_kill, "un colpo subito dal giocatore dovrebbe lasciare sangue a terra")
+
+	# Oltre il tetto le macchie più vecchie vengono scartate: una run
+	# lunga non deve far crescere il disegno all'infinito.
+	for i in range(120):
+		decals.splatter(Vector2(i * 7, i * 5), 2.0)
+	_assert(decals.mark_count() <= BloodDecals.MAX_MARKS, "il sangue accumulato dovrebbe essere limitato a MAX_MARKS")
+
+	# Stanza nuova, pavimento pulito.
+	blood_run._generate_room(2)
+	await get_tree().process_frame
+	_assert(decals.mark_count() == 0, "il sangue della stanza precedente non dovrebbe seguire il giocatore")
+
+	blood_run.queue_free()
+	await get_tree().process_frame
+	print("Sangue a terra: OK")
+
+func _test_arena_visual_geometry() -> void:
+	print("--- Test estetica: la muratura viene generata per ogni stanza ---")
+	var visual := ArenaVisual.new()
+	visual.wall_margin = Run.WALL_MARGIN
+	add_child(visual)
+
+	var test_maze := MazeGrid.new()
+	var maze_rng := RandomNumberGenerator.new()
+	maze_rng.seed = 909
+	test_maze.generate(4, 3, 240.0, maze_rng)
+	visual.maze = test_maze
+	_assert(visual._floor_tiles.size() > 0, "il pavimento del labirinto dovrebbe essere lastricato")
+
+	var tiles_bounds: Rect2 = _tiles_bounds(visual)
+	_assert(test_maze.total_bounds().encloses(tiles_bounds), "le lastre non devono sbordare dal labirinto")
+
+	# Sala del boss: Run azzera il labirinto e SOLO DOPO imposta la
+	# misura dell'arena. Se la geometria non si rigenerasse anche al
+	# cambio di misura, la sala del boss resterebbe lastricata quanto la
+	# stanza precedente, molto più piccola.
+	visual.maze = null
+	visual.arena_size = Run.BOSS_ARENA_SIZE
+	var boss_tiles: Rect2 = _tiles_bounds(visual)
+	_assert(
+		boss_tiles.size.x > Run.BOSS_ARENA_SIZE.x * 0.8,
+		"il pavimento della sala del boss copre solo %d px dei %d dell'arena" % [int(boss_tiles.size.x), int(Run.BOSS_ARENA_SIZE.x)]
+	)
+
+	visual.queue_free()
+	await get_tree().process_frame
+	print("Muratura delle stanze: OK")
+
+func _tiles_bounds(visual: ArenaVisual) -> Rect2:
+	var bounds: Rect2 = Rect2()
+	for i in range(visual._floor_tiles.size()):
+		var tile_rect: Rect2 = visual._floor_tiles[i].rect
+		bounds = tile_rect if i == 0 else bounds.merge(tile_rect)
+	return bounds
+
+func _test_creature_rim_colors() -> void:
+	print("--- Test estetica: il profilo luminoso dice da che parte sta una creatura ---")
+	# Su una pietra quasi nera la silhouette da sola non basta: è il
+	# colore del profilo a distinguere ostili, alleati e dorati.
+	var hostile := Enemy.new()
+	hostile.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	_assert(hostile.current_rim_color() == Palette.RIM_HOSTILE, "un nemico ostile dovrebbe avere il profilo cremisi")
+
+	var ally := Enemy.new()
+	ally.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	ally.is_ally = true
+	_assert(ally.current_rim_color() == Palette.RIM_ALLY, "un alleato dovrebbe avere il profilo d'acciaio")
+
+	var golden := Enemy.new()
+	golden.setup_from_data(GameData.build_golden_enemy_data("strisciante"), true)
+	_assert(golden.current_rim_color() == Palette.RIM_GOLDEN, "un nemico dorato dovrebbe avere il profilo dorato")
+	# Addomesticato, un dorato resta pur sempre un alleato: conta lo
+	# schieramento, non la rarità.
+	golden.is_ally = true
+	_assert(golden.current_rim_color() == Palette.RIM_ALLY, "un dorato addomesticato dovrebbe mostrare il profilo da alleato")
+
+	hostile.free()
+	ally.free()
+	golden.free()
+	print("Profili luminosi delle creature: OK")

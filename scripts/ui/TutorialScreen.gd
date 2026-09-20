@@ -25,7 +25,7 @@ var scroll: ScrollContainer
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 255)
+	bg.color = Palette.UI_BG
 	bg.position = Vector2.ZERO
 	bg.size = get_viewport_rect().size
 	add_child(bg)
@@ -110,7 +110,7 @@ func _build_section_title(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 20)
-	label.modulate = Color(0.4, 0.88, 0.76)
+	label.modulate = Palette.EMBER
 	return label
 
 func _build_step_row(n: int, step_title: String, text: String) -> Control:
@@ -125,7 +125,7 @@ func _build_step_row(n: int, step_title: String, text: String) -> Control:
 	number_label.text = str(n)
 	number_label.custom_minimum_size = Vector2(30, 0)
 	number_label.add_theme_font_size_override("font_size", 20)
-	number_label.modulate = Color(0.4, 0.88, 0.76)
+	number_label.modulate = Palette.EMBER
 	hbox.add_child(number_label)
 
 	var vbox := VBoxContainer.new()
@@ -141,7 +141,7 @@ func _build_step_row(n: int, step_title: String, text: String) -> Control:
 	text_label.custom_minimum_size = Vector2(880, 0)
 	text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	text_label.modulate = Color(0.85, 0.85, 0.88)
+	text_label.modulate = Palette.BONE
 	vbox.add_child(text_label)
 
 	return row
@@ -169,7 +169,7 @@ func _build_enemy_row(entry: Dictionary) -> Control:
 	tip_label.custom_minimum_size = Vector2(760, 0)
 	tip_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	tip_label.modulate = Color(0.85, 0.85, 0.88)
+	tip_label.modulate = Palette.BONE
 	hbox.add_child(tip_label)
 
 	return row
@@ -198,14 +198,14 @@ func _build_ability_row(enemy_entry: Dictionary, ability_entry: Dictionary) -> C
 	desc_label.custom_minimum_size = Vector2(660, 0)
 	desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	desc_label.modulate = Color(0.85, 0.85, 0.88)
+	desc_label.modulate = Palette.BONE
 	hbox.add_child(desc_label)
 
 	return row
 
 func _row_style() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color8(24, 26, 33, 255)
+	sb.bg_color = Palette.UI_BG_SOFT
 	sb.set_corner_radius_all(6)
 	sb.content_margin_left = 14.0
 	sb.content_margin_right = 14.0

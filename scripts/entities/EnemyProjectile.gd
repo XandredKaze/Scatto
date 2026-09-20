@@ -20,7 +20,7 @@ var is_ally_projectile := false
 # (es. il colore a tema dell'alleato per Dardo Velenoso/Sciame Vendicativo),
 # cosí gli attacchi speciali del giocatore restano riconoscibili a colpo
 # d'occhio rispetto ai proiettili nemici generici.
-var color := Color8(224, 102, 63)
+var color := Color8(226, 74, 96)
 
 signal ally_kill(defeated: Node)
 
@@ -80,4 +80,8 @@ func _draw() -> void:
 	if is_ally_projectile and velocity.length() > 0.001:
 		var back: Vector2 = -velocity.normalized() * (radius * 2.5)
 		draw_line(Vector2.ZERO, back, Color(color.r, color.g, color.b, 0.4), radius)
+	# Alone e nucleo chiaro: nella penombra della cripta un proiettile
+	# deve leggersi come una scheggia di luce, non come un pallino piatto.
+	draw_circle(Vector2.ZERO, radius * 2.4, Palette.with_alpha(color, 0.14))
 	draw_circle(Vector2.ZERO, radius, color)
+	draw_circle(Vector2.ZERO, radius * 0.45, Palette.with_alpha(Palette.BONE, 0.8))

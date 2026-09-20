@@ -24,7 +24,7 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(1280, 720)
 
 	var bg := ColorRect.new()
-	bg.color = Color8(13, 14, 18)
+	bg.color = Palette.UI_BG
 	bg.position = Vector2.ZERO
 	bg.size = get_viewport_rect().size
 	add_child(bg)
@@ -47,7 +47,7 @@ func _ready() -> void:
 	subtitle.text = "Un roguelike a scatto"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.custom_minimum_size = Vector2(300, 0)
-	subtitle.modulate = Color(0.7, 0.7, 0.75)
+	subtitle.modulate = Palette.BONE_DIM
 	vbox.add_child(subtitle)
 
 	# Promemoria dei comandi in alto, sopra le voci del menu: con sei voci
@@ -56,7 +56,7 @@ func _ready() -> void:
 	hint.text = "WASD/Frecce per muoverti, E e Q (R1/L1) per attaccare"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.custom_minimum_size = Vector2(300, 0)
-	hint.modulate = Color(0.5, 0.5, 0.55)
+	hint.modulate = Palette.STEEL_DIM
 	vbox.add_child(hint)
 
 	_add_spacer(vbox, 10)
@@ -65,7 +65,7 @@ func _ready() -> void:
 	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stats_label.custom_minimum_size = Vector2(300, 0)
 	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	stats_label.modulate = Color(0.75, 0.75, 0.8)
+	stats_label.modulate = Palette.BONE_DIM
 	vbox.add_child(stats_label)
 
 	_add_spacer(vbox, 10)

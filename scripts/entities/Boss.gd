@@ -161,9 +161,36 @@ func _end_attack() -> void:
 	mode_timer = 0.5
 
 func _draw() -> void:
+	# Il bagliore proprio del boss fa da profilo luminoso: è la creatura
+	# che nel riferimento estetico domina la scena, quindi la sua luce
+	# è più ampia e più calda di quella dei nemici comuni.
+	rim_color = glow_color
+	_draw_tentacles()
 	super._draw()
+
 	if is_special:
-		draw_arc(Vector2.ZERO, radius + 6.0, 0.0, TAU, 32, glow_color, 3.0)
+		draw_arc(Vector2.ZERO, radius + 8.0, 0.0, TAU, 40, glow_color, 3.0)
 	if mode == "telegraph":
-		var telegraph_radius: float = radius + 90.0 if pending_attack == "slam" else radius + 10.0
-		draw_arc(Vector2.ZERO, telegraph_radius, 0.0, TAU, 24, Color(1, 1, 1, 0.6), 2.0)
+		# Il preavviso resta l'informazione più urgente sullo schermo:
+		# cremisi acceso, pieno, impossibile da confondere col decoro.
+		var telegraph_radius: float = radius + 90.0 if pending_attack == "slam" else radius + 12.0
+		draw_arc(Vector2.ZERO, telegraph_radius, 0.0, TAU, 40, Palette.with_alpha(Palette.EMBER, 0.85), 3.0)
+		draw_circle(Vector2.ZERO, telegraph_radius, Palette.with_alpha(Palette.BLOOD, 0.08))
+
+# Tentacoli: lunghi, scuri, in lento movimento. Sono ciò che rende il
+# boss una massa vivente invece di un cerchio più grande degli altri.
+func _draw_tentacles() -> void:
+	var phase: float = float(Time.get_ticks_msec()) * 0.0016
+	var count := 9
+	for i in range(count):
+		var base_angle: float = TAU * float(i) / float(count)
+		var sway: float = sin(phase * 1.3 + float(i) * 1.7) * 0.28
+		var length: float = radius * (1.9 + 0.22 * sin(phase * 2.1 + float(i)))
+		var pts := PackedVector2Array()
+		for seg in range(5):
+			var t: float = float(seg) / 4.0
+			var angle: float = base_angle + sway * t * 2.0
+			pts.append(Vector2.RIGHT.rotated(angle) * (length * t))
+		draw_polyline(pts, color.lerp(Palette.VOID, 0.35), 7.0 - 3.0 * float(i % 2), true)
+		draw_polyline(pts, Palette.with_alpha(glow_color, 0.3), 2.0, true)
+		draw_circle(pts[pts.size() - 1], 3.5, Palette.with_alpha(glow_color, 0.7))

@@ -46,7 +46,7 @@ func _ready() -> void:
 	# ridimensionamento non ha ancora effetto nel frame di creazione e lo
 	# sfondo resterebbe di dimensione (0, 0), lasciando trasparire l'Hub.
 	var bg := ColorRect.new()
-	bg.color = Color8(10, 11, 15, 255)
+	bg.color = Palette.UI_BG
 	bg.position = Vector2.ZERO
 	bg.size = get_viewport_rect().size
 	add_child(bg)
@@ -64,7 +64,7 @@ func _ready() -> void:
 
 	var hint := Label.new()
 	hint.text = "Su/giù per spostarti, A/Croce o Invio per confermare. B/Cerchio o Esc per tornare indietro."
-	hint.modulate = Color(0.6, 0.6, 0.66)
+	hint.modulate = Palette.BONE_DIM
 	panel.add_child(hint)
 
 	panel.add_child(_section_title("Audio"))
@@ -85,14 +85,14 @@ func _ready() -> void:
 	resolution_warning.text = "La finestra non si lascia ridimensionare qui (succede eseguendo il gioco dentro l'editor): la scelta resta salvata e varrà avviando il gioco da solo."
 	resolution_warning.autowrap_mode = TextServer.AUTOWRAP_WORD
 	resolution_warning.custom_minimum_size = Vector2(650, 0)
-	resolution_warning.modulate = Color(0.95, 0.75, 0.35)
+	resolution_warning.modulate = Palette.GOLD
 	resolution_warning.hide()
 	panel.add_child(resolution_warning)
 
 	panel.add_child(_section_title("Comandi"))
 	var rebind_hint := Label.new()
 	rebind_hint.text = "Scegli un comando e premi il tasto (o il pulsante del controller) da assegnargli."
-	rebind_hint.modulate = Color(0.6, 0.6, 0.66)
+	rebind_hint.modulate = Palette.BONE_DIM
 	panel.add_child(rebind_hint)
 
 	for entry in GameSettings.REBINDABLE:
@@ -126,7 +126,7 @@ func _section_title(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 20)
-	label.modulate = Color(0.4, 0.88, 0.76)
+	label.modulate = Palette.EMBER
 	return label
 
 func _make_value_button() -> Button:

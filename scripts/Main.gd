@@ -8,6 +8,10 @@ func _ready() -> void:
 	# Dopo ensure_actions(): le azioni devono esistere nei valori
 	# predefiniti perché le assegnazioni salvate possano sostituirle.
 	GameSettings.apply_all()
+	# Il colore con cui si pulisce lo schermo: lo stesso nero delle
+	# stanze, cosí le bande di adattamento del rapporto d'aspetto non
+	# spiccano ai lati dell'immagine.
+	RenderingServer.set_default_clear_color(Palette.VOID)
 	world = Node2D.new()
 	world.name = "World"
 	add_child(world)
@@ -24,6 +28,9 @@ func _show_hub() -> void:
 	get_tree().paused = false
 	_clear_world()
 	var hub := Hub.new()
+	# Senza il tema della cripta ogni schermata ripartirebbe da quello
+	# predefinito di Godot, grigio e fuori posto.
+	Palette.apply_theme(hub)
 	hub.start_run_requested.connect(_on_start_run_requested)
 	world.add_child(hub)
 	current_screen = hub
