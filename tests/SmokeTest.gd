@@ -1033,6 +1033,11 @@ func _test_run_music() -> void:
 	_assert(music_run.music_player.stream != null, "il brano di sottofondo non è stato caricato")
 	_assert(music_run.music_player.stream is AudioStreamMP3, "il brano di sottofondo dovrebbe essere l'mp3 importato")
 	_assert(music_run.music_player.stream.loop, "il brano di sottofondo deve ripartire in loop, non finire a metà run")
+	# Il punto da cui riparte il loop salta l'introduzione, che si sente
+	# una volta sola. Deve restare dentro la traccia: un valore oltre la
+	# fine spezzerebbe il loop invece di accorciarlo.
+	var loop_from: float = music_run.music_player.stream.loop_offset
+	_assert(loop_from >= 0.0 and loop_from < music_run.music_player.stream.get_length(), "il punto di ripartenza del loop (%.1fs) deve cadere dentro la traccia (%.1fs)" % [loop_from, music_run.music_player.stream.get_length()])
 	_assert(music_run.music_player.playing, "il sottofondo dovrebbe partire con la run")
 	# Il lettore è figlio della run: tornando all'Hub la run viene liberata
 	# e la musica si ferma con lei, senza gestione esterna.

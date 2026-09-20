@@ -13,7 +13,7 @@ dest_files=["res://.godot/imported/mines.mp3-af5045845a501e80d7ba97f2c2fb5de3.mp
 [params]
 
 loop=true
-loop_offset=0
+loop_offset=16
 bpm=0
 beat_count=0
 bar_beats=4

@@ -63,7 +63,7 @@ Dall'Hub si raggiungono anche:
 
 Note:
 
-- Il gioco ha un **sottofondo musicale durante le run** (`assets/audio/mines.mp3`, riprodotto in loop): parte quando inizia una run e si ferma tornando all'Hub, che resta silenzioso. Non ci sono ancora effetti sonori. Il cursore del volume agisce sul bus audio principale, quindi regola anche la musica.
+- Il gioco ha un **sottofondo musicale durante le run** (`assets/audio/mines.mp3`, riprodotto in loop): parte quando inizia una run e si ferma tornando all'Hub, che resta silenzioso. Il loop riparte dal secondo 16 invece che da zero, cosí l'introduzione del brano si sente una volta sola a inizio run e poi gira solo il tema. Non ci sono ancora effetti sonori. Il cursore del volume agisce sul bus audio principale, quindi regola anche la musica.
 - Eseguendo il gioco **dentro l'editor di Godot** la finestra può essere gestita dall'editor stesso (nelle versioni che incorporano l'anteprima di gioco) e non lasciarsi ridimensionare dal gioco: in quel caso le Impostazioni lo dicono esplicitamente e la scelta resta salvata, valida al primo avvio del gioco da solo. Per provare davvero il cambio di risoluzione conviene lanciare l'eseguibile esportato, o disattivare l'anteprima incorporata nell'editor.
 
 ### Tutorial

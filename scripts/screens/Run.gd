@@ -56,7 +56,9 @@ const VINCOLO_VITALE_HEAL := 30.0
 # figlio di questo nodo, quindi tornando all'Hub (dove Run viene liberato)
 # la musica si interrompe da sola, senza doverla fermare a mano. Il brano
 # è importato con il loop attivo (assets/audio/mines.mp3.import), quindi
-# riparte da solo alla fine senza stacchi.
+# riparte da solo alla fine senza stacchi. Il loop riparte dal secondo 16
+# invece che da zero (loop_offset): l'introduzione si sente una volta
+# sola a inizio run, poi gira solo il tema.
 const MUSIC_PATH := "res://assets/audio/mines.mp3"
 # Un po' sotto il volume pieno: è un sottofondo, non deve coprire il resto.
 # Il cursore del volume nelle Impostazioni agisce a monte, sul bus
