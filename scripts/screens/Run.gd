@@ -368,6 +368,11 @@ func _find_tameable_enemy() -> Enemy:
 
 func _convert_enemy_to_ally(enemy: Enemy) -> void:
 	enemy.is_ally = true
+	# Gruppo consultato dagli avversari ostili per scegliere chi attaccare
+	# (CombatEntity._pick_hostile_target): da qui in poi questo alleato è
+	# un bersaglio possibile quanto il giocatore. Uscendo dall'albero
+	# quando muore o viene rimosso, esce da solo anche dal gruppo.
+	enemy.add_to_group("ally")
 	enemy.collision_mask = 2 | 4 | 8
 	enemy.hp = enemy.max_hp
 	enemy.ally_path = PackedVector2Array()
@@ -619,6 +624,11 @@ func _start_boss_room() -> void:
 func _on_boss_melee_aoe(origin: Vector2, radius: float, dmg: float) -> void:
 	if player != null and player.alive and player.global_position.distance_to(origin) <= radius:
 		player.take_damage(dmg)
+	# Il colpo al suolo del boss non distingue amici da nemici: prende
+	# anche gli alleati che si trovano nel raggio.
+	for a in allies:
+		if is_instance_valid(a) and a.alive and a.global_position.distance_to(origin) <= radius:
+			a.take_damage(dmg)
 
 func _on_boss_summon_requested(enemy_type_id: String, count: int, origin: Vector2) -> void:
 	if not GameData.ENEMY_TYPES.has(enemy_type_id):

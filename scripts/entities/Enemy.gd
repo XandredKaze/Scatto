@@ -99,13 +99,25 @@ func _physics_process(delta: float) -> void:
 	if is_ally:
 		_physics_process_ally(delta, player)
 		return
+	# Un nemico ostile non punta per forza al giocatore: se un suo alleato
+	# è più vicino, se la prende con quello (vedi update_hostile_target).
+	var previous_target: Node = current_target
+	var target: Node = update_hostile_target(delta)
+	if target == null:
+		return
+	if target != previous_target:
+		# Il percorso calcolato porta al bersaglio precedente: va rifatto
+		# subito, altrimenti il nemico continuerebbe a inseguire per un
+		# attimo chi ha appena smesso di interessargli.
+		current_path = PackedVector2Array()
+		path_recalc_timer = 0.0
 	if maze != null:
-		_physics_process_maze(delta, player)
+		_physics_process_maze(delta, target)
 	else:
-		_physics_process_direct(delta, player)
+		_physics_process_direct(delta, target)
 
-func _physics_process_direct(delta: float, player: Node) -> void:
-	var to_player: Vector2 = player.global_position - global_position
+func _physics_process_direct(delta: float, target: Node) -> void:
+	var to_player: Vector2 = target.global_position - global_position
 	var dir: Vector2 = to_player.normalized() if to_player.length() > 0.001 else Vector2.ZERO
 	match behavior:
 		"chase":
@@ -122,49 +134,49 @@ func _physics_process_direct(delta: float, player: Node) -> void:
 				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false)
 	_clamp_to_arena()
 
-func _physics_process_maze(delta: float, player: Node) -> void:
+func _physics_process_maze(delta: float, target: Node) -> void:
 	path_recalc_timer -= delta
 	if path_recalc_timer <= 0.0 or current_path.size() < 2:
-		current_path = maze.get_path(global_position, player.global_position)
+		current_path = maze.get_path(global_position, target.global_position)
 		path_target_index = 1 if current_path.size() > 1 else 0
 		path_recalc_timer = 0.35 + randf() * 0.25
 
-	var to_player: Vector2 = player.global_position - global_position
+	var to_player: Vector2 = target.global_position - global_position
 	var straight_dist: float = to_player.length()
 
 	match behavior:
 		"chase":
-			_move_along_path(delta, player)
+			_move_along_path(delta, target)
 		"ranged":
 			if straight_dist > keep_distance + 15.0:
-				_move_along_path(delta, player)
+				_move_along_path(delta, target)
 			attack_timer -= delta
 			if attack_timer <= 0.0:
 				attack_timer = attack_cooldown
 				var dir: Vector2 = to_player.normalized() if straight_dist > 0.001 else Vector2.ZERO
 				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false)
 
-func _move_along_path(delta: float, player: Node) -> void:
+func _move_along_path(delta: float, target: Node) -> void:
 	if current_path.size() < 2:
 		# Il percorso ha un solo punto (o nessuno) quando nemico e
-		# giocatore sono nella stessa cella del labirinto: lí dentro non
+		# bersaglio sono nella stessa cella del labirinto: lí dentro non
 		# può esserci una parete di mezzo, quindi si chiude la distanza
 		# in linea retta invece di restare fermi in attesa di un
 		# percorso che non arriverà mai (la cella di destinazione, non
-		# il punto esatto del giocatore, è già stata raggiunta).
-		var to_player: Vector2 = player.global_position - global_position
+		# il punto esatto del bersaglio, è già stata raggiunta).
+		var to_player: Vector2 = target.global_position - global_position
 		if to_player.length() > 0.001:
 			var dir: Vector2 = to_player.normalized()
 			global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
 		return
 	if path_target_index >= current_path.size():
 		path_target_index = current_path.size() - 1
-	var target: Vector2 = current_path[path_target_index]
-	var to_target: Vector2 = target - global_position
+	var waypoint: Vector2 = current_path[path_target_index]
+	var to_target: Vector2 = waypoint - global_position
 	if to_target.length() < 10.0 and path_target_index < current_path.size() - 1:
 		path_target_index += 1
-		target = current_path[path_target_index]
-		to_target = target - global_position
+		waypoint = current_path[path_target_index]
+		to_target = waypoint - global_position
 	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
 	global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
 

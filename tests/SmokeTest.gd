@@ -38,6 +38,8 @@ func run_and_quit() -> void:
 	await _test_legendary_rarity_weighting()
 	await _test_ally_grants_special_attack()
 	await _test_dash_traded_for_ally_attacks()
+	await _test_hostiles_attack_allies()
+	await _test_boss_attacks_allies()
 	await _test_special_attack_pacing()
 	await _test_ally_powerups()
 	await _test_ally_special_attack_empowered_duplicate()
@@ -985,6 +987,118 @@ func _test_dash_traded_for_ally_attacks() -> void:
 
 	print("Scatto barattato con gli attacchi degli alleati: OK")
 	trade_run.queue_free()
+	await get_tree().process_frame
+
+func _test_hostiles_attack_allies() -> void:
+	print("--- Test regressione: i nemici ostili se la prendono anche con gli alleati ---")
+	var aggro_run := Run.new()
+	add_child(aggro_run)
+	aggro_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in aggro_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+	# Senza labirinto: qui interessa la scelta del bersaglio, non il
+	# percorso tra i corridoi.
+	aggro_run.current_maze = null
+	aggro_run.player.maze = null
+
+	var player_pos: Vector2 = aggro_run.player.global_position
+
+	# Un alleato mandato avanti, il giocatore che resta indietro.
+	var ally := Enemy.new()
+	ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	ally.global_position = player_pos
+	aggro_run.enemy_container.add_child(ally)
+	aggro_run._on_tame_requested()
+	_assert(ally.is_ally, "setup del test: il nemico avrebbe dovuto diventare alleato")
+	_assert(ally.is_in_group("ally"), "un alleato deve entrare nel gruppo consultato dagli avversari")
+	ally.maze = null
+	ally.global_position = player_pos + Vector2(500.0, 0.0)
+
+	# Un nemico ostile piazzato accanto all'alleato e lontano dal giocatore.
+	var hostile := Enemy.new()
+	hostile.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	hostile.global_position = ally.global_position + Vector2(120.0, 0.0)
+	aggro_run.enemy_container.add_child(hostile)
+	await get_tree().physics_frame
+
+	var target: Node = hostile.update_hostile_target(0.0)
+	_assert(target == ally, "il nemico dovrebbe prendersela con l'alleato, che è molto più vicino del giocatore")
+
+	# E deve avvicinarglisi davvero, non solo "puntarlo".
+	var dist_before: float = hostile.global_position.distance_to(ally.global_position)
+	for i in range(30):
+		await get_tree().physics_frame
+	var dist_after: float = hostile.global_position.distance_to(ally.global_position)
+	_assert(dist_after < dist_before, "il nemico non si è avvicinato all'alleato (%.1f -> %.1f)" % [dist_before, dist_after])
+
+	# Il bersaglio non deve ballare tra due candidati quasi equidistanti:
+	# il giocatore appena più vicino dell'alleato non basta a rubare
+	# l'attenzione (serve un vantaggio di TARGET_SWITCH_MARGIN).
+	var margin: float = CombatEntity.TARGET_SWITCH_MARGIN
+	ally.global_position = hostile.global_position + Vector2(300.0, 0.0)
+	aggro_run.player.global_position = hostile.global_position + Vector2(0.0, 300.0 - margin * 0.5)
+	hostile.current_target = ally
+	hostile.target_recheck_timer = 0.0
+	_assert(hostile.update_hostile_target(0.0) == ally, "un bersaglio appena più vicino non dovrebbe rubare l'attenzione")
+
+	# Se invece il giocatore è nettamente più vicino, il nemico cambia idea.
+	aggro_run.player.global_position = hostile.global_position + Vector2(0.0, 300.0 - margin * 2.0)
+	hostile.target_recheck_timer = 0.0
+	_assert(hostile.update_hostile_target(0.0) == aggro_run.player, "con il giocatore nettamente più vicino il nemico dovrebbe tornare su di lui")
+
+	# Morto l'alleato, il nemico torna a occuparsi del giocatore anche se
+	# il tempo di ricontrollo non è ancora scaduto.
+	hostile.current_target = ally
+	hostile.target_recheck_timer = 99.0
+	ally.take_damage(99999.0)
+	await get_tree().process_frame
+	_assert(hostile.update_hostile_target(0.0) == aggro_run.player, "caduto l'alleato il nemico deve tornare sul giocatore senza aspettare")
+
+	print("Aggressività verso gli alleati: OK")
+	aggro_run.queue_free()
+	await get_tree().process_frame
+
+func _test_boss_attacks_allies() -> void:
+	print("--- Test regressione: anche il boss se la prende con gli alleati ---")
+	var boss_run := Run.new()
+	add_child(boss_run)
+	boss_run.begin_new_streak()
+	await get_tree().process_frame
+
+	for e in boss_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+	boss_run.current_maze = null
+	boss_run.player.maze = null
+
+	var player_pos: Vector2 = boss_run.player.global_position
+	var ally := Enemy.new()
+	ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	ally.global_position = player_pos
+	boss_run.enemy_container.add_child(ally)
+	boss_run._on_tame_requested()
+	ally.maze = null
+	ally.global_position = player_pos + Vector2(600.0, 0.0)
+
+	var boss := Boss.new()
+	boss.setup_from_data(GameData.BOSSES["custode"])
+	boss.global_position = ally.global_position + Vector2(150.0, 0.0)
+	boss_run.boss_container.add_child(boss)
+	boss_run.current_boss = boss
+	await get_tree().physics_frame
+
+	_assert(boss.update_hostile_target(0.0) == ally, "il boss dovrebbe puntare l'alleato, molto più vicino del giocatore")
+
+	# Il colpo al suolo del boss non distingue amici da nemici.
+	var ally_hp_before: float = ally.hp
+	boss_run._on_boss_melee_aoe(ally.global_position, 120.0, 25.0)
+	_assert(ally.hp < ally_hp_before, "il colpo ad area del boss dovrebbe danneggiare anche un alleato nel raggio")
+
+	print("Aggressività del boss verso gli alleati: OK")
+	boss_run.queue_free()
 	await get_tree().process_frame
 
 func _test_special_attack_pacing() -> void:
