@@ -21,6 +21,15 @@ const RESOLUTIONS := [
 	Vector2i(1920, 1080),
 ]
 
+# Esito dell'ultima applicazione della risoluzione: falso quando la
+# finestra NON ha davvero assunto la dimensione richiesta. Capita quando il
+# gioco non è padrone della propria finestra — tipicamente eseguendolo
+# dentro l'editor con l'anteprima incorporata, che la ridimensiona lui.
+# In quel caso l'impostazione resta salvata e vale al prossimo avvio del
+# gioco da solo: è la schermata Impostazioni a dirlo, invece di lasciar
+# credere che la scelta sia stata ignorata.
+static var resolution_applied := true
+
 # Azioni riassegnabili dal menu impostazioni, nell'ordine in cui vengono
 # mostrate. Le azioni di navigazione dei menu (ui_accept/ui_cancel) sono
 # deliberatamente escluse: riassegnarle potrebbe rendere il menu stesso
@@ -76,9 +85,19 @@ static func apply_display() -> void:
 		return
 	if is_fullscreen():
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	else:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-		DisplayServer.window_set_size(current_resolution())
+		resolution_applied = true
+		return
+	# L'ordine conta: una finestra massimizzata o a schermo intero ignora
+	# le richieste di ridimensionamento, quindi si torna prima in modalità
+	# finestra e solo dopo si cambia la dimensione.
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	var wanted: Vector2i = current_resolution()
+	DisplayServer.window_set_size(wanted)
+	# Ingrandendo, una finestra ancorata in alto a sinistra finirebbe per
+	# metà fuori dallo schermo: si ricentra su quello spazio utilizzabile.
+	var usable: Rect2i = DisplayServer.screen_get_usable_rect(DisplayServer.window_get_current_screen())
+	DisplayServer.window_set_position(usable.position + (usable.size - wanted) / 2)
+	resolution_applied = DisplayServer.window_get_size() == wanted
 
 static func apply_bindings() -> void:
 	var saved: Dictionary = _saved_bindings()
@@ -104,16 +123,46 @@ static func set_volume(value: float) -> void:
 
 # --- Video -------------------------------------------------
 
-static func get_resolution_index() -> int:
-	return clamp(int(SaveManager.settings.get("resolution_index", 0)), 0, RESOLUTIONS.size() - 1)
+# Solo le risoluzioni che stanno davvero nello spazio utilizzabile dello
+# schermo su cui si trova la finestra. Proporre una finestra più grande
+# dello schermo significa chiedere al sistema operativo qualcosa che non
+# può concedere: la finestra verrebbe ritagliata o spostata, e la scelta
+# sembrerebbe semplicemente "non funzionare".
+static func available_resolutions() -> Array:
+	if DisplayServer.get_name() == "headless":
+		return RESOLUTIONS.duplicate()
+	var usable: Vector2i = DisplayServer.screen_get_usable_rect(DisplayServer.window_get_current_screen()).size
+	var fitting: Array = []
+	for res in RESOLUTIONS:
+		if res.x <= usable.x and res.y <= usable.y:
+			fitting.append(res)
+	# Su uno schermo più piccolo di ogni voce dell'elenco resta comunque
+	# la più bassa, altrimenti non ci sarebbe nulla da scegliere.
+	return fitting if not fitting.is_empty() else [RESOLUTIONS[0]]
 
+# La risoluzione viene salvata per valore, non come indice: l'elenco delle
+# scelte dipende dallo schermo, quindi un indice salvato su un monitor
+# grande punterebbe altrove (o a nulla) su uno più piccolo.
 static func current_resolution() -> Vector2i:
-	return RESOLUTIONS[get_resolution_index()]
+	var available: Array = available_resolutions()
+	var saved := Vector2i(
+		int(SaveManager.settings.get("resolution_w", 0)),
+		int(SaveManager.settings.get("resolution_h", 0))
+	)
+	return saved if available.has(saved) else available[0]
 
-static func set_resolution_index(index: int) -> void:
-	SaveManager.settings["resolution_index"] = posmod(index, RESOLUTIONS.size())
+static func get_resolution_index() -> int:
+	return available_resolutions().find(current_resolution())
+
+static func set_resolution(res: Vector2i) -> void:
+	SaveManager.settings["resolution_w"] = res.x
+	SaveManager.settings["resolution_h"] = res.y
 	apply_display()
 	SaveManager.save_data()
+
+static func cycle_resolution() -> void:
+	var available: Array = available_resolutions()
+	set_resolution(available[(get_resolution_index() + 1) % available.size()])
 
 static func is_fullscreen() -> bool:
 	return bool(SaveManager.settings.get("fullscreen", false))

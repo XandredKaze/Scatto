@@ -56,10 +56,13 @@ Dall'Hub sono raggiungibili due schermate persistenti (salvate su disco, sopravv
 
 Dall'Hub si raggiungono anche:
 
-- **Impostazioni**: volume generale, risoluzione della finestra, schermo intero e **riassegnazione dei tasti** di tutti i comandi di gioco (movimento, i due pulsanti d'attacco, addomesticamento, pausa). Assegnare un tasto della tastiera non tocca il binding del controller della stessa azione e viceversa, cosí i due dispositivi restano sempre utilizzabili insieme; gli assi analogici dello stick non sono riassegnabili e restano sempre attivi sul movimento. `Esc`/B annullano l'assegnazione in corso, e "Ripristina comandi" riporta tutto ai valori predefiniti. Ogni modifica viene applicata subito e salvata su disco, quindi sopravvive al riavvio. La navigazione qui è incatenata a mano (su/giù seguono l'ordine dell'elenco e dall'ultima voce si torna alla prima), cosí il controller non può mai "perdersi" tra i controlli.
+- **Impostazioni**: volume generale, risoluzione della finestra (vengono offerte solo le misure che stanno davvero nello spazio utilizzabile del tuo schermo, e la finestra viene ricentrata a ogni cambio invece di crescere fuori dal bordo), schermo intero e **riassegnazione dei tasti** di tutti i comandi di gioco (movimento, i due pulsanti d'attacco, addomesticamento, pausa). Assegnare un tasto della tastiera non tocca il binding del controller della stessa azione e viceversa, cosí i due dispositivi restano sempre utilizzabili insieme; gli assi analogici dello stick non sono riassegnabili e restano sempre attivi sul movimento. `Esc`/B annullano l'assegnazione in corso, e "Ripristina comandi" riporta tutto ai valori predefiniti. Ogni modifica viene applicata subito e salvata su disco, quindi sopravvive al riavvio. La navigazione qui è incatenata a mano (su/giù seguono l'ordine dell'elenco e dall'ultima voce si torna alla prima), cosí il controller non può mai "perdersi" tra i controlli.
 - **Esci dal gioco**: chiude il software. Non serve salvare nulla a mano: progressi e impostazioni sono già su disco a ogni cambiamento.
 
-Nota: il gioco al momento non ha ancora effetti sonori né musica, quindi il cursore del volume agisce sul bus audio principale ma non c'è ancora nulla da sentire.
+Note:
+
+- Il gioco al momento non ha ancora effetti sonori né musica, quindi il cursore del volume agisce sul bus audio principale ma non c'è ancora nulla da sentire.
+- Eseguendo il gioco **dentro l'editor di Godot** la finestra può essere gestita dall'editor stesso (nelle versioni che incorporano l'anteprima di gioco) e non lasciarsi ridimensionare dal gioco: in quel caso le Impostazioni lo dicono esplicitamente e la scelta resta salvata, valida al primo avvio del gioco da solo. Per provare davvero il cambio di risoluzione conviene lanciare l'eseguibile esportato, o disattivare l'anteprima incorporata nell'editor.
 
 ### Tutorial
 

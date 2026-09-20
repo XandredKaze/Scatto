@@ -25,6 +25,7 @@ var volume_slider: HSlider
 var volume_value_label: Label
 var resolution_btn: Button
 var fullscreen_btn: Button
+var resolution_warning: Label
 # Pulsante di assegnazione per ogni azione riassegnabile, nello stesso
 # ordine di GameSettings.REBINDABLE.
 var binding_buttons: Array = []
@@ -72,6 +73,16 @@ func _ready() -> void:
 	fullscreen_btn = _make_value_button()
 	panel.add_child(_value_row("Schermo intero", fullscreen_btn))
 	fullscreen_btn.pressed.connect(_toggle_fullscreen)
+
+	# Mostrata solo quando la finestra non ha davvero cambiato dimensione
+	# (vedi GameSettings.resolution_applied).
+	resolution_warning = Label.new()
+	resolution_warning.text = "La finestra non si lascia ridimensionare qui (succede eseguendo il gioco dentro l'editor): la scelta resta salvata e varrà avviando il gioco da solo."
+	resolution_warning.autowrap_mode = TextServer.AUTOWRAP_WORD
+	resolution_warning.custom_minimum_size = Vector2(650, 0)
+	resolution_warning.modulate = Color(0.95, 0.75, 0.35)
+	resolution_warning.hide()
+	panel.add_child(resolution_warning)
 
 	panel.add_child(_section_title("Comandi"))
 	var rebind_hint := Label.new()
@@ -181,7 +192,10 @@ func refresh() -> void:
 	_update_volume_label()
 	var res: Vector2i = GameSettings.current_resolution()
 	resolution_btn.text = "%d x %d" % [res.x, res.y]
-	resolution_btn.disabled = GameSettings.is_fullscreen()
+	# Niente da scegliere se lo schermo lascia passare una sola misura, e
+	# niente da scegliere a schermo intero.
+	resolution_btn.disabled = GameSettings.is_fullscreen() or GameSettings.available_resolutions().size() < 2
+	resolution_warning.visible = not GameSettings.is_fullscreen() and not GameSettings.resolution_applied
 	fullscreen_btn.text = "Sì" if GameSettings.is_fullscreen() else "No"
 	_refresh_binding_labels()
 
@@ -205,7 +219,7 @@ func _on_volume_changed(value: float) -> void:
 	_update_volume_label()
 
 func _cycle_resolution() -> void:
-	GameSettings.set_resolution_index(GameSettings.get_resolution_index() + 1)
+	GameSettings.cycle_resolution()
 	refresh()
 
 func _toggle_fullscreen() -> void:

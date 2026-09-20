@@ -777,13 +777,43 @@ func _test_settings_screen() -> void:
 	await get_tree().process_frame
 
 	# Video: la risoluzione cicla tra quelle previste e torna all'inizio.
+	var available: Array = GameSettings.available_resolutions()
+	_assert(available.size() > 1, "setup del test: servono almeno due risoluzioni selezionabili")
 	var first_res: Vector2i = GameSettings.current_resolution()
 	screen._cycle_resolution()
 	_assert(GameSettings.current_resolution() != first_res, "il pulsante risoluzione non ha cambiato valore")
 	_assert(screen.resolution_btn.text == "%d x %d" % [GameSettings.current_resolution().x, GameSettings.current_resolution().y], "l'etichetta della risoluzione non riflette il valore attuale")
-	for i in range(GameSettings.RESOLUTIONS.size() - 1):
+	for i in range(available.size() - 1):
 		screen._cycle_resolution()
 	_assert(GameSettings.current_resolution() == first_res, "ciclando tutte le risoluzioni si dovrebbe tornare alla prima")
+
+	# La risoluzione viene salvata per valore: un indice salvato non
+	# reggerebbe il passaggio a uno schermo che offre meno scelte.
+	screen._cycle_resolution()
+	var chosen: Vector2i = GameSettings.current_resolution()
+	_assert(SaveManager.settings.resolution_w == chosen.x and SaveManager.settings.resolution_h == chosen.y, "la risoluzione scelta non è stata salvata per valore")
+	# Una risoluzione salvata che questo schermo non offre non deve essere
+	# usata: si ripiega su una valida invece di chiedere l'impossibile.
+	SaveManager.settings["resolution_w"] = 7680
+	SaveManager.settings["resolution_h"] = 4320
+	_assert(GameSettings.available_resolutions().has(GameSettings.current_resolution()), "una risoluzione salvata non più disponibile dovrebbe ripiegare su una valida")
+	GameSettings.set_resolution(first_res)
+
+	# Nessuna risoluzione proposta deve superare lo spazio utilizzabile
+	# dello schermo: una finestra più grande dello schermo non può essere
+	# creata, e la scelta sembrerebbe ignorata.
+	for res in GameSettings.available_resolutions():
+		_assert(GameSettings.RESOLUTIONS.has(res), "l'elenco disponibile deve essere un sottoinsieme delle risoluzioni previste")
+
+	# L'avviso sulla finestra non ridimensionabile compare solo quando il
+	# ridimensionamento non ha davvero avuto effetto.
+	GameSettings.resolution_applied = true
+	screen.refresh()
+	_assert(not screen.resolution_warning.visible, "senza problemi di ridimensionamento l'avviso non dovrebbe comparire")
+	GameSettings.resolution_applied = false
+	screen.refresh()
+	_assert(screen.resolution_warning.visible, "se la finestra non si è ridimensionata l'utente va avvisato invece di lasciarlo nel dubbio")
+	GameSettings.resolution_applied = true
 
 	screen._toggle_fullscreen()
 	_assert(GameSettings.is_fullscreen(), "il pulsante schermo intero non ha attivato l'impostazione")
@@ -1484,6 +1514,11 @@ func _test_room_clear_freezes_player_and_clears_projectiles() -> void:
 	await get_tree().process_frame
 
 	# Un proiettile ostile in volo, indipendente dai nemici della stanza.
+	# La stanza viene svuotata dai proiettili prima: se è stato generato un
+	# nemico a distanza, può averne già sparato uno di suo e il conteggio
+	# non sarebbe più quello del solo proiettile di questo test.
+	freeze_run._clear_container(freeze_run.projectile_container)
+	await get_tree().process_frame
 	freeze_run._on_enemy_spawn_projectile(freeze_run.player.global_position + Vector2(300.0, 0.0), Vector2.LEFT, 50.0, 5.0)
 	_assert(freeze_run.projectile_container.get_child_count() == 1, "setup del test: il proiettile ostile dovrebbe essere presente")
 	_assert(not freeze_run.player.frozen, "setup del test: il giocatore non dovrebbe partire congelato")
