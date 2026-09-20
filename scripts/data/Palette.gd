@@ -36,6 +36,13 @@ const BONE_DIM := Color8(146, 142, 147)
 const STEEL := Color8(158, 177, 198)
 const STEEL_DIM := Color8(88, 100, 117)
 const GOLD := Color8(216, 170, 80)
+# Giallo polline: il cuore del Pungiglione e i dardi che spara. È l'unica
+# nota calda del gioco oltre all'oro, e serve proprio a questo: annunciare
+# da lontano da dove arriveranno i colpi.
+const POLLEN := Color8(246, 214, 92)
+# Ambra spenta delle bande dell'insetto: volutamente più cupa dell'oro,
+# che resta riservato alla variante dorata.
+const CHITIN_AMBER := Color8(184, 136, 64)
 
 # --- Ruoli in combattimento (profilo luminoso delle creature) ---
 # Ostile: cremisi. Alleato: acciaio freddo. Dorato: oro.

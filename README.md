@@ -38,6 +38,15 @@ Ne fanno parte anche l'**oscuramento ai bordi dello schermo** (la luce sembra ve
 
 Il giocatore è la figura incappucciata dal mantello cremisi: l'unica della scena col rosso pieno addosso, cosí resta individuabile anche in mezzo alla mischia.
 
+**Ogni specie ha la propria sagoma**, perché in una cripta quasi nera il colore del corpo da solo non basta a distinguerle:
+
+- **Strisciante** — una melma nera e allungata, fatta di segmenti che seguono le posizioni realmente occupate poco prima: si allunga come un serpente quando corre e si raccoglie in una pozza quando si ferma. Di chiaro ha solo due occhi.
+- **Pungiglione** — un fiore carnivoro a otto petali alternati rossi e bianchi, con il cuore giallo. È lo stesso giallo dei dardi che spara, cosí si capisce a colpo d'occhio da dove arriveranno i colpi.
+- **Corazzato** — la sagoma generica: una massa scura e tozza con arti sottili in movimento.
+- **Sciame** — un insetto volante con addome a bande, ali portate all'indietro che battono rapidissime e le mandibole spalancate del cervo volante. L'ombra è piccola e staccata verso il basso, perché è in volo e non appoggiato.
+
+La variante dorata eredita la sagoma della propria specie (lo Strisciante Dorato è una melma) ma in ambra, con l'anello d'oro attorno.
+
 La **sesta stanza** (il boss) è invece un'unica arena aperta, senza pareti interne, ma comunque più grande dello schermo: lo spazio per schivare gli attacchi del boss non è mai limitato al primo piano visibile.
 
 Non appena sconfiggi l'ultimo nemico ostile di una stanza, la ricompensa (la scelta del potenziamento) viene consegnata immediatamente: non serve raggiungere alcun punto della mappa per riscattarla. In quel momento resti fermo sul posto e ogni proiettile ancora in volo (nemico, alleato o del tuo ultimo attacco speciale) sparisce; riprendi il controllo non appena scegli il potenziamento e la stanza successiva (o la sala del boss) comincia. Lo stesso vale alla sconfitta del boss, sulla schermata di fine run.

@@ -56,6 +56,9 @@ func run_and_quit() -> void:
 	await _test_blood_decals()
 	await _test_arena_visual_geometry()
 	_test_creature_rim_colors()
+	_test_creature_shapes()
+	await _test_flower_shoots_its_own_colour()
+	await _test_slime_body_trail()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
 	await _test_boss_defeat_freezes_player_and_clears_projectiles()
 
@@ -2521,3 +2524,113 @@ func _test_creature_rim_colors() -> void:
 	ally.free()
 	golden.free()
 	print("Profili luminosi delle creature: OK")
+
+
+func _test_creature_shapes() -> void:
+	print("--- Test estetica: ogni specie ha la propria sagoma ---")
+	# Le specie non si distinguono più per colore ma per forma: se un
+	# tipo perde la propria sagoma torna a essere il disco generico,
+	# indistinguibile dagli altri, e nulla lo segnalerebbe.
+	var expected := {
+		"strisciante": "slime",
+		"pungiglione": "flower",
+		"corazzato": "brute",
+		"sciame": "insect",
+	}
+	for enemy_id in expected:
+		var creature := Enemy.new()
+		creature.setup_from_data(GameData.ENEMY_TYPES[enemy_id], false)
+		_assert(
+			creature.shape == expected[enemy_id],
+			"%s dovrebbe avere la sagoma '%s', invece ha '%s'" % [enemy_id, expected[enemy_id], creature.shape]
+		)
+		creature.free()
+
+	# La variante dorata è pur sempre uno Strisciante: deve ereditare la
+	# sagoma della specie di base, non ricadere su quella generica.
+	var golden := Enemy.new()
+	golden.setup_from_data(GameData.build_golden_enemy_data("strisciante"), true)
+	_assert(golden.shape == "slime", "lo Strisciante Dorato dovrebbe mantenere la sagoma della specie di base")
+	golden.free()
+	print("Sagome delle specie: OK")
+
+func _test_flower_shoots_its_own_colour() -> void:
+	print("--- Test estetica: i dardi del Pungiglione sono del suo giallo ---")
+	var shot_run := Run.new()
+	add_child(shot_run)
+	shot_run.begin_new_streak()
+	await get_tree().process_frame
+
+	# Arena libera e stanza svuotata: qui conta solo il colore del dardo,
+	# e un nemico a distanza già presente potrebbe averne sparato uno suo.
+	for existing in shot_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	shot_run._clear_container(shot_run.projectile_container)
+	shot_run.current_maze = null
+	shot_run.player.maze = null
+
+	var flower := Enemy.new()
+	flower.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
+	flower.maze = null
+	flower.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	flower.spawn_projectile.connect(shot_run._on_enemy_spawn_projectile)
+	shot_run.enemy_container.add_child(flower)
+	# Dentro il raggio di tiro e pronto a sparare.
+	flower.global_position = shot_run.player.global_position + Vector2(flower.keep_distance, 0.0)
+	flower.attack_timer = 0.0
+
+	var fired: EnemyProjectile = null
+	for i in range(30):
+		await get_tree().physics_frame
+		for child in shot_run.projectile_container.get_children():
+			if child is EnemyProjectile and not child.is_ally_projectile:
+				fired = child
+				break
+		if fired != null:
+			break
+
+	_assert(fired != null, "il Pungiglione ostile non ha sparato alcun dardo")
+	if fired != null:
+		# Il colore viaggia sul segnale spawn_projectile: se quel dato si
+		# perde, i dardi tornano al rosso generico e il legame visivo con
+		# il cuore giallo del fiore sparisce senza altri sintomi.
+		_assert(
+			fired.color.is_equal_approx(GameData.ENEMY_TYPES["pungiglione"].color),
+			"il dardo del Pungiglione dovrebbe avere il giallo della specie, invece è %s" % fired.color
+		)
+
+	shot_run.queue_free()
+	await get_tree().process_frame
+	print("Colore dei dardi del Pungiglione: OK")
+
+func _test_slime_body_trail() -> void:
+	print("--- Test estetica: la melma si allunga dietro di sé ---")
+	var slime := Enemy.new()
+	slime.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	add_child(slime)
+	slime.global_position = Vector2(500, 500)
+	await get_tree().process_frame
+
+	# Ferma: il corpo si raccoglie in un solo segmento, come una pozza.
+	for i in range(5):
+		await get_tree().process_frame
+	_assert(slime._body_trail.size() <= 2, "da ferma la melma non dovrebbe allungarsi (%d segmenti)" % slime._body_trail.size())
+
+	# In movimento: il corpo segue le posizioni appena occupate, ed è
+	# questo a dargli l'andatura serpentina.
+	for i in range(40):
+		slime.global_position += Vector2(Enemy.SLIME_TRAIL_GAP + 1.0, 0.0)
+		await get_tree().process_frame
+	_assert(slime._body_trail.size() > 2, "in movimento la melma dovrebbe allungarsi dietro di sé")
+	_assert(
+		slime._body_trail.size() <= Enemy.SLIME_SEGMENTS,
+		"il corpo della melma non dovrebbe crescere oltre SLIME_SEGMENTS (%d)" % slime._body_trail.size()
+	)
+	# La direzione di marcia segue lo spostamento reale: senza, corpo,
+	# ali e petali di tutte le specie punterebbero sempre a destra.
+	_assert(slime.heading.x > 0.8, "la melma dovrebbe puntare nella direzione in cui si sta muovendo")
+
+	slime.queue_free()
+	await get_tree().process_frame
+	print("Corpo della melma: OK")

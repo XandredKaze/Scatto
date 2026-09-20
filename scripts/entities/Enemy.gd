@@ -13,7 +13,7 @@ extends CombatEntity
 # `arena_bounds`. Il percorso è ricalcolato periodicamente, non ad ogni
 # frame, per restare economico anche con molti nemici in campo.
 
-signal spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool)
+signal spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool, color: Color)
 signal ally_kill(defeated: Node)
 
 var enemy_id := "strisciante"
@@ -25,6 +25,19 @@ var keep_distance := 190.0
 var attack_cooldown := 1.4
 var projectile_speed := 260.0
 var is_golden := false
+# Forma con cui la creatura viene disegnata: ogni specie ha la propria
+# (vedi _draw). "brute" è la sagoma generica, condivisa da chi non ha
+# bisogno di distinguersi per forma.
+var shape := "brute"
+# Direzione verso cui la creatura sta andando davvero, ricavata dallo
+# spostamento fotogramma per fotogramma: orienta corpo, ali e petali
+# senza dover toccare il codice di movimento, che resta uno solo per
+# tutte le specie.
+var heading := Vector2.RIGHT
+var _previous_position := Vector2.ZERO
+# Posizioni recenti del corpo, usate dalla melma per strisciare dietro
+# di sé invece di traslare come un disco rigido.
+var _body_trail: Array = []
 var guaranteed_drop := ""
 # Valori originali del tipo, da cui si ricalcolano i bonus da alleato
 # (Run._apply_ally_buffs): applicare i moltiplicatori sempre alla base
@@ -79,6 +92,7 @@ func setup_from_data(data: Dictionary, golden: bool) -> void:
 	keep_distance = data.get("keep_distance", 190.0)
 	attack_cooldown = data.get("attack_cooldown", 1.4)
 	projectile_speed = data.get("projectile_speed", 260.0)
+	shape = data.get("shape", "brute")
 	guaranteed_drop = data.get("guaranteed_drop", "")
 	is_golden = golden
 	base_max_hp = max_hp
@@ -101,6 +115,21 @@ func _ready() -> void:
 	add_to_group("enemy")
 	attack_timer = randf() * attack_cooldown if attack_cooldown > 0.0 else 0.0
 	path_recalc_timer = randf() * 0.3
+	_previous_position = global_position
+
+# La direzione di marcia si ricava dallo spostamento appena avvenuto,
+# non da dove la creatura vorrebbe andare: cosí vale identica per
+# inseguimento, fuga, percorso nel labirinto e comportamento da alleato,
+# senza dover toccare nessuno dei quattro. Il filtro evita che una
+# creatura ferma contro un muro giri su se stessa per micro-spostamenti.
+func _process(delta: float) -> void:
+	super._process(delta)
+	var moved: Vector2 = global_position - _previous_position
+	if moved.length() > 0.6:
+		heading = heading.lerp(moved.normalized(), 0.3).normalized()
+	_previous_position = global_position
+	if shape == "slime":
+		_update_body_trail()
 
 func _physics_process(delta: float) -> void:
 	if not alive:
@@ -143,7 +172,7 @@ func _physics_process_direct(delta: float, target: Node) -> void:
 			attack_timer -= delta
 			if attack_timer <= 0.0:
 				attack_timer = attack_cooldown
-				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false)
+				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false, color)
 	_clamp_to_arena()
 
 func _physics_process_maze(delta: float, target: Node) -> void:
@@ -166,7 +195,7 @@ func _physics_process_maze(delta: float, target: Node) -> void:
 			if attack_timer <= 0.0:
 				attack_timer = attack_cooldown
 				var dir: Vector2 = to_player.normalized() if straight_dist > 0.001 else Vector2.ZERO
-				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false)
+				spawn_projectile.emit(global_position, dir, projectile_speed, damage, false, color)
 
 func _move_along_path(delta: float, target: Node) -> void:
 	if current_path.size() < 2:
@@ -229,7 +258,7 @@ func _ally_behavior_ranged(delta: float, player: Node, hostile: Node) -> void:
 		attack_timer = attack_cooldown
 		var to_target: Vector2 = hostile.global_position - global_position
 		var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
-		spawn_projectile.emit(global_position, dir, projectile_speed, damage, true)
+		spawn_projectile.emit(global_position, dir, projectile_speed, damage, true, color)
 
 # Velocità con cui questo alleato torna verso `dest_pos` (la posizione del
 # giocatore): la sua andatura normale fino a ALLY_CATCHUP_START, poi
@@ -353,22 +382,207 @@ func _clamp_to_arena() -> void:
 	global_position.x = clamp(global_position.x, arena_bounds.position.x + radius, arena_bounds.end.x - radius)
 	global_position.y = clamp(global_position.y, arena_bounds.position.y + radius, arena_bounds.end.y - radius)
 
-func _draw() -> void:
-	# Lo schieramento si legge dal colore del profilo luminoso, prima
-	# ancora che da qualunque altro dettaglio: cremisi se ostile,
-	# acciaio freddo se alleato, oro se dorato.
-	rim_color = current_rim_color()
-	_draw_limbs()
-	super._draw()
+# --- Aspetto -----------------------------------------------------------------
 
+# Ogni specie ha la propria sagoma. Su una pietra quasi nera il colore
+# del corpo da solo non basta a distinguerle: a fare il lavoro sono la
+# forma, le proporzioni e il movimento delle parti.
+func _draw() -> void:
+	rim_color = current_rim_color()
+	match shape:
+		"slime":
+			_draw_slime()
+		"insect":
+			_draw_insect()
+		"flower":
+			_draw_flower()
+		_:
+			_draw_limbs()
+			super._draw()
+	_draw_allegiance_badges()
+
+# Contrassegni che valgono per tutte le sagome: l'anello dorato della
+# variante rara e il marchio del legame sopra la testa degli alleati.
+func _draw_allegiance_badges() -> void:
 	if is_golden:
 		draw_arc(Vector2.ZERO, radius + 7.0, 0.0, TAU, 28, Palette.with_alpha(Palette.GOLD, 0.75), 2.0)
 	if is_ally:
-		# Marchio del legame: il segno sopra la testa dell'alleato, che
-		# lo distingue a colpo d'occhio anche in mezzo alla mischia.
-		var top := Vector2(0.0, -radius - 6.0)
+		var top := Vector2(0.0, -radius - 8.0)
 		draw_line(top + Vector2(-5.0, 0.0), top + Vector2(5.0, 0.0), Palette.STEEL, 2.0)
 		draw_line(top + Vector2(0.0, -4.0), top + Vector2(0.0, 4.0), Palette.STEEL, 2.0)
+
+# Fase di animazione sfasata per istanza: uno sciame di insetti che
+# battesse le ali all'unisono sembrerebbe un unico oggetto.
+func _animation_phase(speed_factor: float) -> float:
+	return float(Time.get_ticks_msec()) * 0.001 * speed_factor + float(get_instance_id() % 628) * 0.01
+
+# --- Strisciante: melma nera che striscia come un serpente --------------------
+
+const SLIME_SEGMENTS := 8
+const SLIME_TRAIL_GAP := 6.0
+
+# Il corpo segue le posizioni realmente occupate poco fa: è questo, più
+# di qualunque disegno, a dare l'andatura serpentina — la melma si
+# allunga quando corre e si raccoglie in una pozza quando si ferma.
+func _update_body_trail() -> void:
+	if _body_trail.is_empty() or _body_trail[0].distance_to(global_position) >= SLIME_TRAIL_GAP:
+		_body_trail.push_front(global_position)
+		while _body_trail.size() > SLIME_SEGMENTS:
+			_body_trail.pop_back()
+
+func _draw_slime() -> void:
+	_draw_ground_shadow()
+	# Nera. Del colore della specie resta appena un soffio, quel tanto
+	# che basta perché non sia una silhouette piatta — tranne nella
+	# variante dorata, che deve invece farsi notare.
+	var body: Color = Palette.VOID.lerp(color, 0.4 if is_golden else 0.07)
+	if hit_flash > 0.0:
+		body = Palette.BONE
+	var phase: float = _animation_phase(5.0)
+	# Il primo disegno può arrivare prima del primo _process: senza
+	# questo la melma resterebbe senza corpo da disegnare.
+	if _body_trail.is_empty():
+		_update_body_trail()
+	var count: int = _body_trail.size()
+
+	# Dalla coda alla testa, cosí la testa resta sopra al resto.
+	for i in range(count - 1, -1, -1):
+		var t: float = float(i) / float(SLIME_SEGMENTS - 1)
+		var segment: Vector2 = to_local(_body_trail[i])
+		var along: Vector2 = heading
+		if i < count - 1:
+			var delta_pos: Vector2 = _body_trail[i] - _body_trail[i + 1]
+			if delta_pos.length() > 0.001:
+				along = delta_pos.normalized()
+		# Onda trasversale che viaggia dalla testa alla coda: l'ondeggiare
+		# del serpente, presente anche da ferma.
+		var across := Vector2(-along.y, along.x)
+		segment += across * sin(phase - float(i) * 0.85) * radius * (0.16 + 0.3 * t)
+		var segment_radius: float = radius * (1.0 - 0.58 * t)
+		draw_circle(segment, segment_radius, body)
+		# Il profilo si spegne in fretta verso la coda: serve a staccare
+		# la testa dal fondo, non a colorare di rosso tutta la melma.
+		draw_arc(segment, segment_radius, 0.0, TAU, 20, Palette.with_alpha(rim_color, 0.34 * pow(1.0 - t, 2.0)), 1.5, true)
+
+	# Testa: riflesso umido e due occhi pallidi, gli unici punti chiari
+	# di una creatura per il resto completamente nera.
+	var across_head := Vector2(-heading.y, heading.x)
+	draw_circle(-heading * radius * 0.2 - across_head * radius * 0.3, radius * 0.26, Palette.with_alpha(Palette.STEEL, 0.22))
+	var eye_forward: Vector2 = heading * radius * 0.3
+	var eye_side: Vector2 = across_head * radius * 0.36
+	draw_circle(eye_forward + eye_side, radius * 0.17, Palette.BONE)
+	draw_circle(eye_forward - eye_side, radius * 0.17, Palette.BONE)
+	_draw_hp_bar()
+
+# --- Sciame: insetto volante --------------------------------------------------
+
+func _draw_insect() -> void:
+	# Ombra piccola e staccata verso il basso: è in volo, non appoggiato.
+	draw_set_transform(Vector2(0.0, radius * 2.3), 0.0, Vector2(1.0, 0.4))
+	draw_circle(Vector2.ZERO, radius * 0.8, Palette.with_alpha(Palette.VOID, 0.45))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	var phase: float = _animation_phase(1.0)
+	var hover: float = sin(phase * 2.4) * radius * 0.32
+	var chitin: Color = color.lerp(Palette.VOID, 0.45)
+	if hit_flash > 0.0:
+		chitin = Palette.BONE
+	# Disegnato più grande del proprio raggio di collisione: a 9 px di
+	# raggio un insetto "in scala" sarebbe una macchia, e mandibole e
+	# livrea — cioè tutto ciò che lo rende riconoscibile — sparirebbero.
+	var r: float = radius * 1.3
+
+	# Tutto si disegna in un sistema ruotato dove +X è "avanti": cosí
+	# corpo, ali e mandibole seguono da soli la direzione di volo.
+	draw_set_transform(Vector2(0.0, hover), heading.angle(), Vector2.ONE)
+
+	# Ali: due coppie portate all'indietro, come quelle di un calabrone
+	# in volo. Il battito si rende schiacciandone l'apertura.
+	var beat: float = 0.4 + 0.6 * abs(sin(phase * 11.0))
+	for side in [-1.0, 1.0]:
+		for pair in range(2):
+			var span: float = r * (2.0 - 0.5 * float(pair))
+			var root := Vector2(r * (0.15 - 0.3 * float(pair)), 0.0)
+			var wing := PackedVector2Array([
+				root,
+				root + Vector2(-span * 0.25, side * span * 0.34 * beat),
+				root + Vector2(-span * 0.85, side * span * 0.72 * beat),
+				root + Vector2(-span * 0.62, side * span * 0.16 * beat),
+			])
+			draw_colored_polygon(wing, Palette.with_alpha(Palette.STEEL, 0.14))
+			draw_polyline(wing, Palette.with_alpha(Palette.STEEL, 0.16), 1.0, true)
+
+	# Addome a bande: la livrea inconfondibile del calabrone.
+	for i in range(3):
+		var band_x: float = -r * (1.9 - 0.45 * float(i))
+		var band_r: float = r * (0.26 + 0.09 * float(i))
+		draw_circle(Vector2(band_x, 0.0), band_r, chitin if i % 2 == 0 else Palette.CHITIN_AMBER)
+
+	# Torace e testa.
+	draw_circle(Vector2(r * 0.1, 0.0), r * 0.5, chitin)
+	draw_circle(Vector2(r * 0.72, 0.0), r * 0.36, chitin)
+
+	# Mandibole spalancate del cervo volante: la parte che più di tutte
+	# dice "insetto" anche a pochi pixel di dimensione.
+	for side in [-1.0, 1.0]:
+		draw_polyline(PackedVector2Array([
+			Vector2(r * 0.95, side * r * 0.18),
+			Vector2(r * 1.55, side * r * 0.58),
+			Vector2(r * 1.95, side * r * 0.12),
+		]), Palette.BONE, 2.5, true)
+		draw_line(
+			Vector2(r * 0.85, side * r * 0.24),
+			Vector2(r * 1.35, side * r * 0.95),
+			Palette.with_alpha(Palette.BONE_DIM, 0.65), 1.0
+		)
+		draw_circle(Vector2(r * 0.8, side * r * 0.2), r * 0.12, Palette.BONE)
+
+	draw_arc(Vector2(r * 0.1, 0.0), r * 0.52, 0.0, TAU, 20, Palette.with_alpha(rim_color, 0.4), 1.0, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_hp_bar()
+
+# --- Pungiglione: fiore carnivoro rosso e bianco ------------------------------
+
+const FLOWER_PETALS := 8
+
+func _draw_flower() -> void:
+	_draw_ground_shadow()
+	var phase: float = _animation_phase(1.0)
+	# Il fiore respira: i petali si aprono e si chiudono piano.
+	var bloom: float = 1.0 + 0.09 * sin(phase * 1.6)
+	var spin: float = heading.angle() + 0.1 * sin(phase * 0.9)
+
+	for i in range(FLOWER_PETALS):
+		var angle: float = spin + TAU * float(i) / float(FLOWER_PETALS)
+		var out := Vector2.RIGHT.rotated(angle)
+		var across := Vector2(-out.y, out.x)
+		var petal := PackedVector2Array([
+			out * radius * 0.3,
+			out * radius * 0.75 * bloom + across * radius * 0.46,
+			out * radius * 1.45 * bloom,
+			out * radius * 0.75 * bloom - across * radius * 0.46,
+		])
+		# Petali alternati rossi e bianchi: due tinte sole, cosí la
+		# livrea si legge anche quando il fiore è lontano e piccolo.
+		var petal_color: Color = Palette.BLOOD if i % 2 == 0 else Palette.BONE
+		if hit_flash > 0.0:
+			petal_color = Palette.BONE
+		draw_colored_polygon(petal, petal_color)
+		var outline: PackedVector2Array = petal.duplicate()
+		outline.append(petal[0])
+		draw_polyline(outline, Palette.with_alpha(rim_color, 0.45), 1.0, true)
+
+	# Cuore del fiore: lo stesso giallo dei dardi che spara, cosí si
+	# capisce a colpo d'occhio da dove arriveranno i colpi.
+	draw_circle(Vector2.ZERO, radius * 0.52, Palette.BLOOD_DEEP)
+	draw_circle(Vector2.ZERO, radius * 0.34, Palette.POLLEN)
+	# Stami puntati in avanti: la bocca da cui parte il dardo.
+	for i in range(3):
+		var stem_angle: float = heading.angle() + (float(i) - 1.0) * 0.32
+		var tip: Vector2 = Vector2.RIGHT.rotated(stem_angle) * radius * 0.9
+		draw_line(Vector2.ZERO, tip, Palette.with_alpha(Palette.POLLEN, 0.75), 1.5)
+		draw_circle(tip, radius * 0.11, Palette.POLLEN)
+	_draw_hp_bar()
 
 # Cremisi se ostile, acciaio freddo se alleato, oro se dorato. È una
 # funzione a sé e non due righe dentro _draw perché lo schieramento di
