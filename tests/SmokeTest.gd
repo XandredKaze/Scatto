@@ -38,6 +38,7 @@ func run_and_quit() -> void:
 	await _test_legendary_rarity_weighting()
 	await _test_ally_grants_special_attack()
 	await _test_dash_traded_for_ally_attacks()
+	await _test_ally_catchup_speed()
 	await _test_hostiles_attack_allies()
 	await _test_boss_attacks_allies()
 	await _test_special_attack_pacing()
@@ -1018,6 +1019,86 @@ func _test_dash_traded_for_ally_attacks() -> void:
 	print("Scatto barattato con gli attacchi degli alleati: OK")
 	trade_run.queue_free()
 	await get_tree().process_frame
+
+func _test_ally_catchup_speed() -> void:
+	print("--- Test regressione: un alleato rimasto indietro accelera esponenzialmente ---")
+	var ally := Enemy.new()
+	ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	ally.is_ally = true
+	add_child(ally)
+	ally.global_position = Vector2.ZERO
+	var base: float = ally.speed
+
+	# Vicino al giocatore nessuna accelerazione: si muove come sempre.
+	_assert(is_equal_approx(ally.ally_follow_speed(Vector2(50.0, 0.0)), base), "vicino al giocatore l'alleato dovrebbe andare alla sua velocità normale")
+	_assert(is_equal_approx(ally.ally_follow_speed(Vector2(Enemy.ALLY_CATCHUP_START, 0.0)), base), "alla soglia l'accelerazione non dovrebbe essere ancora partita")
+
+	# Oltre la soglia raddoppia ogni ALLY_CATCHUP_DOUBLING pixel.
+	var one_doubling: float = Enemy.ALLY_CATCHUP_START + Enemy.ALLY_CATCHUP_DOUBLING
+	var two_doublings: float = Enemy.ALLY_CATCHUP_START + Enemy.ALLY_CATCHUP_DOUBLING * 2.0
+	var at_one: float = ally.ally_follow_speed(Vector2(one_doubling, 0.0))
+	var at_two: float = ally.ally_follow_speed(Vector2(two_doublings, 0.0))
+	_assert(is_equal_approx(at_one, base * 2.0), "a un raddoppio di distanza la velocità dovrebbe essere doppia (attesa %.1f, trovata %.1f)" % [base * 2.0, at_one])
+	_assert(is_equal_approx(at_two, base * 4.0), "a due raddoppi la velocità dovrebbe essere quadrupla (attesa %.1f, trovata %.1f)" % [base * 4.0, at_two])
+
+	# La crescita è esponenziale, non lineare: il secondo tratto di
+	# distanza aggiunge più velocità del primo.
+	var gain_first: float = at_one - base
+	var gain_second: float = at_two - at_one
+	_assert(gain_second > gain_first, "la crescita dovrebbe essere esponenziale: il secondo tratto deve valere più del primo (%.1f contro %.1f)" % [gain_second, gain_first])
+
+	# Il tetto evita che l'inseguimento diventi un teletrasporto.
+	var very_far: float = ally.ally_follow_speed(Vector2(100000.0, 0.0))
+	_assert(is_equal_approx(very_far, base * Enemy.ALLY_CATCHUP_MAX_MULT), "a distanza enorme la velocità dovrebbe fermarsi al tetto")
+
+	# Anche il tipo più lento deve poter superare il giocatore quando è
+	# molto lontano, altrimenti non lo raggiungerebbe mai.
+	var player_speed: float = Player.BASE_SPEED
+	_assert(base * Enemy.ALLY_CATCHUP_MAX_MULT > player_speed, "al massimo dell'inseguimento anche l'alleato più lento deve superare il giocatore (%.1f contro %.1f)" % [base * Enemy.ALLY_CATCHUP_MAX_MULT, player_speed])
+
+	ally.queue_free()
+	await get_tree().process_frame
+
+	# Verifica sul movimento reale: due alleati identici, uno vicino e uno
+	# lontano dal giocatore, devono coprire distanze diverse nello stesso
+	# tempo (niente labirinto e nessun nemico, cosí si misura solo questo).
+	var move_run := Run.new()
+	add_child(move_run)
+	move_run.begin_new_streak()
+	await get_tree().process_frame
+	for e in move_run.enemy_container.get_children():
+		e.queue_free()
+	await get_tree().process_frame
+	move_run.current_maze = null
+	move_run.player.maze = null
+
+	var player_pos: Vector2 = move_run.player.global_position
+	var near_ally := _spawn_follower(move_run, player_pos + Vector2(Enemy.ALLY_CATCHUP_START + 20.0, 0.0))
+	var far_ally := _spawn_follower(move_run, player_pos + Vector2(Enemy.ALLY_CATCHUP_START + Enemy.ALLY_CATCHUP_DOUBLING * 2.0, 0.0))
+	var near_before: float = near_ally.global_position.distance_to(player_pos)
+	var far_before: float = far_ally.global_position.distance_to(player_pos)
+	for i in range(20):
+		await get_tree().physics_frame
+	var near_closed: float = near_before - near_ally.global_position.distance_to(player_pos)
+	var far_closed: float = far_before - far_ally.global_position.distance_to(player_pos)
+	print("Distanza recuperata in 20 frame: vicino %.1f, lontano %.1f" % [near_closed, far_closed])
+	_assert(near_closed > 0.0 and far_closed > 0.0, "entrambi gli alleati dovrebbero avvicinarsi al giocatore")
+	_assert(far_closed > near_closed * 1.5, "l'alleato più lontano dovrebbe recuperare molto più in fretta (%.1f contro %.1f)" % [far_closed, near_closed])
+
+	print("Accelerazione di inseguimento degli alleati: OK")
+	move_run.queue_free()
+	await get_tree().process_frame
+
+# Alleato "puro" usato per misurare il solo inseguimento: nessun nemico
+# intorno, quindi segue sempre e solo il giocatore.
+func _spawn_follower(run_node: Run, pos: Vector2) -> Enemy:
+	var ally := Enemy.new()
+	ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	ally.is_ally = true
+	ally.maze = null
+	run_node.enemy_container.add_child(ally)
+	ally.global_position = pos
+	return ally
 
 func _test_hostiles_attack_allies() -> void:
 	print("--- Test regressione: i nemici ostili se la prendono anche con gli alleati ---")

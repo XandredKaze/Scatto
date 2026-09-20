@@ -48,6 +48,18 @@ var path_recalc_timer := 0.0
 var is_ally := false
 const ALLY_ENGAGE_RADIUS := 260.0
 const ALLY_FOLLOW_DISTANCE := 130.0
+# Inseguimento del giocatore. Quasi tutti i tipi sono più lenti di lui
+# (il Corazzato va a 55 contro i 220 del giocatore), quindi un alleato
+# rimasto indietro non lo raggiungerebbe mai e resterebbe perso in fondo
+# al labirinto. Oltre ALLY_CATCHUP_START la velocità cresce in modo
+# esponenziale con la distanza: raddoppia ogni ALLY_CATCHUP_DOUBLING
+# pixel di distacco, fino al tetto di ALLY_CATCHUP_MAX_MULT, che evita
+# che l'inseguimento diventi un teletrasporto.
+# L'accelerazione vale solo mentre l'alleato sta tornando dal giocatore:
+# se è impegnato contro un nemico si muove alla sua velocità normale.
+const ALLY_CATCHUP_START := 200.0
+const ALLY_CATCHUP_DOUBLING := 220.0
+const ALLY_CATCHUP_MAX_MULT := 8.0
 var ally_path: PackedVector2Array = PackedVector2Array()
 var ally_path_target_index := 0
 var ally_path_recalc_timer := 0.0
@@ -198,17 +210,18 @@ func _physics_process_ally(delta: float, player: Node) -> void:
 	_ally_resolve_combat()
 
 func _ally_behavior_chase(delta: float, player: Node, hostile: Node) -> void:
-	var dest_pos: Vector2 = hostile.global_position if hostile != null else player.global_position
-	var stop_distance: float = (radius + hostile.radius - 4.0) if hostile != null else ALLY_FOLLOW_DISTANCE
-	_ally_move_toward(delta, dest_pos, stop_distance)
+	if hostile != null:
+		_ally_move_toward(delta, hostile.global_position, radius + hostile.radius - 4.0, speed)
+		return
+	_ally_move_toward(delta, player.global_position, ALLY_FOLLOW_DISTANCE, ally_follow_speed(player.global_position))
 
 func _ally_behavior_ranged(delta: float, player: Node, hostile: Node) -> void:
 	if hostile == null:
-		_ally_move_toward(delta, player.global_position, ALLY_FOLLOW_DISTANCE)
+		_ally_move_toward(delta, player.global_position, ALLY_FOLLOW_DISTANCE, ally_follow_speed(player.global_position))
 		return
 	var dist: float = global_position.distance_to(hostile.global_position)
 	if dist > keep_distance + 15.0:
-		_ally_move_toward(delta, hostile.global_position, keep_distance)
+		_ally_move_toward(delta, hostile.global_position, keep_distance, speed)
 	elif dist < keep_distance - 15.0:
 		_ally_move_away_from(delta, hostile.global_position)
 	attack_timer -= delta
@@ -218,15 +231,25 @@ func _ally_behavior_ranged(delta: float, player: Node, hostile: Node) -> void:
 		var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
 		spawn_projectile.emit(global_position, dir, projectile_speed, damage, true)
 
-func _ally_move_toward(delta: float, dest_pos: Vector2, stop_distance: float) -> void:
+# Velocità con cui questo alleato torna verso `dest_pos` (la posizione del
+# giocatore): la sua andatura normale fino a ALLY_CATCHUP_START, poi
+# raddoppiata ogni ALLY_CATCHUP_DOUBLING pixel di distacco, fino al tetto.
+func ally_follow_speed(dest_pos: Vector2) -> float:
+	var dist: float = global_position.distance_to(dest_pos)
+	if dist <= ALLY_CATCHUP_START:
+		return speed
+	var doublings: float = (dist - ALLY_CATCHUP_START) / ALLY_CATCHUP_DOUBLING
+	return speed * min(pow(2.0, doublings), ALLY_CATCHUP_MAX_MULT)
+
+func _ally_move_toward(delta: float, dest_pos: Vector2, stop_distance: float, move_speed: float) -> void:
 	if global_position.distance_to(dest_pos) <= stop_distance:
 		return
 	if maze != null:
-		_ally_move_along_maze(delta, dest_pos)
+		_ally_move_along_maze(delta, dest_pos, move_speed)
 	else:
 		var to_dest: Vector2 = dest_pos - global_position
 		var dir: Vector2 = to_dest.normalized() if to_dest.length() > 0.001 else Vector2.ZERO
-		global_position += dir * speed * delta
+		global_position += dir * move_speed * delta
 		_clamp_to_arena()
 
 func _ally_move_away_from(delta: float, threat_pos: Vector2) -> void:
@@ -253,7 +276,7 @@ func _find_nearest_hostile(max_radius: float) -> Node:
 				nearest = node
 	return nearest
 
-func _ally_move_along_maze(delta: float, dest_pos: Vector2) -> void:
+func _ally_move_along_maze(delta: float, dest_pos: Vector2, move_speed: float) -> void:
 	ally_path_recalc_timer -= delta
 	if ally_path_recalc_timer <= 0.0 or ally_path.size() < 2:
 		ally_path = maze.get_path(global_position, dest_pos)
@@ -264,7 +287,7 @@ func _ally_move_along_maze(delta: float, dest_pos: Vector2) -> void:
 		var to_dest: Vector2 = dest_pos - global_position
 		if to_dest.length() > 0.001:
 			var dir: Vector2 = to_dest.normalized()
-			global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
+			global_position = maze.resolve_move(global_position, dir * move_speed * delta, radius)
 		return
 	if ally_path_target_index >= ally_path.size():
 		ally_path_target_index = ally_path.size() - 1
@@ -275,7 +298,7 @@ func _ally_move_along_maze(delta: float, dest_pos: Vector2) -> void:
 		target = ally_path[ally_path_target_index]
 		to_target = target - global_position
 	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
-	global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
+	global_position = maze.resolve_move(global_position, dir * move_speed * delta, radius)
 
 func _ally_resolve_combat() -> void:
 	# Stesso schema del Player._resolve_combat(): è l'alleato stesso a
