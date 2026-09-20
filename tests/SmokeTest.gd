@@ -43,6 +43,8 @@ func run_and_quit() -> void:
 	await _test_ally_special_attack_effects()
 	await _test_special_attack_visual_effects()
 	_test_special_attack_key_bindings()
+	await _test_settings_screen()
+	await _test_hub_settings_and_quit_entries()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
 	await _test_boss_defeat_freezes_player_and_clears_projectiles()
 
@@ -748,6 +750,138 @@ func _test_ally_grants_special_attack() -> void:
 
 	print("Concessione dell'attacco speciale su slot indipendenti: OK")
 	grant_run.queue_free()
+	await get_tree().process_frame
+
+func _test_settings_screen() -> void:
+	print("--- Test impostazioni (volume, video, assegnazione tasti, persistenza) ---")
+	var previous_settings: Dictionary = SaveManager.settings.duplicate(true)
+	SaveManager.settings = {}
+
+	var screen := SettingsScreen.new()
+	add_child(screen)
+	await get_tree().process_frame
+
+	# Volume: applicato davvero al bus audio e salvato.
+	screen.volume_slider.value = 0.5
+	await get_tree().process_frame
+	_assert(is_equal_approx(GameSettings.get_volume(), 0.5), "il cursore del volume non ha aggiornato l'impostazione")
+	_assert(not AudioServer.is_bus_mute(0), "a volume 50%% il bus audio non dovrebbe essere silenziato")
+	_assert(SaveManager.settings.get("volume", -1.0) == 0.5, "il volume non è stato salvato")
+	screen.volume_slider.value = 0.0
+	await get_tree().process_frame
+	_assert(AudioServer.is_bus_mute(0), "a volume 0 il bus audio dovrebbe essere silenziato")
+	screen.volume_slider.value = 1.0
+	await get_tree().process_frame
+
+	# Video: la risoluzione cicla tra quelle previste e torna all'inizio.
+	var first_res: Vector2i = GameSettings.current_resolution()
+	screen._cycle_resolution()
+	_assert(GameSettings.current_resolution() != first_res, "il pulsante risoluzione non ha cambiato valore")
+	_assert(screen.resolution_btn.text == "%d x %d" % [GameSettings.current_resolution().x, GameSettings.current_resolution().y], "l'etichetta della risoluzione non riflette il valore attuale")
+	for i in range(GameSettings.RESOLUTIONS.size() - 1):
+		screen._cycle_resolution()
+	_assert(GameSettings.current_resolution() == first_res, "ciclando tutte le risoluzioni si dovrebbe tornare alla prima")
+
+	screen._toggle_fullscreen()
+	_assert(GameSettings.is_fullscreen(), "il pulsante schermo intero non ha attivato l'impostazione")
+	_assert(screen.resolution_btn.disabled, "a schermo intero la scelta della risoluzione dovrebbe essere disattivata")
+	screen._toggle_fullscreen()
+	_assert(not GameSettings.is_fullscreen(), "il pulsante schermo intero non ha disattivato l'impostazione")
+
+	# Assegnazione di un tasto: sostituisce solo il binding da tastiera e
+	# lascia intatto quello del controller della stessa azione.
+	_assert(_action_has_key("tame", KEY_F), "setup del test: l'azione tame dovrebbe partire dal tasto F")
+	screen._start_listening("tame", screen.binding_buttons[6])
+	var key_event := InputEventKey.new()
+	key_event.physical_keycode = KEY_L
+	key_event.pressed = true
+	screen._input(key_event)
+	_assert(_action_has_key("tame", KEY_L), "il tasto assegnato non è finito nell'azione")
+	_assert(not _action_has_key("tame", KEY_F), "il vecchio tasto dovrebbe essere stato sostituito")
+	_assert(_action_has_joypad_button("tame", JOY_BUTTON_X), "assegnare un tasto non deve togliere il binding del controller")
+	_assert(screen.listening_action == "", "dopo l'assegnazione la schermata non dovrebbe restare in ascolto")
+	_assert(SaveManager.settings.bindings.tame.key == KEY_L, "l'assegnazione non è stata salvata")
+
+	# Assegnazione da controller: sostituisce solo il binding del joypad.
+	screen._start_listening("tame", screen.binding_buttons[6])
+	var pad_event := InputEventJoypadButton.new()
+	pad_event.button_index = JOY_BUTTON_Y
+	pad_event.pressed = true
+	screen._input(pad_event)
+	_assert(_action_has_joypad_button("tame", JOY_BUTTON_Y), "il pulsante del controller assegnato non è finito nell'azione")
+	_assert(not _action_has_joypad_button("tame", JOY_BUTTON_X), "il vecchio pulsante del controller dovrebbe essere stato sostituito")
+	_assert(_action_has_key("tame", KEY_L), "assegnare un pulsante del controller non deve togliere il binding da tastiera")
+
+	# Esc annulla senza assegnare nulla.
+	screen._start_listening("tame", screen.binding_buttons[6])
+	var esc_event := InputEventKey.new()
+	esc_event.physical_keycode = KEY_ESCAPE
+	esc_event.pressed = true
+	screen._input(esc_event)
+	_assert(_action_has_key("tame", KEY_L), "Esc dovrebbe annullare l'assegnazione, non sostituirla")
+	_assert(not _action_has_key("tame", KEY_ESCAPE), "Esc non deve mai essere assegnato a un'azione")
+	_assert(screen.listening_action == "", "Esc dovrebbe interrompere l'ascolto")
+
+	# Le impostazioni salvate devono essere riapplicate a freddo, come
+	# all'avvio successivo del gioco.
+	InputMap.action_erase_events("tame")
+	GameSettings.apply_bindings()
+	_assert(_action_has_key("tame", KEY_L), "le assegnazioni salvate non sono state riapplicate all'avvio")
+	_assert(_action_has_joypad_button("tame", JOY_BUTTON_Y), "le assegnazioni del controller salvate non sono state riapplicate")
+
+	# Ripristino dei predefiniti.
+	screen._reset_bindings()
+	_assert(_action_has_key("tame", KEY_F), "il ripristino non ha riportato l'azione al tasto predefinito")
+	_assert(_action_has_joypad_button("tame", JOY_BUTTON_X), "il ripristino non ha riportato l'azione al pulsante predefinito")
+	_assert(SaveManager.settings.get("bindings", {}).is_empty(), "il ripristino dovrebbe svuotare le assegnazioni salvate")
+
+	# La navigazione da controller non si affida alla geometria: ogni
+	# controllo selezionabile deve avere un vicino sopra/sotto esplicito.
+	var chain_size: int = 3 + GameSettings.REBINDABLE.size() + 2
+	_assert(screen._focus_chain.size() == chain_size, "la catena di focus dovrebbe coprire tutti i controlli selezionabili")
+	for control in screen._focus_chain:
+		_assert(control.focus_mode == Control.FOCUS_ALL, "ogni controllo della catena dovrebbe essere selezionabile")
+		_assert(not control.focus_neighbor_top.is_empty(), "manca il vicino superiore esplicito su un controllo delle impostazioni")
+		_assert(not control.focus_neighbor_bottom.is_empty(), "manca il vicino inferiore esplicito su un controllo delle impostazioni")
+	_assert(screen.close_btn.focus_neighbor_bottom == screen._focus_chain[0].get_path(), "dall'ultima voce si dovrebbe tornare alla prima")
+	_assert(screen._focus_chain[0].focus_neighbor_top == screen.close_btn.get_path(), "dalla prima voce si dovrebbe risalire all'ultima")
+
+	print("Impostazioni: OK")
+	screen.queue_free()
+	await get_tree().process_frame
+	SaveManager.settings = previous_settings
+	SaveManager.save_data()
+
+func _test_hub_settings_and_quit_entries() -> void:
+	print("--- Test regressione: voci Impostazioni e uscita nell'Hub ---")
+	var hub := Hub.new()
+	add_child(hub)
+	await get_tree().process_frame
+
+	_assert(hub.settings_btn != null and hub.settings_btn.text == "Impostazioni", "l'Hub dovrebbe avere una voce Impostazioni")
+	_assert(hub.quit_btn != null and hub.quit_btn.text == "Esci dal gioco", "l'Hub dovrebbe avere una voce per chiudere il gioco")
+
+	# Nota: qui non si verifica a pixel che il menu stia nello schermo. In
+	# headless il TextServer riporta altezze del testo circa doppie rispetto
+	# al rendering reale (un Label alto 23px diventa 48px), quindi un
+	# controllo del genere segnalerebbe uno sbordamento inesistente. Il
+	# rientro del menu va verificato su uno screenshot vero.
+	hub._open_settings()
+	await get_tree().process_frame
+	_assert(hub.settings_panel != null and hub.settings_panel.visible, "la voce Impostazioni non ha aperto la schermata")
+	_assert(hub.start_btn.focus_mode == Control.FOCUS_NONE, "con le impostazioni aperte i pulsanti dell'Hub non devono essere selezionabili")
+	_assert(hub.settings_btn.focus_mode == Control.FOCUS_NONE, "anche la voce Impostazioni va disattivata mentre il pannello è aperto")
+	_assert(hub.quit_btn.focus_mode == Control.FOCUS_NONE, "anche la voce di uscita va disattivata mentre il pannello è aperto")
+	_assert(hub.settings_panel.volume_slider.has_focus(), "all'apertura il focus dovrebbe partire dal primo controllo delle impostazioni")
+
+	hub.settings_panel.closed.emit()
+	await get_tree().process_frame
+	_assert(not hub.settings_panel.visible, "chiudendo le impostazioni il pannello dovrebbe sparire")
+	_assert(hub.start_btn.focus_mode == Control.FOCUS_ALL, "chiuse le impostazioni i pulsanti dell'Hub tornano selezionabili")
+	_assert(hub.start_btn.has_focus(), "chiuse le impostazioni il focus dovrebbe tornare sull'Hub")
+
+	print("Voci Impostazioni e uscita nell'Hub: OK")
+	hub.queue_free()
 	await get_tree().process_frame
 
 func _test_dash_traded_for_ally_attacks() -> void:

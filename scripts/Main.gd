@@ -5,6 +5,9 @@ var current_screen: Node = null
 
 func _ready() -> void:
 	InputSetup.ensure_actions()
+	# Dopo ensure_actions(): le azioni devono esistere nei valori
+	# predefiniti perché le assegnazioni salvate possano sostituirle.
+	GameSettings.apply_all()
 	world = Node2D.new()
 	world.name = "World"
 	add_child(world)

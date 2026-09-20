@@ -1,12 +1,16 @@
 extends Node
 
-# Salvataggio persistente: archivio potenziamenti, bestiario e statistiche.
+# Salvataggio persistente: archivio potenziamenti, bestiario, statistiche
+# e impostazioni (audio, video, assegnazione dei tasti).
 # Sopravvive tra una run e l'altra e tra un avvio e l'altro del gioco.
 
 const SAVE_PATH := "user://scatto_save.json"
 
 var archive: Dictionary = {}
 var bestiary: Dictionary = {}
+# Preferenze del giocatore. Qui c'è solo il dato grezzo: a leggerlo,
+# applicarlo al motore e riscriverlo ci pensa GameSettings.
+var settings: Dictionary = {}
 var stats: Dictionary = {
 	"runs_started": 0,
 	"runs_won": 0,
@@ -32,13 +36,14 @@ func load_data() -> void:
 		return
 	archive = parsed.get("archive", {})
 	bestiary = parsed.get("bestiary", {})
+	settings = parsed.get("settings", {})
 	var loaded_stats: Dictionary = parsed.get("stats", {})
 	for key in stats.keys():
 		if loaded_stats.has(key):
 			stats[key] = loaded_stats[key]
 
 func save_data() -> void:
-	var data := {"archive": archive, "bestiary": bestiary, "stats": stats}
+	var data := {"archive": archive, "bestiary": bestiary, "stats": stats, "settings": settings}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		return

@@ -48,6 +48,15 @@ Dall'Hub sono raggiungibili due schermate persistenti (salvate su disco, sopravv
 - **Archivio dei Potenziamenti**: elenca tutti i potenziamenti del gioco; quelli mai raccolti restano "???" finché non li ottieni per la prima volta.
 - **Bestiario**: elenca tutti gli avversari (nemici comuni, la variante dorata e i boss); un nemico resta "???" finché non lo sconfiggi per la prima volta.
 
+### Impostazioni e uscita
+
+Dall'Hub si raggiungono anche:
+
+- **Impostazioni**: volume generale, risoluzione della finestra, schermo intero e **riassegnazione dei tasti** di tutti i comandi di gioco (movimento, i due pulsanti d'attacco, addomesticamento, pausa). Assegnare un tasto della tastiera non tocca il binding del controller della stessa azione e viceversa, cosí i due dispositivi restano sempre utilizzabili insieme; gli assi analogici dello stick non sono riassegnabili e restano sempre attivi sul movimento. `Esc`/B annullano l'assegnazione in corso, e "Ripristina comandi" riporta tutto ai valori predefiniti. Ogni modifica viene applicata subito e salvata su disco, quindi sopravvive al riavvio. La navigazione qui è incatenata a mano (su/giù seguono l'ordine dell'elenco e dall'ultima voce si torna alla prima), cosí il controller non può mai "perdersi" tra i controlli.
+- **Esci dal gioco**: chiude il software. Non serve salvare nulla a mano: progressi e impostazioni sono già su disco a ogni cambiamento.
+
+Nota: il gioco al momento non ha ancora effetti sonori né musica, quindi il cursore del volume agisce sul bus audio principale ma non c'è ancora nulla da sentire.
+
 ### Tutorial
 
 Dall'Hub è raggiungibile anche un **Tutorial** che spiega passo per passo i comandi (movimento, scatto, contatto, potenziamenti) e il comportamento dei nemici comuni. I boss, le loro varianti speciali e la variante dorata non vengono mai menzionati: restano una scoperta della run.
@@ -73,7 +82,8 @@ scripts/
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
-  ui/                         # Hub, Archivio, Bestiario, Tutorial, scelta potenziamento, pausa, fine run, game over, HUD
+  core/GameSettings.gd        # impostazioni (audio, video, assegnazione tasti): applicazione e persistenza
+  ui/                         # Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD
 tests/SmokeTest.gd            # test end-to-end eseguibile in headless (vedi sotto)
 ```
 
