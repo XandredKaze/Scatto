@@ -13,10 +13,12 @@ Un roguelike top-down realizzato in **Godot 4.3** costruito su una rinuncia: si 
   - **Morso Selvaggio** (Strisciante, corpo a corpo): tanto danno, colpi radi — un solo balzo stende quasi ogni nemico comune, ma torna pronto con calma (2s).
   - **Dardo Velenoso** (Pungiglione, a distanza): poco danno, tanti colpi — quasi a raffica (0,5s), ma ogni dardo punge poco e può mancare il bersaglio.
   - **Colpo Corazzato** (Corazzato, ad area): bilanciato — danno e ritmo intermedi (1,5s), ma colpisce tutti i nemici intorno a te invece di uno solo.
-  - **Sciame Vendicativo** (Sciame, raffica circolare): variante a distanza che sacrifica il danno del singolo proiettile per coprire ogni direzione (1,1s); sul bersaglio singolo rende poco, su un gruppo tantissimo. Con un solo alleato il pulsante rimasto libero resta inattivo (non torna a scattare) finché non ne addomestichi un secondo. Con 2 alleati di tipo diverso hai entrambi gli attacchi utilizzabili in modo indipendente su pulsanti diversi; con 2 alleati dello stesso tipo i due condividono un solo pulsante in una versione potenziata (più danno, o un colpo/proiettile aggiuntivo). Se un alleato muore, il suo attacco sparisce (o torna alla versione base, se era potenziato).
+  - **Sciame Vendicativo** (Sciame, raffica circolare): variante a distanza che sacrifica il danno del singolo proiettile per coprire ogni direzione (1,1s); sul bersaglio singolo rende poco, su un gruppo tantissimo.
+
+  Con un solo alleato il pulsante rimasto libero resta inattivo (non torna a scattare) finché non ne addomestichi un secondo. Con 2 alleati di tipo diverso hai entrambi gli attacchi utilizzabili in modo indipendente su pulsanti diversi; con 2 alleati dello stesso tipo i due condividono un solo pulsante in una versione potenziata (più danno, o un colpo/proiettile aggiuntivo). Se un alleato muore, il suo attacco sparisce (o torna alla versione base, se era potenziato).
 - Il controller è riconosciuto automaticamente (nessuna configurazione richiesta) e può essere usato insieme alla tastiera in qualsiasi momento.
 - **Menu e scelta dei potenziamenti**: navigabili anche da controller con lo stick/D-pad, confermando con il tasto A/Croce e tornando indietro con B/Cerchio. Ogni menu (Hub, scelta del potenziamento, archivio, bestiario, tutorial, fine run) mette a fuoco automaticamente l'opzione predefinita, cosí il pad ha sempre un punto di partenza da cui navigare. Archivio, Bestiario e Tutorial elencano più voci di quante ne stiano a schermo: qui lo stick sinistro/D-pad su/giù scorre direttamente la vista (niente da selezionare riga per riga), mentre B/Cerchio chiude il pannello in qualsiasi momento.
-- **Pausa**: `Esc` o il tasto Start/Opzioni del controller, in qualsiasi momento durante una run (tranne sopra un altro menu già aperto, come la scelta del potenziamento). Il menu di pausa offre tre opzioni, navigabili anch'esse da controller: **Riprendi** (torna esattamente da dove eri), **Riprova la run dall'inizio** (rigioca la stanza 1 di questa run con le statistiche che avevi quando l'hai iniziata, senza i potenziamenti presi nel frattempo) e **Torna all'Hub** (abbandona la run e interrompe la serie, come morire).
+- **Pausa**: `Esc` o il tasto Start/Opzioni del controller, in qualsiasi momento durante una run (tranne sopra un altro menu già aperto, come la scelta del potenziamento). Il menu di pausa offre quattro opzioni, navigabili anch'esse da controller: **Riprendi** (torna esattamente da dove eri), **Riprova la run dall'inizio** (rigioca la stanza 1 di questa run con le statistiche che avevi quando l'hai iniziata, senza i potenziamenti presi nel frattempo), **Impostazioni** (le stesse dell'Hub — volume, video, comandi — senza dover abbandonare la run) e **Torna all'Hub** (abbandona la run e interrompe la serie, come morire).
 
 ### Stanze e labirinto
 
@@ -61,7 +63,7 @@ Dall'Hub si raggiungono anche:
 
 Note:
 
-- Il gioco al momento non ha ancora effetti sonori né musica, quindi il cursore del volume agisce sul bus audio principale ma non c'è ancora nulla da sentire.
+- Il gioco ha un **sottofondo musicale durante le run** (`assets/audio/mines.mp3`, riprodotto in loop): parte quando inizia una run e si ferma tornando all'Hub, che resta silenzioso. Non ci sono ancora effetti sonori. Il cursore del volume agisce sul bus audio principale, quindi regola anche la musica.
 - Eseguendo il gioco **dentro l'editor di Godot** la finestra può essere gestita dall'editor stesso (nelle versioni che incorporano l'anteprima di gioco) e non lasciarsi ridimensionare dal gioco: in quel caso le Impostazioni lo dicono esplicitamente e la scelta resta salvata, valida al primo avvio del gioco da solo. Per provare davvero il cambio di risoluzione conviene lanciare l'eseguibile esportato, o disattivare l'anteprima incorporata nell'editor.
 
 ### Tutorial
@@ -81,6 +83,7 @@ godot --path .
 ```
 project.godot
 scenes/Main.tscn              # unica scena "fisica": tutto il resto è costruito da codice
+assets/audio/mines.mp3        # sottofondo musicale delle run (importato con il loop attivo)
 scripts/
   Main.gd                     # coordina Hub <-> Run
   core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice

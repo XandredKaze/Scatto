@@ -35,6 +35,11 @@ var listening_button: Button = null
 var _focus_chain: Array = []
 
 func _ready() -> void:
+	# Raggiungibile anche dal menu di pausa, cioè a simulazione ferma
+	# (get_tree().paused): senza PROCESS_MODE_ALWAYS questa schermata non
+	# riceverebbe più input e resterebbe bloccata, senza nemmeno poter
+	# essere chiusa.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
 	# Sfondo opaco a dimensione esplicita: con il solo anchor preset il

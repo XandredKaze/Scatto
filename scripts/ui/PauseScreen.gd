@@ -17,6 +17,10 @@ signal retry_pressed
 
 var run: Node = null
 var resume_btn: Button
+var retry_btn: Button
+var hub_btn: Button
+var settings_btn: Button
+var settings_panel: SettingsScreen
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -53,7 +57,7 @@ func _ready() -> void:
 	resume_btn.pressed.connect(_close)
 	vbox.add_child(resume_btn)
 
-	var retry_btn := Button.new()
+	retry_btn = Button.new()
 	retry_btn.text = "Riprova la run dall'inizio"
 	retry_btn.custom_minimum_size = Vector2(280, 48)
 	retry_btn.pressed.connect(func():
@@ -62,7 +66,13 @@ func _ready() -> void:
 	)
 	vbox.add_child(retry_btn)
 
-	var hub_btn := Button.new()
+	settings_btn = Button.new()
+	settings_btn.text = "Impostazioni"
+	settings_btn.custom_minimum_size = Vector2(280, 48)
+	settings_btn.pressed.connect(_open_settings)
+	vbox.add_child(settings_btn)
+
+	hub_btn = Button.new()
 	hub_btn.text = "Torna all'Hub"
 	hub_btn.custom_minimum_size = Vector2(280, 48)
 	hub_btn.pressed.connect(func():
@@ -71,7 +81,38 @@ func _ready() -> void:
 	)
 	vbox.add_child(hub_btn)
 
+# Le stesse Impostazioni dell'Hub, aperte sopra il menu di pausa. Mentre
+# sono aperte i pulsanti della pausa non devono restare selezionabili,
+# altrimenti il focus da controller potrebbe sconfinare sul menu coperto.
+func _open_settings() -> void:
+	if settings_panel == null:
+		settings_panel = SettingsScreen.new()
+		settings_panel.closed.connect(_close_settings)
+		add_child(settings_panel)
+	settings_panel.show()
+	_set_menu_focusable(false)
+	settings_panel.refresh()
+	settings_panel.focus_first_control()
+
+func _close_settings() -> void:
+	settings_panel.hide()
+	_set_menu_focusable(true)
+	resume_btn.grab_focus()
+
+func _set_menu_focusable(enabled: bool) -> void:
+	var mode: Control.FocusMode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
+	resume_btn.focus_mode = mode
+	retry_btn.focus_mode = mode
+	settings_btn.focus_mode = mode
+	hub_btn.focus_mode = mode
+
 func _process(_delta: float) -> void:
+	# Con le Impostazioni aperte sopra la pausa, Esc/Start servono a
+	# chiuderle (se ne occupa la schermata stessa) e non devono anche
+	# togliere la pausa. Vale anche mentre si sta riassegnando un tasto:
+	# lí Esc annulla l'assegnazione.
+	if settings_panel != null and settings_panel.visible:
+		return
 	if Input.is_action_just_pressed("pause"):
 		if visible:
 			_close()

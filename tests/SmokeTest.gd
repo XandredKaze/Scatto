@@ -38,6 +38,8 @@ func run_and_quit() -> void:
 	await _test_legendary_rarity_weighting()
 	await _test_ally_grants_special_attack()
 	await _test_dash_traded_for_ally_attacks()
+	await _test_run_music()
+	await _test_pause_menu_settings()
 	await _test_ally_catchup_speed()
 	await _test_hostiles_attack_allies()
 	await _test_boss_attacks_allies()
@@ -1018,6 +1020,83 @@ func _test_dash_traded_for_ally_attacks() -> void:
 
 	print("Scatto barattato con gli attacchi degli alleati: OK")
 	trade_run.queue_free()
+	await get_tree().process_frame
+
+func _test_run_music() -> void:
+	print("--- Test regressione: sottofondo musicale solo durante la run, in loop ---")
+	var music_run := Run.new()
+	add_child(music_run)
+	music_run.begin_new_streak()
+	await get_tree().process_frame
+
+	_assert(music_run.music_player != null, "la run dovrebbe avere un lettore per il sottofondo musicale")
+	_assert(music_run.music_player.stream != null, "il brano di sottofondo non è stato caricato")
+	_assert(music_run.music_player.stream is AudioStreamMP3, "il brano di sottofondo dovrebbe essere l'mp3 importato")
+	_assert(music_run.music_player.stream.loop, "il brano di sottofondo deve ripartire in loop, non finire a metà run")
+	_assert(music_run.music_player.playing, "il sottofondo dovrebbe partire con la run")
+	# Il lettore è figlio della run: tornando all'Hub la run viene liberata
+	# e la musica si ferma con lei, senza gestione esterna.
+	_assert(music_run.music_player.get_parent() == music_run, "il lettore deve essere figlio della run, cosí la musica finisce con essa")
+
+	music_run.queue_free()
+	await get_tree().process_frame
+
+	# Nell'Hub non deve esserci sottofondo.
+	var quiet_hub := Hub.new()
+	add_child(quiet_hub)
+	await get_tree().process_frame
+	var hub_players := 0
+	for c in quiet_hub.get_children():
+		if c is AudioStreamPlayer:
+			hub_players += 1
+	_assert(hub_players == 0, "l'Hub non dovrebbe avere sottofondo musicale")
+	quiet_hub.queue_free()
+	await get_tree().process_frame
+
+	print("Sottofondo musicale della run: OK")
+
+func _test_pause_menu_settings() -> void:
+	print("--- Test regressione: Impostazioni raggiungibili dal menu di pausa ---")
+	var pause_run := Run.new()
+	add_child(pause_run)
+	pause_run.begin_new_streak()
+	await get_tree().process_frame
+
+	var pause: PauseScreen = pause_run.pause_screen
+	pause._open()
+	await get_tree().process_frame
+	_assert(pause.visible and get_tree().paused, "setup del test: il menu di pausa dovrebbe essere aperto e il gioco in pausa")
+	_assert(pause.settings_btn != null and pause.settings_btn.text == "Impostazioni", "il menu di pausa dovrebbe avere una voce Impostazioni")
+
+	pause._open_settings()
+	await get_tree().process_frame
+	_assert(pause.settings_panel != null and pause.settings_panel.visible, "la voce Impostazioni non ha aperto la schermata")
+	# A gioco in pausa la schermata deve continuare a ricevere input,
+	# altrimenti resterebbe bloccata e nemmeno chiudibile.
+	_assert(pause.settings_panel.process_mode == Node.PROCESS_MODE_ALWAYS, "le Impostazioni aperte in pausa devono restare attive a simulazione ferma")
+	_assert(pause.resume_btn.focus_mode == Control.FOCUS_NONE, "con le Impostazioni aperte i pulsanti della pausa non devono essere selezionabili")
+	_assert(pause.hub_btn.focus_mode == Control.FOCUS_NONE, "anche 'Torna all'Hub' va disattivato mentre le Impostazioni sono aperte")
+	_assert(pause.settings_panel.volume_slider.has_focus(), "all'apertura il focus dovrebbe partire dal primo controllo delle Impostazioni")
+
+	# Le impostazioni cambiate dalla pausa valgono davvero.
+	pause.settings_panel.volume_slider.value = 0.35
+	await get_tree().process_frame
+	_assert(is_equal_approx(GameSettings.get_volume(), 0.35), "una modifica fatta dalla pausa dovrebbe essere applicata")
+	pause.settings_panel.volume_slider.value = 1.0
+
+	pause.settings_panel.closed.emit()
+	await get_tree().process_frame
+	_assert(not pause.settings_panel.visible, "chiudendo le Impostazioni il pannello dovrebbe sparire")
+	_assert(get_tree().paused, "chiudendo le Impostazioni il gioco deve restare in pausa, non riprendere")
+	_assert(pause.visible, "chiudendo le Impostazioni si deve tornare al menu di pausa")
+	_assert(pause.resume_btn.focus_mode == Control.FOCUS_ALL and pause.resume_btn.has_focus(), "chiuse le Impostazioni il focus torna al menu di pausa")
+
+	pause._close()
+	await get_tree().process_frame
+	_assert(not get_tree().paused, "il menu di pausa dovrebbe essersi chiuso correttamente")
+
+	print("Impostazioni nel menu di pausa: OK")
+	pause_run.queue_free()
 	await get_tree().process_frame
 
 func _test_ally_catchup_speed() -> void:

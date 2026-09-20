@@ -52,6 +52,16 @@ const SWARM_SPEED := 300.0
 const SWARM_DAMAGE := 12.0
 # Vita restituita dal potenziamento "Vincolo Vitale" alla caduta di un alleato.
 const VINCOLO_VITALE_HEAL := 30.0
+# Sottofondo musicale, in riproduzione solo durante una run: il lettore è
+# figlio di questo nodo, quindi tornando all'Hub (dove Run viene liberato)
+# la musica si interrompe da sola, senza doverla fermare a mano. Il brano
+# è importato con il loop attivo (assets/audio/mines.mp3.import), quindi
+# riparte da solo alla fine senza stacchi.
+const MUSIC_PATH := "res://assets/audio/mines.mp3"
+# Un po' sotto il volume pieno: è un sottofondo, non deve coprire il resto.
+# Il cursore del volume nelle Impostazioni agisce a monte, sul bus
+# principale, quindi continua a valere anche su questo.
+const MUSIC_VOLUME_DB := -6.0
 
 var player: Player
 var current_boss: Boss = null
@@ -74,6 +84,7 @@ var boss_container: Node2D
 var projectile_container: Node2D
 var effect_container: Node2D
 var arena_visual: ArenaVisual
+var music_player: AudioStreamPlayer
 var ui_layer: CanvasLayer
 var hud: HUD
 var powerup_choice_screen: PowerupChoiceScreen
@@ -105,6 +116,12 @@ func _build_scene_tree() -> void:
 	# cosí gli effetti degli attacchi speciali restano sempre ben visibili.
 	effect_container = Node2D.new()
 	add_child(effect_container)
+
+	music_player = AudioStreamPlayer.new()
+	music_player.stream = load(MUSIC_PATH)
+	music_player.volume_db = MUSIC_VOLUME_DB
+	add_child(music_player)
+	music_player.play()
 
 	ui_layer = CanvasLayer.new()
 	add_child(ui_layer)
