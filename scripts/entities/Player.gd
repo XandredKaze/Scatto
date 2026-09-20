@@ -33,7 +33,6 @@ const BASE_DASH_COOLDOWN := 0.55
 const HIT_IFRAME := 0.8
 const KNOCKBACK := 20.0
 const TAME_COOLDOWN := 14.0
-const SPECIAL_ATTACK_COOLDOWN := 6.0
 # I due soli pulsanti d'attacco del giocatore (E/R1 e Q/L1): un pulsante
 # per alleato vivo (fino a MAX_ALLIES = 2), cosí ogni attacco speciale
 # concesso resta utilizzabile in modo indipendente. Un pulsante senza
@@ -223,8 +222,11 @@ func dash_cooldown() -> float:
 func tame_cooldown() -> float:
 	return TAME_COOLDOWN * tame_cooldown_mult
 
-func special_attack_cooldown() -> float:
-	return SPECIAL_ATTACK_COOLDOWN * special_cooldown_mult
+# Il tempo di recupero è proprio dell'abilità, non uguale per tutte: un
+# dardo a distanza torna pronto quasi subito, un morso in corpo a corpo
+# molto più lentamente (vedi GameData.ALLY_SPECIAL_ATTACKS).
+func special_attack_cooldown(ability_id: String) -> float:
+	return float(GameData.ALLY_SPECIAL_ATTACKS[ability_id].cooldown) * special_cooldown_mult
 
 # Almeno un alleato vivo al seguito: basta guardare gli slot d'abilità,
 # che Run tiene sincronizzati con gli alleati vivi (_sync_granted_ability).
@@ -342,7 +344,7 @@ func _read_input_and_move(delta: float) -> void:
 		var ability_id: String = granted_ability_ids[slot]
 		if ability_id != "":
 			if can_use_special_attack(slot):
-				special_attack_cooldowns[ability_id] = special_attack_cooldown()
+				special_attack_cooldowns[ability_id] = special_attack_cooldown(ability_id)
 				special_attack_requested.emit(ability_id, global_position, facing, special_attack_empowered[slot])
 		elif can_dash():
 			start_dash(move.normalized() if move != Vector2.ZERO else facing)

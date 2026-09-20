@@ -33,17 +33,23 @@ const SHOCKWAVE_RATIO := 0.4
 const MAX_ALLIES := 2
 const TAME_RANGE := 180.0
 # Attacchi speciali concessi dagli alleati (vedi GameData.ALLY_SPECIAL_ATTACKS
-# e Player.granted_ability_ids/special_attack_requested).
+# e Player.granted_ability_ids/special_attack_requested). Il danno qui e il
+# tempo di recupero in GameData vanno letti insieme: sono le due metà del
+# ruolo di ogni attacco (corpo a corpo che picchia duro di rado, dardo
+# debole quasi a raffica, onda d'urto bilanciata ma su tutti i nemici
+# vicini). Con alleati al seguito questi attacchi sostituiscono del tutto
+# lo scatto, quindi il loro danno al secondo deve reggere il confronto con
+# quello dell'attacco base, non essere un extra occasionale.
 const LUNGE_OFFSET := 40.0
 const LUNGE_RADIUS := 50.0
-const LUNGE_DAMAGE := 18.0
+const LUNGE_DAMAGE := 45.0
 const DART_SPEED := 420.0
-const DART_DAMAGE := 14.0
+const DART_DAMAGE := 13.0
 const SLAM_RADIUS := 90.0
-const SLAM_DAMAGE := 16.0
+const SLAM_DAMAGE := 28.0
 const SWARM_COUNT := 6
 const SWARM_SPEED := 300.0
-const SWARM_DAMAGE := 6.0
+const SWARM_DAMAGE := 12.0
 # Vita restituita dal potenziamento "Vincolo Vitale" alla caduta di un alleato.
 const VINCOLO_VITALE_HEAL := 30.0
 

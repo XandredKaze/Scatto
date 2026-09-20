@@ -47,22 +47,34 @@ const ENEMY_TYPES := {
 # vivo occupa un proprio pulsante (fino a Run.MAX_ALLIES = 2); se i due
 # alleati vivi sono dello stesso tipo, condividono un solo pulsante in
 # versione "potenziata" (EMPOWERED_DAMAGE_MULT e affini qui sotto).
+# Il tempo di recupero ("cooldown", in secondi) è quello che caratterizza
+# il ritmo di ogni attacco, in coppia con il danno definito in Run.gd:
+#
+# - corpo a corpo (Morso Selvaggio): tanto danno, pochi colpi -> il
+#   recupero più lungo, ma un singolo colpo stende quasi ogni nemico comune;
+# - a distanza (Dardo Velenoso): poco danno, tanti colpi -> il recupero
+#   più breve di tutti, si tira quasi a raffica ma ogni dardo punge poco
+#   e può mancare il bersaglio;
+# - ad area (Colpo Corazzato): bilanciato -> danno e ritmo intermedi, ma
+#   colpisce tutti i nemici intorno invece di uno solo;
+# - a raffica circolare (Sciame Vendicativo): variante "a distanza" che
+#   sacrifica il danno del singolo proiettile per coprire ogni direzione.
 const ALLY_SPECIAL_ATTACKS := {
 	"strisciante": {
-		"name": "Morso Selvaggio", "icon": "sword",
-		"desc": "Un balzo che morde tutti i nemici davanti a te.",
+		"name": "Morso Selvaggio", "icon": "sword", "cooldown": 2.0,
+		"desc": "Un balzo che morde tutti i nemici davanti a te: tanto danno, colpi radi.",
 	},
 	"pungiglione": {
-		"name": "Dardo Velenoso", "icon": "arrow",
-		"desc": "Scaglia un dardo avvelenato nella direzione in cui guardi.",
+		"name": "Dardo Velenoso", "icon": "arrow", "cooldown": 0.5,
+		"desc": "Scaglia un dardo avvelenato nella direzione in cui guardi: poco danno, ma quasi a raffica.",
 	},
 	"corazzato": {
-		"name": "Colpo Corazzato", "icon": "shield",
-		"desc": "Un'onda d'urto che danneggia i nemici intorno a te.",
+		"name": "Colpo Corazzato", "icon": "shield", "cooldown": 1.5,
+		"desc": "Un'onda d'urto che danneggia tutti i nemici intorno a te: danno e ritmo bilanciati.",
 	},
 	"sciame": {
-		"name": "Sciame Vendicativo", "icon": "bolt",
-		"desc": "Una raffica di proiettili in tutte le direzioni intorno a te.",
+		"name": "Sciame Vendicativo", "icon": "bolt", "cooldown": 1.1,
+		"desc": "Una raffica di proiettili deboli in tutte le direzioni intorno a te.",
 	},
 }
 

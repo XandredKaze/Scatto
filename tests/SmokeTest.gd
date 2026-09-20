@@ -38,6 +38,7 @@ func run_and_quit() -> void:
 	await _test_legendary_rarity_weighting()
 	await _test_ally_grants_special_attack()
 	await _test_dash_traded_for_ally_attacks()
+	await _test_special_attack_pacing()
 	await _test_ally_powerups()
 	await _test_ally_special_attack_empowered_duplicate()
 	await _test_ally_special_attack_effects()
@@ -986,6 +987,59 @@ func _test_dash_traded_for_ally_attacks() -> void:
 	trade_run.queue_free()
 	await get_tree().process_frame
 
+func _test_special_attack_pacing() -> void:
+	print("--- Test bilanciamento: ritmo e danno di ogni tipo di attacco speciale ---")
+	var pace_run := Run.new()
+	add_child(pace_run)
+	pace_run.begin_new_streak()
+	await get_tree().process_frame
+
+	var p: Player = pace_run.player
+	var melee: float = p.special_attack_cooldown("strisciante")
+	var ranged: float = p.special_attack_cooldown("pungiglione")
+	var aoe: float = p.special_attack_cooldown("corazzato")
+	var burst: float = p.special_attack_cooldown("sciame")
+
+	# Ogni attacco deve tornare pronto molto più in fretta del vecchio
+	# recupero unico da 6 secondi, che li rendeva inutilizzabili come
+	# attacco principale.
+	for entry in GameData.ALLY_SPECIAL_ATTACKS.keys():
+		var cd: float = p.special_attack_cooldown(entry)
+		_assert(cd <= 2.5, "il recupero di %s è ancora troppo lungo (%.2fs)" % [entry, cd])
+
+	# I ruoli: a distanza il più rapido, corpo a corpo il più lento, area
+	# nel mezzo.
+	_assert(ranged < aoe, "l'attacco a distanza dovrebbe tornare pronto prima di quello ad area (%.2f vs %.2f)" % [ranged, aoe])
+	_assert(aoe < melee, "l'attacco ad area dovrebbe tornare pronto prima di quello in corpo a corpo (%.2f vs %.2f)" % [aoe, melee])
+	_assert(burst < aoe, "la raffica circolare è un attacco a distanza: dovrebbe essere più rapida di quello ad area (%.2f vs %.2f)" % [burst, aoe])
+
+	# Il danno segue il ruolo opposto: pochi colpi forti in mischia, tanti
+	# colpi deboli a distanza.
+	_assert(Run.LUNGE_DAMAGE > Run.SLAM_DAMAGE, "il morso in corpo a corpo dovrebbe fare più danno dell'onda d'urto")
+	_assert(Run.SLAM_DAMAGE > Run.DART_DAMAGE, "l'onda d'urto dovrebbe fare più danno del singolo dardo")
+	_assert(Run.SWARM_DAMAGE < Run.DART_DAMAGE, "i proiettili della raffica circolare dovrebbero essere i più deboli")
+
+	# Un colpo in corpo a corpo deve stendere un nemico comune di base: è
+	# il senso di "tanto danno, pochi colpi".
+	_assert(Run.LUNGE_DAMAGE >= float(GameData.ENEMY_TYPES["strisciante"].hp), "un Morso Selvaggio dovrebbe bastare a stendere uno Strisciante")
+
+	# Il danno al secondo di ogni attacco deve reggere il confronto con
+	# l'attacco base: senza scatto sono l'unica offesa rimasta.
+	var dash_dps: float = Player.BASE_DASH_DAMAGE / p.dash_cooldown()
+	var dps := {
+		"strisciante": Run.LUNGE_DAMAGE / melee,
+		"pungiglione": Run.DART_DAMAGE / ranged,
+		"corazzato": Run.SLAM_DAMAGE / aoe,
+		"sciame": Run.SWARM_DAMAGE / burst,
+	}
+	print("Danno al secondo (bersaglio singolo): scatto %.1f, %s" % [dash_dps, dps])
+	for ability_id in dps.keys():
+		_assert(dps[ability_id] >= dash_dps * 0.15, "%s resta troppo debole rispetto allo scatto (%.1f contro %.1f al secondo)" % [ability_id, dps[ability_id], dash_dps])
+
+	print("Ritmo e danno degli attacchi speciali: OK")
+	pace_run.queue_free()
+	await get_tree().process_frame
+
 func _test_ally_powerups() -> void:
 	print("--- Test regressione: i potenziamenti dedicati ad alleati e attacchi speciali ---")
 	var pw_run := Run.new()
@@ -1004,12 +1058,12 @@ func _test_ally_powerups() -> void:
 
 	var p: Player = pw_run.player
 	var base_tame: float = p.tame_cooldown()
-	var base_special: float = p.special_attack_cooldown()
+	var base_special: float = p.special_attack_cooldown("corazzato")
 
 	p.apply_powerup("richiamo_rapido")
 	_assert(p.tame_cooldown() < base_tame, "Richiamo Rapido dovrebbe ridurre il recupero dell'addomesticamento")
 	p.apply_powerup("eco_selvaggia")
-	_assert(p.special_attack_cooldown() < base_special, "Eco Selvaggia dovrebbe ridurre il recupero degli attacchi speciali")
+	_assert(p.special_attack_cooldown("corazzato") < base_special, "Eco Selvaggia dovrebbe ridurre il recupero degli attacchi speciali")
 
 	p.apply_powerup("passo_del_predatore")
 	var solo_speed: float = p.current_speed_mult()
@@ -1121,6 +1175,20 @@ func _test_ally_special_attack_empowered_duplicate() -> void:
 	dup_run.queue_free()
 	await get_tree().process_frame
 
+func _spawn_damage_dummy(container: Node, pos: Vector2) -> Enemy:
+	# Bersaglio "sacco da colpi": un nemico comune con una riserva di vita
+	# enorme. Serve per misurare il danno DAVVERO inflitto da un attacco:
+	# con la vita normale di un nemico comune un colpo forte la azzererebbe
+	# e la misura risulterebbe troncata, facendo sembrare uguali due
+	# attacchi di potenza diversa.
+	var dummy := Enemy.new()
+	dummy.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	dummy.max_hp = 100000.0
+	dummy.hp = dummy.max_hp
+	dummy.global_position = pos
+	container.add_child(dummy)
+	return dummy
+
 func _test_ally_special_attack_effects() -> void:
 	print("--- Test regressione: gli attacchi speciali degli alleati infliggono danno reale ---")
 	var fx_run := Run.new()
@@ -1142,10 +1210,7 @@ func _test_ally_special_attack_effects() -> void:
 	var dir := Vector2.RIGHT
 
 	# Morso Selvaggio (strisciante): mischia davanti al giocatore.
-	var lunge_target := Enemy.new()
-	lunge_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
-	lunge_target.global_position = player_pos + dir * fx_run.LUNGE_OFFSET
-	fx_run.enemy_container.add_child(lunge_target)
+	var lunge_target := _spawn_damage_dummy(fx_run.enemy_container, player_pos + dir * fx_run.LUNGE_OFFSET)
 	var lunge_hp_before: float = lunge_target.hp
 	fx_run._on_special_attack_requested("strisciante", player_pos, dir)
 	_assert(lunge_target.hp < lunge_hp_before, "Morso Selvaggio non ha danneggiato il nemico davanti al giocatore")
@@ -1155,10 +1220,7 @@ func _test_ally_special_attack_effects() -> void:
 
 	# Versione potenziata di Morso Selvaggio: stesso bersaglio/posizione,
 	# ma deve infliggere più danno (EMPOWERED_DAMAGE_MULT) della versione base.
-	var lunge_target_emp := Enemy.new()
-	lunge_target_emp.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
-	lunge_target_emp.global_position = player_pos + dir * fx_run.LUNGE_OFFSET
-	fx_run.enemy_container.add_child(lunge_target_emp)
+	var lunge_target_emp := _spawn_damage_dummy(fx_run.enemy_container, player_pos + dir * fx_run.LUNGE_OFFSET)
 	var lunge_hp_before_emp: float = lunge_target_emp.hp
 	fx_run._on_special_attack_requested("strisciante", player_pos, dir, true)
 	var lunge_dmg_emp: float = lunge_hp_before_emp - lunge_target_emp.hp
@@ -1167,10 +1229,7 @@ func _test_ally_special_attack_effects() -> void:
 	await get_tree().process_frame
 
 	# Colpo Corazzato (corazzato): danno ad area intorno al giocatore.
-	var slam_target := Enemy.new()
-	slam_target.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
-	slam_target.global_position = player_pos + Vector2(fx_run.SLAM_RADIUS - 10.0, 0.0)
-	fx_run.enemy_container.add_child(slam_target)
+	var slam_target := _spawn_damage_dummy(fx_run.enemy_container, player_pos + Vector2(fx_run.SLAM_RADIUS - 10.0, 0.0))
 	var slam_hp_before: float = slam_target.hp
 	fx_run._on_special_attack_requested("corazzato", player_pos, dir)
 	_assert(slam_target.hp < slam_hp_before, "Colpo Corazzato non ha danneggiato il nemico nei paraggi del giocatore")
@@ -1180,10 +1239,7 @@ func _test_ally_special_attack_effects() -> void:
 
 	# Versione potenziata di Colpo Corazzato: stesso danno base atteso più
 	# alto di EMPOWERED_DAMAGE_MULT rispetto alla versione normale.
-	var slam_target_emp := Enemy.new()
-	slam_target_emp.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
-	slam_target_emp.global_position = player_pos + Vector2(fx_run.SLAM_RADIUS - 10.0, 0.0)
-	fx_run.enemy_container.add_child(slam_target_emp)
+	var slam_target_emp := _spawn_damage_dummy(fx_run.enemy_container, player_pos + Vector2(fx_run.SLAM_RADIUS - 10.0, 0.0))
 	var slam_hp_before_emp: float = slam_target_emp.hp
 	fx_run._on_special_attack_requested("corazzato", player_pos, dir, true)
 	var slam_dmg_emp: float = slam_hp_before_emp - slam_target_emp.hp
