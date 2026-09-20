@@ -57,6 +57,7 @@ func run_and_quit() -> void:
 	await _test_arena_visual_geometry()
 	_test_creature_rim_colors()
 	_test_creature_shapes()
+	_test_boss_shapes()
 	await _test_flower_shoots_its_own_colour()
 	await _test_slime_body_trail()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
@@ -2634,3 +2635,43 @@ func _test_slime_body_trail() -> void:
 	slime.queue_free()
 	await get_tree().process_frame
 	print("Corpo della melma: OK")
+
+
+func _test_boss_shapes() -> void:
+	print("--- Test estetica: ogni boss ha la sagoma del proprio nome ---")
+	# Prima erano tutti e tre la stessa massa con tentacoli: un Custode
+	# non si distingueva da un Colosso. Ora la sagoma segue il nome, e
+	# la variante corrotta condivide quella del boss di base.
+	var expected := {
+		"custode": "custode", "custode_corrotto": "custode",
+		"colosso": "colosso", "colosso_corrotto": "colosso",
+		"spettro": "spettro", "spettro_corrotto": "spettro",
+	}
+	for boss_id in expected:
+		var boss := Boss.new()
+		boss.setup_from_data(GameData.BOSSES[boss_id])
+		_assert(
+			boss.shape == expected[boss_id],
+			"%s dovrebbe avere la sagoma '%s', invece ha '%s'" % [boss_id, expected[boss_id], boss.shape]
+		)
+		boss.free()
+
+	# Il bagliore è l'altra metà dell'identità: acciaio freddo per il
+	# guardiano, ambra da roccia calda per il colosso, luce funeraria per
+	# lo spettro. Se due archetipi finissero con lo stesso bagliore si
+	# riconfonderebbero, ed è proprio il difetto da cui si parte.
+	var glows := {}
+	for boss_id in GameData.BOSS_ARCHETYPES:
+		var data: Dictionary = GameData.BOSSES[boss_id]
+		_assert(data.has("glow"), "il boss %s non ha un bagliore proprio" % boss_id)
+		var key: String = str(data.glow)
+		_assert(not glows.has(key), "%s e %s condividono lo stesso bagliore" % [boss_id, glows.get(key, "")])
+		glows[key] = boss_id
+		# La variante corrotta si riconosce a distanza proprio perché il
+		# suo bagliore non è quello del boss normale.
+		var corrupted: Dictionary = GameData.BOSSES[boss_id + "_corrotto"]
+		_assert(
+			not corrupted.glow.is_equal_approx(data.glow),
+			"%s corrotto dovrebbe avere un bagliore diverso dal boss normale" % boss_id
+		)
+	print("Sagome e bagliori dei boss: OK")

@@ -47,6 +47,14 @@ Il giocatore è la figura incappucciata dal mantello cremisi: l'unica della scen
 
 La variante dorata eredita la sagoma della propria specie (lo Strisciante Dorato è una melma) ma in ambra, con l'anello d'oro attorno.
 
+**Anche i tre boss hanno l'aspetto del proprio nome**, sagoma e bagliore:
+
+- **Custode** — una sentinella corazzata: corpo ottagonale di piastre d'acciaio, spallacci, uno scudo tenuto verso la preda e una visiera accesa al posto degli occhi. Le rune che gli orbitano intorno sono le stesse che scaglia nella raffica circolare. Bagliore d'acciaio freddo.
+- **Colosso di Pietra** — nessuna curva: lastre squadrate e sbilenche, giunti profondi, due pugni enormi che oscillano ai lati e detriti sparsi alla base. Le crepe bruciano d'ambra, la roccia calda che ha dentro.
+- **Spettro Errante** — non tocca terra e non ha contorni netti: un cappuccio vuoto, un sudario sfrangiato che ondeggia, scie che si sfilacciano dietro e due occhi accesi di luce funeraria. È semitrasparente, così il pavimento si intravede attraverso.
+
+Le versioni corrotte condividono la sagoma del boss di base e se ne distinguono per il bagliore: cremisi per il Custode Corrotto, magma per il Colosso Corrotto, viola per lo Spettro Corrotto.
+
 La **sesta stanza** (il boss) è invece un'unica arena aperta, senza pareti interne, ma comunque più grande dello schermo: lo spazio per schivare gli attacchi del boss non è mai limitato al primo piano visibile.
 
 Non appena sconfiggi l'ultimo nemico ostile di una stanza, la ricompensa (la scelta del potenziamento) viene consegnata immediatamente: non serve raggiungere alcun punto della mappa per riscattarla. In quel momento resti fermo sul posto e ogni proiettile ancora in volo (nemico, alleato o del tuo ultimo attacco speciale) sparisce; riprendi il controllo non appena scegli il potenziamento e la stanza successiva (o la sala del boss) comincia. Lo stesso vale alla sconfitta del boss, sulla schermata di fine run.
