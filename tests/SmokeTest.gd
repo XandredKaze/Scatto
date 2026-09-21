@@ -12,7 +12,7 @@ extends Node
 var run: Run
 
 func run_and_quit() -> void:
-	print("=== SCATTO SMOKE TEST ===")
+	print("=== A.M.I.C. SMOKE TEST ===")
 
 	await _test_gamepad_input()
 	await _test_controller_menu_navigation()
@@ -68,6 +68,7 @@ func run_and_quit() -> void:
 	await _test_defeated_creatures_disappear()
 	await _test_title_screen()
 	_test_save_slots()
+	_test_legacy_user_dir_recovery()
 	await _test_save_slot_screen()
 	await _test_hub_change_slot_entry()
 	await _test_flower_shoots_its_own_colour()
@@ -3408,3 +3409,48 @@ func _test_title_screen() -> void:
 	fresh.queue_free()
 	await get_tree().process_frame
 	print("Schermata del titolo: OK")
+
+
+func _test_legacy_user_dir_recovery() -> void:
+	print("--- Test regressione: i salvataggi della vecchia cartella vengono recuperati ---")
+	# Rinominando il gioco cambia anche la cartella dei dati utente, e i
+	# salvataggi di chi già giocava resterebbero in quella vecchia,
+	# invisibili. Qui si verifica la regola che conta: si recupera solo
+	# ciò che nella cartella nuova non c'è già.
+	var base: String = OS.get_user_data_dir().path_join("test_recupero")
+	var legacy_dir: String = base.path_join("vecchia")
+	var current_dir: String = base.path_join("nuova")
+	DirAccess.make_dir_recursive_absolute(legacy_dir)
+	DirAccess.make_dir_recursive_absolute(current_dir)
+
+	_write_test_file(legacy_dir.path_join("scatto_save_1.json"), "{\"stats\":{\"runs_won\":7}}")
+	_write_test_file(legacy_dir.path_join("scatto_settings.json"), "{\"volume\":0.3}")
+	# Nella cartella nuova questo file esiste già: è più recente di
+	# quello vecchio e non va toccato.
+	_write_test_file(current_dir.path_join("scatto_settings.json"), "{\"volume\":0.9}")
+
+	var recovered: int = SaveManager.recover_saves_from(legacy_dir, current_dir)
+	_assert(recovered == 1, "avrebbe dovuto recuperare il solo salvataggio mancante, invece %d file" % recovered)
+	_assert(FileAccess.file_exists(current_dir.path_join("scatto_save_1.json")), "il salvataggio vecchio non è stato recuperato")
+	_assert(
+		FileAccess.get_file_as_string(current_dir.path_join("scatto_settings.json")) == "{\"volume\":0.9}",
+		"il recupero non deve sovrascrivere un file già presente nella cartella nuova"
+	)
+	# Una cartella che non esiste non è un errore: semplicemente non c'è
+	# niente da recuperare.
+	_assert(SaveManager.recover_saves_from(base.path_join("inesistente"), current_dir) == 0, "una cartella inesistente non dovrebbe recuperare nulla")
+
+	for file_name in SaveManager.MIGRATED_FILE_NAMES:
+		DirAccess.remove_absolute(legacy_dir.path_join(file_name))
+		DirAccess.remove_absolute(current_dir.path_join(file_name))
+	DirAccess.remove_absolute(legacy_dir)
+	DirAccess.remove_absolute(current_dir)
+	DirAccess.remove_absolute(base)
+	print("Recupero dalla vecchia cartella dati: OK")
+
+func _write_test_file(path: String, contents: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string(contents)
+	file.close()

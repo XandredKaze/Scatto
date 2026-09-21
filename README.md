@@ -1,10 +1,12 @@
-# Scatto
+# A.M.I.C.
 
 Un roguelike top-down realizzato in **Godot 4.3** costruito su una rinuncia: si parte con lo *scatto* come unico attacco — non esiste un tasto per colpire, bisogna scattare addosso agli avversari restando invulnerabili per la durata dello scatto — ma addomesticare un nemico lo sostituisce con gli attacchi speciali degli alleati.
 
 ## Schermata del titolo
 
 All'avvio si apre la classica schermata del titolo: il logo, il nome **A.M.I.C.** e l'invito lampeggiante a premere un tasto. "Un tasto qualsiasi" è da prendere alla lettera — tastiera, controller o mouse — e da lí si passa alla scelta del salvataggio. La si vede una volta sola, all'accensione: tornando all'Hub o cambiando salvataggio non ci si ripassa.
+
+Il gioco si chiamava **Scatto**, dal nome della sua meccanica. Rinominandolo, Godot cambia anche la cartella dei dati utente: i salvataggi di chi già giocava resterebbero in quella vecchia, invisibili. Alla prima esecuzione col nome nuovo vengono quindi recuperati da lí — copiati e non spostati, cosí la cartella di prima resta com'è come rete di sicurezza — e non si sovrascrive mai un file già presente in quella nuova. La parola *scatto* resta ovunque indichi la meccanica: a cambiare è solo il nome del gioco.
 
 Il logo (`assets/images/amic_logo.png`) è ritagliato: lo sfondo attorno al soggetto è trasparente e non nero, altrimenti sulla schermata comparirebbe un riquadro squadrato attorno al disegno.
 

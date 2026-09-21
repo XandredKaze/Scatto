@@ -17,6 +17,16 @@ const SETTINGS_PATH := "user://scatto_settings.json"
 # Alla prima esecuzione il suo contenuto viene travasato nello slot 1 e
 # nelle impostazioni globali, e il vecchio file rimosso.
 const LEGACY_SAVE_PATH := "user://scatto_save.json"
+# Il gioco si chiamava "Scatto": rinominandolo, Godot cambia anche la
+# cartella dei dati utente, e i salvataggi di chi già giocava
+# resterebbero in quella vecchia, invisibili. Alla prima esecuzione col
+# nome nuovo vengono portati qui. I file si copiano, non si spostano:
+# la cartella di prima resta com'è, come rete di sicurezza.
+const LEGACY_USER_DIR_NAME := "Scatto"
+const MIGRATED_FILE_NAMES := [
+	"scatto_save_1.json", "scatto_save_2.json", "scatto_save_3.json",
+	"scatto_settings.json", "scatto_save.json",
+]
 
 # Slot attualmente in uso (1..SLOT_COUNT). Parte da 1 come ripiego
 # prudente: cosí qualunque salvataggio che avvenisse prima della scelta
@@ -38,6 +48,7 @@ var stats: Dictionary = {
 }
 
 func _ready() -> void:
+	_migrate_legacy_user_dir()
 	load_settings()
 	_migrate_legacy_save()
 	use_slot(current_slot)
@@ -150,6 +161,35 @@ func _reset_progress() -> void:
 		"golden_defeated": 0,
 		"special_boss_defeated": 0,
 	}
+
+# Recupera i salvataggi rimasti nella cartella del vecchio nome del
+# gioco. Non serve sapere come si chiami quella nuova: basta che sia la
+# sorella di "Scatto" sotto lo stesso genitore, e questo vale su ogni
+# piattaforma, perché a cambiare è solo il nome del progetto.
+func _migrate_legacy_user_dir() -> void:
+	var current_dir: String = OS.get_user_data_dir()
+	var legacy_dir: String = current_dir.get_base_dir().path_join(LEGACY_USER_DIR_NAME)
+	if legacy_dir == current_dir:
+		return
+	recover_saves_from(legacy_dir, current_dir)
+
+# Copia i salvataggi da una cartella all'altra e dice quanti ne ha
+# portati. È una funzione a sé, e non due righe dentro la migrazione,
+# perché la regola che conta — non sovrascrivere mai quello che c'è già
+# — si possa verificare senza dover rinominare il gioco.
+func recover_saves_from(legacy_dir: String, current_dir: String) -> int:
+	if not DirAccess.dir_exists_absolute(legacy_dir):
+		return 0
+	var recovered := 0
+	for file_name in MIGRATED_FILE_NAMES:
+		var source: String = legacy_dir.path_join(file_name)
+		var destination: String = current_dir.path_join(file_name)
+		# Mai sovrascrivere: se qui c'è già qualcosa, è più recente di
+		# quello che si stava recuperando.
+		if FileAccess.file_exists(source) and not FileAccess.file_exists(destination):
+			if DirAccess.copy_absolute(source, destination) == OK:
+				recovered += 1
+	return recovered
 
 # Chi giocava prima degli slot non deve perdere niente: il vecchio
 # salvataggio unico diventa lo slot 1, le sue impostazioni diventano

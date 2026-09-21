@@ -6,7 +6,7 @@ config_version=5
 
 [application]
 
-config/name="Scatto"
+config/name="A.M.I.C."
 config/description="Un roguelike top-down in cui l'unico attacco è lo scatto contro i nemici."
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
