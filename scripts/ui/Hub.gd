@@ -6,6 +6,9 @@ extends Control
 # dal salvataggio persistente (SaveManager).
 
 signal start_run_requested
+# Torna alla scelta del salvataggio. Senza questa via d'uscita, scelto
+# uno slot lo si potrebbe cambiare solo riavviando il gioco.
+signal change_slot_requested
 
 var archive_panel: ArchiveScreen
 var bestiary_panel: BestiaryScreen
@@ -17,6 +20,7 @@ var tutorial_btn: Button
 var archive_btn: Button
 var bestiary_btn: Button
 var settings_btn: Button
+var slot_btn: Button
 var quit_btn: Button
 
 func _ready() -> void:
@@ -30,7 +34,7 @@ func _ready() -> void:
 	add_child(bg)
 
 	var vbox := VBoxContainer.new()
-	vbox.position = Vector2(490, 92)
+	vbox.position = Vector2(490, 64)
 	vbox.custom_minimum_size = Vector2(300, 0)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 10)
@@ -50,8 +54,8 @@ func _ready() -> void:
 	subtitle.modulate = Palette.BONE_DIM
 	vbox.add_child(subtitle)
 
-	# Promemoria dei comandi in alto, sopra le voci del menu: con sei voci
-	# in elenco non c'è più spazio per tenerlo in fondo.
+	# Promemoria dei comandi in alto, sopra le voci del menu: con sette
+	# voci in elenco non c'è più spazio per tenerlo in fondo.
 	var hint := Label.new()
 	hint.text = "WASD/Frecce per muoverti, E e Q (R1/L1) per attaccare"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -100,6 +104,12 @@ func _ready() -> void:
 	settings_btn.pressed.connect(_open_settings)
 	vbox.add_child(settings_btn)
 
+	slot_btn = Button.new()
+	slot_btn.text = "Cambia salvataggio"
+	slot_btn.custom_minimum_size = Vector2(260, 44)
+	slot_btn.pressed.connect(func(): change_slot_requested.emit())
+	vbox.add_child(slot_btn)
+
 	quit_btn = Button.new()
 	quit_btn.text = "Esci dal gioco"
 	quit_btn.custom_minimum_size = Vector2(260, 44)
@@ -111,8 +121,8 @@ func _ready() -> void:
 
 func _refresh_stats() -> void:
 	var s: Dictionary = SaveManager.stats
-	stats_label.text = "Run vinte: %d  •  Serie migliore: %d\nMorti: %d  •  Dorati sconfitti: %d" % [
-		s.runs_won, s.best_streak, s.deaths, s.golden_defeated
+	stats_label.text = "Slot %d  •  Run vinte: %d  •  Serie migliore: %d\nMorti: %d  •  Dorati sconfitti: %d" % [
+		SaveManager.current_slot, s.runs_won, s.best_streak, s.deaths, s.golden_defeated
 	]
 
 func _add_spacer(container: Control, h: int) -> void:
@@ -180,4 +190,5 @@ func _set_menu_focusable(enabled: bool) -> void:
 	archive_btn.focus_mode = mode
 	bestiary_btn.focus_mode = mode
 	settings_btn.focus_mode = mode
+	slot_btn.focus_mode = mode
 	quit_btn.focus_mode = mode

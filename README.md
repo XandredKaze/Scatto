@@ -2,6 +2,18 @@
 
 Un roguelike top-down realizzato in **Godot 4.3** costruito su una rinuncia: si parte con lo *scatto* come unico attacco — non esiste un tasto per colpire, bisogna scattare addosso agli avversari restando invulnerabili per la durata dello scatto — ma addomesticare un nemico lo sostituisce con gli attacchi speciali degli alleati.
 
+## Salvataggi
+
+All'avvio, **prima dell'Hub**, si sceglie su quale dei **tre slot** giocare. Ogni slot ha i propri progressi — archivio dei potenziamenti, bestiario, statistiche — completamente indipendenti dagli altri, e la riga di ciascuno riassume che cosa contiene prima di sceglierlo (run vinte, serie migliore, potenziamenti e creature scoperte) oppure dichiara che è vuoto.
+
+Ogni slot si può **svuotare** per ricominciare da capo. Siccome è un'azione distruttiva e irreversibile, chiede conferma: il pulsante diventa "Confermi?" e cancella solo alla seconda pressione. La conferma scade da sola dopo qualche secondo e si annulla toccando qualunque altra voce, perché un "sí" restato armato mentre si fa altro è il modo più facile per perdere una partita per sbaglio.
+
+Le **impostazioni** (volume, risoluzione, assegnazione dei tasti) sono invece **in comune a tutti i salvataggi** e stanno in un file a parte: sono preferenze di chi gioca, non progressi di una partita, e svuotare uno slot non deve costringere a rifarle.
+
+Dall'Hub si torna alla scelta con la voce **Cambia salvataggio**: senza, scelto uno slot lo si potrebbe cambiare solo riavviando il gioco.
+
+Chi giocava prima che gli slot esistessero non perde niente: al primo avvio il vecchio salvataggio unico viene travasato nello slot 1, e le sue impostazioni diventano quelle globali.
+
 ## Come si gioca
 
 - **Movimento**: `WASD`/frecce direzionali, oppure lo stick sinistro o il D-pad di un controller.
@@ -130,13 +142,13 @@ scripts/
   Main.gd                     # coordina Hub <-> Run
   core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice
   core/MazeGrid.gd            # labirinto procedurale: generazione, collisione, pathfinding
-  autoload/SaveManager.gd     # persistenza (archivio, bestiario, statistiche) su user://
+  autoload/SaveManager.gd     # persistenza su user://: tre slot di progressi + impostazioni in comune
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   data/Palette.gd             # linguaggio cromatico unico del gioco + tema dell'interfaccia
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
   core/GameSettings.gd        # impostazioni (audio, video, assegnazione tasti): applicazione e persistenza
-  ui/                         # Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Vignette, HudSigil
+  ui/                         # scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Vignette, HudSigil
 tests/SmokeTest.gd            # test end-to-end eseguibile in headless (vedi sotto)
 ```
 

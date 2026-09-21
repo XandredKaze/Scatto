@@ -20,7 +20,18 @@ func _ready() -> void:
 		add_child(tester)
 		tester.run_and_quit()
 	else:
-		_show_hub()
+		_show_slot_select()
+
+# Prima dell'Hub si sceglie su quale dei tre salvataggi giocare: da lí
+# in poi ogni progresso registrato finisce in quello slot.
+func _show_slot_select() -> void:
+	get_tree().paused = false
+	_clear_world()
+	var slots := SaveSlotScreen.new()
+	Palette.apply_theme(slots)
+	slots.slot_chosen.connect(func(_slot): _show_hub())
+	world.add_child(slots)
+	current_screen = slots
 
 func _show_hub() -> void:
 	# Rete di sicurezza: qualunque cosa abbia lasciato l'albero in pausa
@@ -32,6 +43,7 @@ func _show_hub() -> void:
 	# predefinito di Godot, grigio e fuori posto.
 	Palette.apply_theme(hub)
 	hub.start_run_requested.connect(_on_start_run_requested)
+	hub.change_slot_requested.connect(_show_slot_select)
 	world.add_child(hub)
 	current_screen = hub
 

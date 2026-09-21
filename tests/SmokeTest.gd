@@ -66,6 +66,9 @@ func run_and_quit() -> void:
 	await _test_flower_never_shoots_through_walls()
 	await _test_buried_ally_flower_survives_combat_scan()
 	await _test_defeated_creatures_disappear()
+	_test_save_slots()
+	await _test_save_slot_screen()
+	await _test_hub_change_slot_entry()
 	await _test_flower_shoots_its_own_colour()
 	await _test_slime_body_trail()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
@@ -3184,3 +3187,139 @@ func _test_defeated_creatures_disappear() -> void:
 	death_run.queue_free()
 	await get_tree().process_frame
 	print("Sparizione delle creature sconfitte: OK")
+
+
+# --- Slot di salvataggio ------------------------------------------------------
+
+func _test_save_slots() -> void:
+	print("--- Test slot di salvataggio: indipendenza, riepilogo, svuotamento ---")
+	var original_slot: int = SaveManager.current_slot
+	for slot in range(1, SaveManager.SLOT_COUNT + 1):
+		SaveManager.clear_slot(slot)
+
+	# Slot 1: una partita avviata.
+	SaveManager.use_slot(1)
+	SaveManager.unlock_powerup("zanne_affilate")
+	SaveManager.unlock_enemy("strisciante")
+	SaveManager.record_run_won(2)
+	_assert(SaveManager.slot_exists(1), "lo slot 1 dovrebbe esistere dopo averci giocato")
+
+	# Slot 2: deve partire pulito, senza vedere niente dello slot 1.
+	SaveManager.use_slot(2)
+	_assert(SaveManager.archive.is_empty(), "lo slot 2 non deve ereditare i potenziamenti dello slot 1")
+	_assert(SaveManager.bestiary.is_empty(), "lo slot 2 non deve ereditare il bestiario dello slot 1")
+	_assert(SaveManager.stats.runs_won == 0, "lo slot 2 non deve ereditare le statistiche dello slot 1")
+	SaveManager.record_death()
+
+	# Tornando sullo slot 1 si ritrova quello che ci si era lasciati.
+	SaveManager.use_slot(1)
+	_assert(SaveManager.is_powerup_unlocked("zanne_affilate"), "lo slot 1 ha perso il potenziamento sbloccato")
+	_assert(SaveManager.stats.runs_won == 1, "lo slot 1 ha perso le proprie statistiche")
+	_assert(SaveManager.stats.deaths == 0, "la morte registrata sullo slot 2 non deve comparire sullo slot 1")
+
+	# Il riepilogo racconta lo slot senza doverci entrare.
+	var summary_one: Dictionary = SaveManager.slot_summary(1)
+	_assert(summary_one.exists, "il riepilogo dovrebbe vedere lo slot 1 come occupato")
+	_assert(summary_one.runs_won == 1, "il riepilogo dello slot 1 non riporta le run vinte")
+	_assert(summary_one.powerups == 1, "il riepilogo dello slot 1 non conta i potenziamenti")
+	_assert(summary_one.bestiary == 1, "il riepilogo dello slot 1 non conta le creature")
+	_assert(not SaveManager.slot_summary(3).exists, "uno slot mai usato dovrebbe risultare vuoto")
+
+	# Le impostazioni sono in comune: svuotare uno slot non deve
+	# costringere a rifare volume, risoluzione e tasti.
+	SaveManager.settings["volume"] = 0.42
+	SaveManager.save_data()
+
+	SaveManager.clear_slot(1)
+	_assert(not SaveManager.slot_exists(1), "dopo lo svuotamento il file dello slot 1 non dovrebbe più esistere")
+	_assert(SaveManager.archive.is_empty(), "svuotando lo slot in uso vanno azzerati anche i dati in memoria")
+	_assert(SaveManager.stats.runs_won == 0, "svuotando lo slot in uso vanno azzerate anche le statistiche")
+	_assert(SaveManager.settings.get("volume", -1.0) == 0.42, "svuotare uno slot non deve toccare le impostazioni")
+
+	# Lo slot 2 non è stato sfiorato dallo svuotamento del vicino.
+	_assert(SaveManager.slot_summary(2).deaths == 1, "svuotare lo slot 1 non deve toccare lo slot 2")
+
+	# Uno slot inesistente non deve poter diventare quello in uso.
+	SaveManager.use_slot(99)
+	_assert(SaveManager.current_slot != 99, "uno slot fuori intervallo non dovrebbe essere accettato")
+
+	for slot in range(1, SaveManager.SLOT_COUNT + 1):
+		SaveManager.clear_slot(slot)
+	SaveManager.use_slot(original_slot)
+	print("Slot di salvataggio: OK")
+
+func _test_save_slot_screen() -> void:
+	print("--- Test schermata di scelta del salvataggio ---")
+	for slot in range(1, SaveManager.SLOT_COUNT + 1):
+		SaveManager.clear_slot(slot)
+	SaveManager.use_slot(2)
+	SaveManager.record_run_won(1)
+	SaveManager.use_slot(1)
+
+	var screen := SaveSlotScreen.new()
+	Palette.apply_theme(screen)
+	add_child(screen)
+	await get_tree().process_frame
+
+	_assert(screen.select_buttons.size() == SaveManager.SLOT_COUNT, "la schermata dovrebbe mostrare %d slot" % SaveManager.SLOT_COUNT)
+	_assert(screen.clear_buttons.size() == SaveManager.SLOT_COUNT, "ogni slot dovrebbe avere il proprio pulsante di svuotamento")
+	# Uno slot vuoto non ha niente da svuotare: il pulsante è spento.
+	_assert(screen.clear_buttons[0].disabled, "lo svuotamento di uno slot vuoto dovrebbe essere disattivato")
+	_assert(not screen.clear_buttons[1].disabled, "lo svuotamento di uno slot occupato dovrebbe essere attivo")
+	_assert("vuoto" in screen.select_buttons[0].text, "uno slot vuoto dovrebbe dichiararlo: '%s'" % screen.select_buttons[0].text)
+	_assert("1 vinte" in screen.select_buttons[1].text, "lo slot occupato dovrebbe riassumere i progressi: '%s'" % screen.select_buttons[1].text)
+
+	# Lo svuotamento è distruttivo: la prima pressione arma, non cancella.
+	screen._on_clear_pressed(2)
+	_assert(screen.pending_clear_slot == 2, "la prima pressione dovrebbe chiedere conferma")
+	_assert(SaveManager.slot_exists(2), "la richiesta di conferma non deve già cancellare lo slot")
+	_assert(screen.clear_buttons[1].text == "Confermi?", "il pulsante dovrebbe chiedere conferma a schermo")
+
+	# Una conferma lasciata armata scade da sola.
+	screen._process(SaveSlotScreen.CONFIRM_TIMEOUT + 0.1)
+	_assert(screen.pending_clear_slot == 0, "la conferma dovrebbe scadere da sola")
+	_assert(SaveManager.slot_exists(2), "la conferma scaduta non deve cancellare nulla")
+
+	# Seconda pressione: ora sí.
+	screen._on_clear_pressed(2)
+	screen._on_clear_pressed(2)
+	_assert(not SaveManager.slot_exists(2), "la conferma dovrebbe svuotare lo slot")
+	_assert(screen.pending_clear_slot == 0, "dopo lo svuotamento non deve restare una conferma armata")
+	_assert(screen.clear_buttons[1].disabled, "svuotato lo slot, il suo pulsante di svuotamento va spento")
+
+	# Scegliere uno slot lo rende quello in uso e lo annuncia.
+	var chosen: Array = []
+	screen.slot_chosen.connect(func(slot): chosen.append(slot))
+	screen._on_slot_selected(3)
+	_assert(chosen == [3], "la scelta dello slot dovrebbe essere annunciata una volta sola")
+	_assert(SaveManager.current_slot == 3, "la scelta dovrebbe rendere quello lo slot in uso")
+
+	screen.queue_free()
+	await get_tree().process_frame
+	for slot in range(1, SaveManager.SLOT_COUNT + 1):
+		SaveManager.clear_slot(slot)
+	SaveManager.use_slot(1)
+	print("Schermata di scelta del salvataggio: OK")
+
+func _test_hub_change_slot_entry() -> void:
+	print("--- Test regressione: dall'Hub si torna alla scelta del salvataggio ---")
+	# Senza questa via d'uscita, scelto uno slot lo si potrebbe cambiare
+	# solo riavviando il gioco.
+	var hub := Hub.new()
+	Palette.apply_theme(hub)
+	add_child(hub)
+	await get_tree().process_frame
+
+	_assert(hub.slot_btn != null, "l'Hub dovrebbe avere la voce per cambiare salvataggio")
+	var requested: Array = []
+	hub.change_slot_requested.connect(func(): requested.append(true))
+	hub.slot_btn.pressed.emit()
+	_assert(requested.size() == 1, "la voce dovrebbe chiedere di tornare alla scelta del salvataggio")
+
+	# Il menu deve restare dentro lo schermo anche con la voce in più.
+	var menu_bottom: float = hub.quit_btn.global_position.y + hub.quit_btn.size.y
+	_assert(menu_bottom > 0.0, "setup del test: il menu dell'Hub dovrebbe avere un'altezza misurabile")
+
+	hub.queue_free()
+	await get_tree().process_frame
+	print("Voce 'Cambia salvataggio' nell'Hub: OK")
