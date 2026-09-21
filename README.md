@@ -72,6 +72,17 @@ Non appena sconfiggi l'ultimo nemico ostile di una stanza, la ricompensa (la sce
 - Morire in qualsiasi momento interrompe la serie e riporta all'Hub.
 - Ogni boss speciale sconfitto **almeno una volta** (in qualsiasi run precedente, non solo quella corrente) sblocca per sempre il suo potenziamento leggendario nel pool delle scelte casuali di fine stanza: da quel momento in poi può ricomparire anche senza dover sconfiggere di nuovo quel boss, oltre a restare comunque un bottino garantito la prima volta. Le scelte di fine stanza sono estratte con un peso per rarità (comune > raro > leggendario), cosí un leggendario resta un colpo di fortuna occasionale invece di comparire alla pari degli altri.
 
+### Come attaccano i nemici
+
+Ogni specie ha il proprio modo di arrivare a colpire, non solo il proprio aspetto. Sono quattro schemi distinti, e ognuno lascia al giocatore una finestra diversa per reagire:
+
+- **Strisciante** — ti insegue, ma raggiunta la preda **si ferma a un soffio da lei**, arretra la testa, spalanca le fauci e affonda il morso; poi si prende un attimo e torna a inseguire. Si ferma appena fuori dal contatto, quindi il morso è il suo vero attacco — e quell'attimo di immobilità è il momento buono per colpirlo.
+- **Pungiglione** — **non insegue nessuno**: vive abbarbicato alle pareti, spara il suo dardo e subito dopo **sprofonda nel pavimento per rispuntare poco più in là**, sempre contro un muro e sempre dentro la stanza. Mentre è sotto terra non è colpibile, ma sono frazioni di secondo: il momento per colpirlo è appena rispunta, prima che il dardo parta.
+- **Corazzato** — colpisce come prima, ma **non cammina più: avanza a balzi**, e ogni atterraggio scarica a terra una piccola onda d'urto che prende chi gli sta intorno. Stargli lontano non basta più del tutto.
+- **Sciame** — a tiro della preda **si ferma a caricare per un secondo e mezzo**, puntandola con un mirino che si allunga mentre le ali impazziscono, poi si lancia in picchiata come uno scatto. La carica è lunga apposta: è ciò che rende l'attacco schivabile invece che inevitabile.
+
+Gli schemi valgono anche quando la creatura combatte come tua alleata, rivolti contro gli ostili. L'unica eccezione è il Pungiglione: da alleato usa lo sprofondamento anche per starti dietro (rispunta vicino a te quando è rimasto indietro), perché un fiore inchiodato a una parete in fondo al labirinto sarebbe un alleato perso.
+
 ### Nemico dorato
 
 Lo **Strisciante** (il nemico comune di base) ha una rarissima **variante dorata**: ogni stanza generata ha **1 probabilità su 4096** di far comparire lo Strisciante Dorato, molto più forte del normale e con un bottino leggendario garantito.

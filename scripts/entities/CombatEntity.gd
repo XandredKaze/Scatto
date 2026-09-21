@@ -25,6 +25,11 @@ var color := Color(0.5, 0.68, 0.34)
 # quasi nera su una pietra quasi nera, ed è anche l'unico segnale di
 # schieramento (cremisi = ostile, acciaio = alleato, oro = dorato).
 var rim_color: Color = Palette.RIM_HOSTILE
+# Scostamento del corpo rispetto al punto in cui la creatura si trova
+# davvero. Serve a chi si stacca da terra (il salto del Corazzato):
+# l'ombra resta al suolo mentre il corpo sale, cosí il salto si vede.
+# La collisione non ne risente: è puro disegno.
+var body_offset := Vector2.ZERO
 
 var hp := 0.0
 var alive := true
@@ -117,10 +122,14 @@ func _process(delta: float) -> void:
 # specie resta riconoscibile, ma cupo: a dare la lettura immediata sono
 # la silhouette e il bordo illuminato, non il riempimento.
 func _draw() -> void:
-	_draw_ground_shadow()
+	# L'ombra resta dove la creatura poggia davvero; tutto il resto segue
+	# body_offset, cosí un corpo in aria si stacca dalla propria ombra.
+	var lift: float = -body_offset.y
+	_draw_ground_shadow(1.0 - clamp(lift / (radius * 6.0), 0.0, 0.4))
 	var body: Color = color.lerp(Palette.VOID, 0.55)
 	if hit_flash > 0.0:
 		body = Palette.BONE
+	draw_set_transform(body_offset, 0.0, Vector2.ONE)
 	# Alone: la creatura sembra emettere la propria poca luce.
 	draw_circle(Vector2.ZERO, radius + 6.0, Palette.with_alpha(rim_color, 0.07))
 	draw_circle(Vector2.ZERO, radius, body)
@@ -129,12 +138,13 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, radius - 1.0, 0.0, TAU, 28, Palette.with_alpha(rim_color, 0.5), 1.5, true)
 	_draw_pale_face()
 	_draw_hp_bar()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # Ombra schiacciata a terra: stacca la creatura dal pavimento e le dà
 # peso, come nelle scene isometriche di riferimento.
-func _draw_ground_shadow() -> void:
+func _draw_ground_shadow(scale_factor: float = 1.0) -> void:
 	draw_set_transform(Vector2(0.0, radius * 0.62), 0.0, Vector2(1.0, 0.42))
-	draw_circle(Vector2.ZERO, radius * 1.15, Palette.SHADOW)
+	draw_circle(Vector2.ZERO, radius * 1.15 * scale_factor, Palette.SHADOW)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # Il volto pallido: la macchia chiara che, nel riferimento, è l'unica

@@ -15,6 +15,10 @@ extends CombatEntity
 
 signal spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool, color: Color)
 signal ally_kill(defeated: Node)
+# Onda d'urto scaricata a terra dal Corazzato a ogni atterraggio. La
+# gestisce Run (che sa chi è amico e chi nemico), come già fa per il
+# colpo al suolo del boss.
+signal shockwave(origin: Vector2, radius: float, dmg: float, from_ally: bool)
 
 var enemy_id := "strisciante"
 var display_name := "Strisciante"
@@ -47,6 +51,65 @@ var base_max_hp := 30.0
 var base_damage := 8.0
 
 var attack_timer := 0.0
+
+# --- Schema d'attacco ---------------------------------------------------------
+#
+# Ogni specie ha il proprio modo di arrivare a colpire, non solo il
+# proprio aspetto. Lo schema è una piccola macchina a stati condivisa:
+# _update_attack_pattern() la fa avanzare e risponde al chiamante che
+# cosa fare del movimento in questo fotogramma — "avanza" (muoviti
+# normalmente), "fermo" (resta dove sei) o "scatta" (lanciati in
+# charge_dir). È cosí che lo stesso schema vale sia quando la creatura è
+# ostile sia quando combatte come alleato, senza scriverlo due volte.
+var attack_pattern := "nessuno"
+var attack_state := "avanza"
+var attack_state_timer := 0.0
+var charge_dir := Vector2.RIGHT
+
+# Morso (Strisciante): si ferma a un soffio dalla preda, affonda il
+# colpo, poi riprende a inseguirla.
+const BITE_WINDUP := 0.3
+const BITE_STRIKE := 0.12
+const BITE_RECOVER := 0.45
+const BITE_REACH_BONUS := 6.0
+
+# Carica (Sciame): a tiro si ferma, punta la preda e si lancia.
+const SWARM_CHARGE_RANGE := 240.0
+const SWARM_CHARGE_TIME := 1.5
+const SWARM_DASH_TIME := 0.32
+const SWARM_DASH_SPEED := 520.0
+const SWARM_RECOVER := 0.7
+
+# Salto (Corazzato): avanza a balzi e a ogni atterraggio scarica a terra
+# un'onda d'urto. Il moltiplicatore di velocità in aria compensa i tempi
+# fermi, cosí l'andatura media resta quella di prima.
+const HOP_CROUCH := 0.22
+const HOP_AIR := 0.4
+const HOP_LAND := 0.3
+const HOP_SPEED_MULT := 2.3
+const HOP_HEIGHT := 16.0
+const HOP_SHOCKWAVE_RADIUS := 54.0
+const HOP_SHOCKWAVE_DAMAGE_RATIO := 0.35
+
+# Agguato (Pungiglione): non insegue, vive attaccato alle pareti e tra un
+# dardo e l'altro sprofonda nel pavimento per rispuntare poco più in là.
+const BURROW_SINK := 0.3
+const BURROW_HIDDEN := 0.25
+const BURROW_RISE := 0.3
+const BURROW_MIN_DISTANCE := 70.0
+const BURROW_MAX_DISTANCE := 180.0
+# Quanto vicino a una parete deve rispuntare. Il punto scelto deve
+# starci senza compenetrare il muro ma avercelo a ridosso.
+const WALL_HUG_DISTANCE := 34.0
+const BURROW_ATTEMPTS := 40
+const BURROW_ANCHOR_RETRIES := 30
+var burrow_target := Vector2.ZERO
+var _anchored_to_wall := false
+var _anchor_attempts := 0
+# Durata residua del lampo dell'onda d'urto appena scaricata: puro
+# disegno, non tocca il colpo (già inflitto al momento dell'atterraggio).
+var _land_flash := 0.0
+
 var arena_bounds: Rect2 = Rect2()
 var maze: MazeGrid = null
 var current_path: PackedVector2Array = PackedVector2Array()
@@ -93,6 +156,7 @@ func setup_from_data(data: Dictionary, golden: bool) -> void:
 	attack_cooldown = data.get("attack_cooldown", 1.4)
 	projectile_speed = data.get("projectile_speed", 260.0)
 	shape = data.get("shape", "brute")
+	attack_pattern = data.get("attack_pattern", "nessuno")
 	guaranteed_drop = data.get("guaranteed_drop", "")
 	is_golden = golden
 	base_max_hp = max_hp
@@ -128,6 +192,8 @@ func _process(delta: float) -> void:
 	if moved.length() > 0.6:
 		heading = heading.lerp(moved.normalized(), 0.3).normalized()
 	_previous_position = global_position
+	if _land_flash > 0.0:
+		_land_flash -= delta
 	if shape == "slime":
 		_update_body_trail()
 
@@ -162,8 +228,13 @@ func _physics_process_direct(delta: float, target: Node) -> void:
 	var dir: Vector2 = to_player.normalized() if to_player.length() > 0.001 else Vector2.ZERO
 	match behavior:
 		"chase":
-			global_position += dir * speed * delta
+			if _apply_pattern_action(_update_attack_pattern(delta, target), delta):
+				return
+			global_position += dir * current_move_speed() * delta
 		"ranged":
+			if attack_pattern == "agguato":
+				_pattern_agguato(delta, target, false, global_position)
+				return
 			var d := to_player.length()
 			if d < keep_distance - 15.0:
 				global_position -= dir * speed * delta
@@ -187,8 +258,13 @@ func _physics_process_maze(delta: float, target: Node) -> void:
 
 	match behavior:
 		"chase":
+			if _apply_pattern_action(_update_attack_pattern(delta, target), delta):
+				return
 			_move_along_path(delta, target)
 		"ranged":
+			if attack_pattern == "agguato":
+				_pattern_agguato(delta, target, false, global_position)
+				return
 			if straight_dist > keep_distance + 15.0:
 				_move_along_path(delta, target)
 			attack_timer -= delta
@@ -208,7 +284,7 @@ func _move_along_path(delta: float, target: Node) -> void:
 		var to_player: Vector2 = target.global_position - global_position
 		if to_player.length() > 0.001:
 			var dir: Vector2 = to_player.normalized()
-			global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
+			global_position = maze.resolve_move(global_position, dir * current_move_speed() * delta, radius)
 		return
 	if path_target_index >= current_path.size():
 		path_target_index = current_path.size() - 1
@@ -220,6 +296,272 @@ func _move_along_path(delta: float, target: Node) -> void:
 		to_target = waypoint - global_position
 	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
 	global_position = maze.resolve_move(global_position, dir * speed * delta, radius)
+
+
+# --- Schemi d'attacco ---------------------------------------------------------
+
+# Fa avanzare la macchina a stati e risponde che cosa fare del movimento
+# in questo fotogramma: "avanza", "fermo" o "scatta". Vale sia per una
+# creatura ostile sia per un alleato: cambia solo chi è il bersaglio.
+func _update_attack_pattern(delta: float, target: Node) -> String:
+	match attack_pattern:
+		"morso":
+			return _pattern_morso(delta, target)
+		"carica":
+			return _pattern_carica(delta, target)
+		"salto":
+			return _pattern_salto(delta)
+	return "avanza"
+
+# Distanza alla quale questa creatura considera la preda "a portata di
+# morso": i due corpi quasi a contatto, senza compenetrarsi.
+func melee_reach(target: Node) -> float:
+	var target_radius: float = target.radius if target != null and "radius" in target else 0.0
+	return radius + target_radius + BITE_REACH_BONUS
+
+# Velocità di questo fotogramma: il Corazzato in aria va più forte, cosí
+# i tempi fermi del balzo non lo rendono più lento di prima.
+func current_move_speed() -> float:
+	if attack_pattern == "salto" and attack_state == "salto":
+		return speed * HOP_SPEED_MULT
+	return speed
+
+func _start_attack_state(next_state: String, duration: float) -> void:
+	attack_state = next_state
+	attack_state_timer = duration
+
+# Strisciante: raggiunta la preda si ferma, arretra la testa, affonda il
+# morso e si prende un attimo prima di tornare a inseguirla.
+func _pattern_morso(delta: float, target: Node) -> String:
+	attack_state_timer -= delta
+	match attack_state:
+		"carica":
+			_face(target)
+			if attack_state_timer <= 0.0:
+				_start_attack_state("colpisce", BITE_STRIKE)
+				_strike_melee(target)
+			return "fermo"
+		"colpisce":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("recupero", BITE_RECOVER)
+			return "fermo"
+		"recupero":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("avanza", 0.0)
+			return "fermo"
+	if target != null and global_position.distance_to(target.global_position) <= melee_reach(target):
+		_face(target)
+		_start_attack_state("carica", BITE_WINDUP)
+		return "fermo"
+	return "avanza"
+
+# Sciame: a tiro si ferma a caricare per SWARM_CHARGE_TIME puntando la
+# preda, poi si lancia. La carica è lunga apposta: è il preavviso che
+# rende l'attacco schivabile invece che inevitabile.
+func _pattern_carica(delta: float, target: Node) -> String:
+	attack_state_timer -= delta
+	match attack_state:
+		"carica":
+			# Continua a puntare fino all'ultimo istante: la direzione
+			# dello scatto è quella dell'attimo in cui parte.
+			if target != null:
+				var to_target: Vector2 = target.global_position - global_position
+				if to_target.length() > 0.001:
+					charge_dir = to_target.normalized()
+					heading = charge_dir
+			if attack_state_timer <= 0.0:
+				_start_attack_state("scatto", SWARM_DASH_TIME)
+			return "fermo"
+		"scatto":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("recupero", SWARM_RECOVER)
+				return "fermo"
+			return "scatta"
+		"recupero":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("avanza", 0.0)
+			return "avanza"
+	if target != null and global_position.distance_to(target.global_position) <= SWARM_CHARGE_RANGE:
+		_start_attack_state("carica", SWARM_CHARGE_TIME)
+		return "fermo"
+	return "avanza"
+
+# Corazzato: non cammina, avanza a balzi. Si raccoglie, salta (ed è solo
+# in aria che si sposta), e atterrando scarica a terra un'onda d'urto.
+func _pattern_salto(delta: float) -> String:
+	attack_state_timer -= delta
+	match attack_state:
+		"salto":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("atterra", HOP_LAND)
+				_land_flash = 0.3
+				shockwave.emit(global_position, HOP_SHOCKWAVE_RADIUS, damage * HOP_SHOCKWAVE_DAMAGE_RATIO, is_ally)
+				return "fermo"
+			return "avanza"
+		"atterra":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("carica", HOP_CROUCH)
+			return "fermo"
+	if attack_state != "carica":
+		_start_attack_state("carica", HOP_CROUCH)
+	if attack_state_timer <= 0.0:
+		_start_attack_state("salto", HOP_AIR)
+	return "fermo"
+
+# Quanto il Corazzato è staccato da terra in questo istante (0 a terra).
+func hop_height() -> float:
+	if attack_pattern != "salto" or attack_state != "salto":
+		return 0.0
+	var t: float = 1.0 - clamp(attack_state_timer / HOP_AIR, 0.0, 1.0)
+	# Parabola: sale, culmina a metà volo e ricade.
+	return HOP_HEIGHT * 4.0 * t * (1.0 - t)
+
+func _face(target: Node) -> void:
+	if target == null:
+		return
+	var to_target: Vector2 = target.global_position - global_position
+	if to_target.length() > 0.001:
+		heading = to_target.normalized()
+
+# Il morso: a differenza del danno da contatto — che è il bersaglio a
+# rilevare — qui è la creatura a colpire, perché si ferma appena fuori
+# dalla sovrapposizione e nessun contatto avverrebbe mai.
+func _strike_melee(target: Node) -> void:
+	if target == null or not is_instance_valid(target) or not target.alive:
+		return
+	if global_position.distance_to(target.global_position) > melee_reach(target) + 12.0:
+		return
+	var was_alive: bool = target.alive
+	target.take_damage(damage)
+	if is_ally and was_alive and not target.alive:
+		ally_kill.emit(target)
+
+# Movimento dello scatto dello Sciame: ignora il percorso nel labirinto
+# (si lancia in linea retta) ma non le pareti, contro cui si ferma.
+func _move_charge(delta: float) -> void:
+	var step: Vector2 = charge_dir * SWARM_DASH_SPEED * delta
+	if maze != null:
+		global_position = maze.resolve_move(global_position, step, radius)
+	else:
+		global_position += step
+		_clamp_to_arena()
+
+# Applica al movimento ciò che lo schema d'attacco ha deciso. Restituisce
+# true se il movimento è già stato gestito qui (fermo o scatto) e il
+# chiamante non deve muovere la creatura.
+func _apply_pattern_action(action: String, delta: float) -> bool:
+	if action == "scatta":
+		_move_charge(delta)
+		return true
+	return action == "fermo"
+
+# --- Agguato del Pungiglione --------------------------------------------------
+
+# Non insegue e non indietreggia: resta abbarbicato alla parete, spara, e
+# subito dopo sprofonda per rispuntare poco più in là. Mentre è sotto il
+# pavimento non è raggiungibile — è sotto terra — ma sono frazioni di
+# secondo.
+func _pattern_agguato(delta: float, target: Node, from_ally: bool, anchor: Vector2) -> void:
+	attack_state_timer -= delta
+	match attack_state:
+		"sparisce":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("sepolto", BURROW_HIDDEN)
+				_set_targetable(false)
+				global_position = burrow_target
+			return
+		"sepolto":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("riemerge", BURROW_RISE)
+			return
+		"riemerge":
+			if attack_state_timer <= 0.0:
+				_start_attack_state("avanza", 0.0)
+				_set_targetable(true)
+			return
+
+	if not _anchored_to_wall:
+		# Appena nato può trovarsi in mezzo al corridoio: si attacca
+		# subito a una parete, senza animazione. Se il primo tentativo
+		# non trova un appiglio valido riprova al fotogramma dopo invece
+		# di rassegnarsi: restare in mezzo al corridoio sarebbe proprio
+		# il difetto da evitare.
+		var spot: Vector2 = _pick_burrow_spot(global_position, 0.0, BURROW_MAX_DISTANCE)
+		_anchor_attempts += 1
+		if spot != global_position:
+			global_position = spot
+			_anchored_to_wall = true
+		elif _is_wall_hug_spot(global_position) or _anchor_attempts >= BURROW_ANCHOR_RETRIES:
+			# O è già a ridosso di una parete, o in questa stanza non ne
+			# esiste una raggiungibile: dopo qualche tentativo smette di
+			# cercarne una ad ogni fotogramma e si accontenta.
+			_anchored_to_wall = true
+
+	attack_timer -= delta
+	if attack_timer > 0.0 or target == null:
+		return
+	attack_timer = attack_cooldown
+	var to_target: Vector2 = target.global_position - global_position
+	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.RIGHT
+	heading = dir
+	spawn_projectile.emit(global_position, dir, projectile_speed, damage, from_ally, color)
+
+	burrow_target = _pick_burrow_spot(anchor, BURROW_MIN_DISTANCE, BURROW_MAX_DISTANCE)
+	if burrow_target != global_position:
+		_start_attack_state("sparisce", BURROW_SINK)
+
+func _set_targetable(value: bool) -> void:
+	monitorable = value
+	monitoring = value
+
+# Quanto il fiore è emerso dal pavimento: 1 in superficie, 0 sepolto.
+func burrow_scale() -> float:
+	if attack_pattern != "agguato":
+		return 1.0
+	match attack_state:
+		"sparisce":
+			return clamp(attack_state_timer / BURROW_SINK, 0.0, 1.0)
+		"sepolto":
+			return 0.0
+		"riemerge":
+			return 1.0 - clamp(attack_state_timer / BURROW_RISE, 0.0, 1.0)
+	return 1.0
+
+func is_burrowed() -> bool:
+	return attack_pattern == "agguato" and attack_state == "sepolto"
+
+# Un punto dove rispuntare: dentro la mappa, largo abbastanza da
+# contenere il fiore, e con una parete a ridosso. Se non ne trova uno
+# valido resta dov'è: meglio fermo che incastrato in un muro.
+func _pick_burrow_spot(around: Vector2, min_distance: float, max_distance: float) -> Vector2:
+	for i in range(BURROW_ATTEMPTS):
+		var angle: float = randf() * TAU
+		var distance: float = lerp(min_distance, max_distance, randf())
+		var candidate: Vector2 = around + Vector2.RIGHT.rotated(angle) * distance
+		if _is_wall_hug_spot(candidate):
+			return candidate
+	return global_position
+
+func _is_wall_hug_spot(pos: Vector2) -> bool:
+	if maze != null:
+		if not maze.total_bounds().has_point(pos):
+			return false
+		# Ci deve stare senza compenetrare la parete...
+		if not maze.is_position_free(pos, radius + 2.0):
+			return false
+		# ...ma deve avercene una a ridosso: il fiore vive attaccato al muro.
+		return not maze.is_position_free(pos, radius + WALL_HUG_DISTANCE)
+	if arena_bounds.size.x <= 0.0 or arena_bounds.size.y <= 0.0:
+		return false
+	var inner: Rect2 = arena_bounds.grow(-radius)
+	if not inner.has_point(pos):
+		return false
+	# Nell'arena aperta del boss la parete è il bordo della stanza.
+	var edge_distance: float = min(
+		min(pos.x - inner.position.x, inner.end.x - pos.x),
+		min(pos.y - inner.position.y, inner.end.y - pos.y)
+	)
+	return edge_distance <= WALL_HUG_DISTANCE
 
 # --- Comportamento da alleato -------------------------------------------------
 
@@ -240,11 +582,20 @@ func _physics_process_ally(delta: float, player: Node) -> void:
 
 func _ally_behavior_chase(delta: float, player: Node, hostile: Node) -> void:
 	if hostile != null:
-		_ally_move_toward(delta, hostile.global_position, radius + hostile.radius - 4.0, speed)
+		# Stesso schema d'attacco che aveva da nemico, solo rivolto
+		# contro gli ostili: morde, balza o si lancia come prima.
+		if _apply_pattern_action(_update_attack_pattern(delta, hostile), delta):
+			return
+		_ally_move_toward(delta, hostile.global_position, melee_reach(hostile), current_move_speed())
 		return
+	# Tornando dal giocatore lo schema non c'entra: si limita a seguirlo.
+	_start_attack_state("avanza", 0.0)
 	_ally_move_toward(delta, player.global_position, ALLY_FOLLOW_DISTANCE, ally_follow_speed(player.global_position))
 
 func _ally_behavior_ranged(delta: float, player: Node, hostile: Node) -> void:
+	if attack_pattern == "agguato":
+		_ally_behavior_agguato(delta, player, hostile)
+		return
 	if hostile == null:
 		_ally_move_toward(delta, player.global_position, ALLY_FOLLOW_DISTANCE, ally_follow_speed(player.global_position))
 		return
@@ -259,6 +610,24 @@ func _ally_behavior_ranged(delta: float, player: Node, hostile: Node) -> void:
 		var to_target: Vector2 = hostile.global_position - global_position
 		var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
 		spawn_projectile.emit(global_position, dir, projectile_speed, damage, true, color)
+
+# Il Pungiglione alleato non cammina neppure da alleato: si sposta
+# sprofondando e rispuntando. Se è rimasto indietro rispunta vicino al
+# giocatore invece che vicino a dove era, altrimenti resterebbe
+# abbarbicato a una parete in fondo al labirinto mentre la run prosegue.
+func _ally_behavior_agguato(delta: float, player: Node, hostile: Node) -> void:
+	var too_far: bool = global_position.distance_to(player.global_position) > ALLY_FOLLOW_DISTANCE * 1.6
+	var anchor: Vector2 = player.global_position if too_far else global_position
+	if hostile != null:
+		_pattern_agguato(delta, hostile, true, anchor)
+		return
+	# Nessun nemico in vista: non spara, ma continua a spostarsi per
+	# restare al passo col giocatore.
+	if too_far and attack_state == "avanza":
+		burrow_target = _pick_burrow_spot(player.global_position, 0.0, ALLY_FOLLOW_DISTANCE)
+		if burrow_target != global_position:
+			_start_attack_state("sparisce", BURROW_SINK)
+	_pattern_agguato(delta, null, true, anchor)
 
 # Velocità con cui questo alleato torna verso `dest_pos` (la posizione del
 # giocatore): la sua andatura normale fino a ALLY_CATCHUP_START, poi
@@ -397,9 +766,26 @@ func _draw() -> void:
 		"flower":
 			_draw_flower()
 		_:
+			# Il balzo alza il corpo (e i suoi arti) lasciando l'ombra a
+			# terra; il lampo è l'onda d'urto appena scaricata.
+			body_offset = Vector2(0.0, -hop_height())
+			_draw_landing_shockwave()
+			draw_set_transform(body_offset, 0.0, Vector2.ONE)
 			_draw_limbs()
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			super._draw()
 	_draw_allegiance_badges()
+
+# Anello che si allarga e sfuma sul punto d'atterraggio: è il segno
+# dell'onda d'urto, il cui colpo è già stato inflitto da Run.
+func _draw_landing_shockwave() -> void:
+	if _land_flash <= 0.0:
+		return
+	var t: float = 1.0 - clamp(_land_flash / 0.3, 0.0, 1.0)
+	var ring_radius: float = lerp(radius * 0.6, HOP_SHOCKWAVE_RADIUS, t)
+	var fade: float = 1.0 - t
+	draw_arc(Vector2.ZERO, ring_radius, 0.0, TAU, 32, Palette.with_alpha(Palette.STONE_EDGE, fade * 0.9), 3.0, true)
+	draw_circle(Vector2.ZERO, ring_radius, Palette.with_alpha(Palette.STONE, fade * 0.12))
 
 # Contrassegni che valgono per tutte le sagome: l'anello dorato della
 # variante rara e il marchio del legame sopra la testa degli alleati.
@@ -466,6 +852,7 @@ func _draw_slime() -> void:
 
 	# Testa: riflesso umido e due occhi pallidi, gli unici punti chiari
 	# di una creatura per il resto completamente nera.
+	_draw_bite_jaws(body)
 	var across_head := Vector2(-heading.y, heading.x)
 	draw_circle(-heading * radius * 0.2 - across_head * radius * 0.3, radius * 0.26, Palette.with_alpha(Palette.STEEL, 0.22))
 	var eye_forward: Vector2 = heading * radius * 0.3
@@ -473,6 +860,44 @@ func _draw_slime() -> void:
 	draw_circle(eye_forward + eye_side, radius * 0.17, Palette.BONE)
 	draw_circle(eye_forward - eye_side, radius * 0.17, Palette.BONE)
 	_draw_hp_bar()
+
+# L'animazione del morso: la melma arretra la testa mentre si carica,
+# spalanca le fauci, poi scatta in avanti richiudendole. Sono due archi e
+# uno scostamento, ma bastano a far capire che cosa sta per succedere —
+# che è il punto: l'attacco deve essere leggibile prima di arrivare.
+func _draw_bite_jaws(body: Color) -> void:
+	if attack_pattern != "morso" or attack_state == "avanza":
+		return
+	var reach: float = radius * (1.0 + 0.55 * _bite_phase())
+	var gape: float = _bite_gape()
+	var mouth: Vector2 = heading * reach
+	for side in [-1.0, 1.0]:
+		var jaw_angle: float = heading.angle() + side * (0.12 + 0.75 * gape)
+		var jaw_tip: Vector2 = mouth + Vector2.RIGHT.rotated(jaw_angle) * radius * 0.75
+		draw_line(mouth, jaw_tip, body.lerp(Palette.VOID, 0.4), 4.0)
+		draw_circle(jaw_tip, radius * 0.1, Palette.BONE_DIM)
+	# Gola: il rosso che si intravede quando le fauci sono aperte.
+	draw_circle(mouth, radius * 0.3 * gape, Palette.with_alpha(Palette.BLOOD, 0.75))
+
+# -1 testa completamente arretrata, +1 affondo pieno.
+func _bite_phase() -> float:
+	match attack_state:
+		"carica":
+			return -(1.0 - clamp(attack_state_timer / BITE_WINDUP, 0.0, 1.0))
+		"colpisce":
+			return lerp(1.0, 0.3, 1.0 - clamp(attack_state_timer / BITE_STRIKE, 0.0, 1.0))
+		"recupero":
+			return lerp(0.3, 0.0, 1.0 - clamp(attack_state_timer / BITE_RECOVER, 0.0, 1.0))
+	return 0.0
+
+# 0 fauci chiuse, 1 spalancate.
+func _bite_gape() -> float:
+	match attack_state:
+		"carica":
+			return 1.0 - clamp(attack_state_timer / BITE_WINDUP, 0.0, 1.0)
+		"colpisce":
+			return clamp(attack_state_timer / BITE_STRIKE, 0.0, 1.0)
+	return 0.0
 
 # --- Sciame: insetto volante --------------------------------------------------
 
@@ -496,9 +921,11 @@ func _draw_insect() -> void:
 	# corpo, ali e mandibole seguono da soli la direzione di volo.
 	draw_set_transform(Vector2(0.0, hover), heading.angle(), Vector2.ONE)
 
-	# Ali: due coppie portate all'indietro, come quelle di un calabrone
-	# in volo. Il battito si rende schiacciandone l'apertura.
-	var beat: float = 0.4 + 0.6 * abs(sin(phase * 11.0))
+	# In carica il battito impazzisce: è il preavviso che l'insetto sta
+	# per lanciarsi, e insieme al mirino disegnato sotto rende lo scatto
+	# schivabile invece che inevitabile.
+	var wing_rate: float = 20.0 if attack_state == "carica" else 11.0
+	var beat: float = 0.4 + 0.6 * abs(sin(phase * wing_rate))
 	for side in [-1.0, 1.0]:
 		for pair in range(2):
 			var span: float = r * (2.0 - 0.5 * float(pair))
@@ -539,13 +966,40 @@ func _draw_insect() -> void:
 
 	draw_arc(Vector2(r * 0.1, 0.0), r * 0.52, 0.0, TAU, 20, Palette.with_alpha(rim_color, 0.4), 1.0, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_charge_telegraph()
 	_draw_hp_bar()
+
+# Mirino della carica: una linea che si allunga verso la preda man mano
+# che l'insetto finisce di caricare. Quando tocca il fondo, parte.
+func _draw_charge_telegraph() -> void:
+	if attack_pattern != "carica" or attack_state != "carica":
+		return
+	var progress: float = 1.0 - clamp(attack_state_timer / SWARM_CHARGE_TIME, 0.0, 1.0)
+	var length: float = radius * 2.0 + radius * 7.0 * progress
+	var tip: Vector2 = charge_dir * length
+	draw_line(charge_dir * radius * 1.4, tip, Palette.with_alpha(rim_color, 0.25 + 0.5 * progress), 2.0)
+	draw_circle(tip, radius * 0.22 * (0.4 + progress), Palette.with_alpha(rim_color, 0.5 + 0.4 * progress))
+	# Anello che si stringe attorno all'insetto: il conto alla rovescia.
+	draw_arc(Vector2.ZERO, radius * (2.2 - 1.1 * progress), 0.0, TAU, 28, Palette.with_alpha(rim_color, 0.3 + 0.4 * progress), 1.5, true)
 
 # --- Pungiglione: fiore carnivoro rosso e bianco ------------------------------
 
 const FLOWER_PETALS := 8
 
 func _draw_flower() -> void:
+	# Il buco nel pavimento resta visibile mentre il fiore sprofonda e
+	# mentre rispunta: è l'indizio che dice al giocatore dove guardare.
+	var emerged: float = burrow_scale()
+	if emerged < 1.0:
+		draw_set_transform(Vector2(0.0, radius * 0.5), 0.0, Vector2(1.0, 0.45))
+		draw_circle(Vector2.ZERO, radius * 1.25, Palette.VOID)
+		draw_arc(Vector2.ZERO, radius * 1.25, 0.0, TAU, 28, Palette.with_alpha(Palette.BLOOD_DEEP, 0.8), 2.0, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if emerged <= 0.01:
+		return
+	# Sprofondando il fiore si rimpicciolisce e scende dentro il buco.
+	draw_set_transform(Vector2(0.0, radius * 0.5 * (1.0 - emerged)), 0.0, Vector2(emerged, emerged))
+
 	_draw_ground_shadow()
 	var phase: float = _animation_phase(1.0)
 	# Il fiore respira: i petali si aprono e si chiudono piano.
@@ -582,6 +1036,7 @@ func _draw_flower() -> void:
 		var tip: Vector2 = Vector2.RIGHT.rotated(stem_angle) * radius * 0.9
 		draw_line(Vector2.ZERO, tip, Palette.with_alpha(Palette.POLLEN, 0.75), 1.5)
 		draw_circle(tip, radius * 0.11, Palette.POLLEN)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_hp_bar()
 
 # Cremisi se ostile, acciaio freddo se alleato, oro se dorato. È una

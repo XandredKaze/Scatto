@@ -249,6 +249,7 @@ func _generate_room(n: int) -> void:
 		enemy.setup_from_data(spawn.data, spawn.golden)
 		enemy.global_position = spawn.position
 		enemy.spawn_projectile.connect(_on_enemy_spawn_projectile)
+		enemy.shockwave.connect(_on_enemy_shockwave)
 		enemy_container.add_child(enemy)
 		if spawn.golden:
 			has_golden = true
@@ -694,7 +695,22 @@ func _on_boss_summon_requested(enemy_type_id: String, count: int, origin: Vector
 		enemy.setup_from_data(data, false)
 		enemy.global_position = pos
 		enemy.spawn_projectile.connect(_on_enemy_spawn_projectile)
+		enemy.shockwave.connect(_on_enemy_shockwave)
 		enemy_container.add_child(enemy)
+
+# L'onda d'urto che il Corazzato scarica a terra atterrando. Chi la
+# subisce dipende da chi l'ha generata: da nemico prende giocatore e
+# alleati, da alleato prende gli ostili.
+func _on_enemy_shockwave(origin: Vector2, radius: float, dmg: float, from_ally: bool) -> void:
+	_spawn_special_effect(SpecialAttackEffect.Kind.RING, Palette.STONE_EDGE, radius, 0.28, origin)
+	if from_ally:
+		_damage_hostiles_in_radius(origin, radius, dmg)
+		return
+	if player != null and player.alive and player.global_position.distance_to(origin) <= radius:
+		player.take_damage(dmg)
+	for a in allies:
+		if is_instance_valid(a) and a.alive and a.global_position.distance_to(origin) <= radius:
+			a.take_damage(dmg)
 
 func _on_enemy_spawn_projectile(pos: Vector2, dir: Vector2, speed: float, dmg: float, is_ally_projectile: bool = false, color: Color = Color8(224, 102, 63)) -> void:
 	var proj := EnemyProjectile.new()

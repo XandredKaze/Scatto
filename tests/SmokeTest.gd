@@ -58,6 +58,10 @@ func run_and_quit() -> void:
 	_test_creature_rim_colors()
 	_test_creature_shapes()
 	_test_boss_shapes()
+	await _test_bite_pattern()
+	await _test_swarm_charge_pattern()
+	await _test_hop_shockwave_pattern()
+	await _test_burrow_pattern()
 	await _test_flower_shoots_its_own_colour()
 	await _test_slime_body_trail()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
@@ -2093,7 +2097,16 @@ func _test_maze_integration() -> void:
 	# linea d'aria non è monotona nel breve periodo. Si verifica invece
 	# che la distanza sul GRAFO del percorso (numero di celle da
 	# attraversare) diminuisca, e che la posizione sia cambiata davvero.
-	var target_enemy = maze_run.enemy_container.get_child(0)
+	# L'inseguitore va messo apposta e non pescato tra quelli della
+	# stanza: la stanza 1 può essere composta di soli Pungiglioni, che
+	# non inseguono più nessuno (vivono attaccati alle pareti e si
+	# spostano sprofondando), e il test diventerebbe incostante.
+	var target_enemy := Enemy.new()
+	target_enemy.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	target_enemy.maze = maze_run.current_maze
+	maze_run.enemy_container.add_child(target_enemy)
+	target_enemy.global_position = maze_run.enemy_container.get_child(0).global_position
+	await get_tree().process_frame
 	var pos_before: Vector2 = target_enemy.global_position
 	var path_len_before: int = maze_run.current_maze.get_path(pos_before, maze_run.player.global_position).size()
 	for i in range(180):
@@ -2675,3 +2688,235 @@ func _test_boss_shapes() -> void:
 			"%s corrotto dovrebbe avere un bagliore diverso dal boss normale" % boss_id
 		)
 	print("Sagome e bagliori dei boss: OK")
+
+
+# --- Schemi d'attacco delle creature ------------------------------------------
+
+func _test_bite_pattern() -> void:
+	print("--- Test schema: lo Strisciante si ferma e morde ---")
+	var bite_run := Run.new()
+	add_child(bite_run)
+	bite_run.begin_new_streak()
+	await get_tree().process_frame
+	for existing in bite_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	bite_run.current_maze = null
+	bite_run.player.maze = null
+
+	var slime := Enemy.new()
+	slime.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	slime.maze = null
+	slime.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	bite_run.enemy_container.add_child(slime)
+	# Esattamente a portata di morso: i due corpi NON si sovrappongono,
+	# quindi qualunque danno subito può venire solo dal morso e non dal
+	# contatto, che è la cosa che questo test deve distinguere.
+	var reach: float = slime.melee_reach(bite_run.player)
+	slime.global_position = bite_run.player.global_position + Vector2(reach, 0.0)
+	_assert(reach > slime.radius + bite_run.player.radius, "setup del test: a portata di morso i corpi non devono toccarsi")
+
+	var hp_before: float = bite_run.player.hp
+	var saw_windup := false
+	var saw_strike := false
+	var moved_closer_than_reach := false
+	for i in range(120):
+		await get_tree().physics_frame
+		if slime.attack_state == "carica":
+			saw_windup = true
+		if slime.attack_state == "colpisce":
+			saw_strike = true
+		if slime.global_position.distance_to(bite_run.player.global_position) < slime.radius + bite_run.player.radius:
+			moved_closer_than_reach = true
+
+	_assert(saw_windup, "lo Strisciante dovrebbe fermarsi a caricare il morso")
+	_assert(saw_strike, "lo Strisciante dovrebbe portare il morso dopo la carica")
+	_assert(not moved_closer_than_reach, "lo Strisciante non dovrebbe entrare addosso alla preda: si ferma a distanza di morso")
+	_assert(bite_run.player.hp < hp_before, "il morso dovrebbe togliere vita al giocatore")
+	# Dopo il morso torna a inseguire invece di restare inchiodato lí.
+	var cycled := false
+	for i in range(120):
+		await get_tree().physics_frame
+		if slime.attack_state == "avanza":
+			cycled = true
+			break
+	_assert(cycled, "dopo il morso lo Strisciante dovrebbe tornare a inseguire")
+
+	bite_run.queue_free()
+	await get_tree().process_frame
+	print("Morso dello Strisciante: OK")
+
+func _test_swarm_charge_pattern() -> void:
+	print("--- Test schema: lo Sciame carica e si lancia ---")
+	var swarm_run := Run.new()
+	add_child(swarm_run)
+	swarm_run.begin_new_streak()
+	await get_tree().process_frame
+	for existing in swarm_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	swarm_run.current_maze = null
+	swarm_run.player.maze = null
+	swarm_run.player.frozen = true
+
+	var insect := Enemy.new()
+	insect.setup_from_data(GameData.ENEMY_TYPES["sciame"], false)
+	insect.maze = null
+	insect.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	swarm_run.enemy_container.add_child(insect)
+	insect.global_position = swarm_run.player.global_position + Vector2(200.0, 0.0)
+
+	# Entra in carica quasi subito: è già dentro SWARM_CHARGE_RANGE.
+	var charging := false
+	for i in range(30):
+		await get_tree().physics_frame
+		if insect.attack_state == "carica":
+			charging = true
+			break
+	_assert(charging, "a tiro lo Sciame dovrebbe mettersi a caricare")
+
+	# Durante la carica resta praticamente fermo: è il momento in cui lo
+	# si può colpire, e non deve trasformarsi in un avvicinamento.
+	var charge_start: Vector2 = insect.global_position
+	var frames_charging := 0
+	while insect.attack_state == "carica" and frames_charging < 200:
+		await get_tree().physics_frame
+		frames_charging += 1
+	var charge_seconds: float = float(frames_charging) / float(Engine.physics_ticks_per_second)
+	_assert(
+		absf(charge_seconds - Enemy.SWARM_CHARGE_TIME) < 0.25,
+		"la carica dovrebbe durare circa %.1fs, è durata %.2fs" % [Enemy.SWARM_CHARGE_TIME, charge_seconds]
+	)
+	_assert(
+		charge_start.distance_to(insect.global_position) < 12.0,
+		"durante la carica lo Sciame dovrebbe restare fermo (spostato di %.1f px)" % charge_start.distance_to(insect.global_position)
+	)
+	_assert(insect.attack_state == "scatto", "finita la carica lo Sciame dovrebbe lanciarsi")
+
+	# Lo scatto lo porta verso il bersaglio, e ben più veloce del suo passo.
+	var dash_start: Vector2 = insect.global_position
+	var dash_frames := 0
+	while insect.attack_state == "scatto" and dash_frames < 60:
+		await get_tree().physics_frame
+		dash_frames += 1
+	var travelled: float = dash_start.distance_to(insect.global_position)
+	var walked: float = insect.speed * float(dash_frames) / float(Engine.physics_ticks_per_second)
+	_assert(travelled > walked, "lo scatto dovrebbe coprire più strada del passo normale (%.1f contro %.1f px)" % [travelled, walked])
+	_assert(
+		insect.global_position.distance_to(swarm_run.player.global_position) < dash_start.distance_to(swarm_run.player.global_position),
+		"lo scatto dovrebbe portare lo Sciame verso la preda"
+	)
+
+	swarm_run.queue_free()
+	await get_tree().process_frame
+	print("Carica dello Sciame: OK")
+
+func _test_hop_shockwave_pattern() -> void:
+	print("--- Test schema: il Corazzato avanza a balzi con onda d'urto ---")
+	var hop_run := Run.new()
+	add_child(hop_run)
+	hop_run.begin_new_streak()
+	await get_tree().process_frame
+	for existing in hop_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	hop_run.current_maze = null
+	hop_run.player.maze = null
+
+	var brute := Enemy.new()
+	brute.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	brute.maze = null
+	brute.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	var waves: Array = []
+	brute.shockwave.connect(func(origin, radius, dmg, from_ally): waves.append({"origin": origin, "radius": radius, "dmg": dmg, "from_ally": from_ally}))
+	hop_run.enemy_container.add_child(brute)
+	brute.global_position = hop_run.player.global_position + Vector2(400.0, 0.0)
+
+	var start: Vector2 = brute.global_position
+	var airborne := false
+	for i in range(180):
+		await get_tree().physics_frame
+		if brute.hop_height() > 0.0:
+			airborne = true
+
+	_assert(airborne, "il Corazzato dovrebbe staccarsi da terra durante il balzo")
+	_assert(waves.size() > 0, "ogni atterraggio dovrebbe scaricare un'onda d'urto")
+	_assert(waves[0].radius == Enemy.HOP_SHOCKWAVE_RADIUS, "l'onda d'urto non ha il raggio previsto")
+	_assert(waves[0].dmg < brute.damage, "l'onda d'urto deve fare meno danno del colpo diretto")
+	_assert(not waves[0].from_ally, "un Corazzato ostile non dovrebbe generare un'onda d'urto amica")
+	# I balzi restano un modo di avanzare: deve comunque avvicinarsi.
+	_assert(
+		brute.global_position.distance_to(hop_run.player.global_position) < start.distance_to(hop_run.player.global_position),
+		"a balzi il Corazzato dovrebbe comunque avvicinarsi alla preda"
+	)
+
+	hop_run.queue_free()
+	await get_tree().process_frame
+	print("Balzi del Corazzato: OK")
+
+func _test_burrow_pattern() -> void:
+	print("--- Test schema: il Pungiglione sprofonda e rispunta sulle pareti ---")
+	var burrow_run := Run.new()
+	add_child(burrow_run)
+	burrow_run.begin_new_streak()
+	await get_tree().process_frame
+	for existing in burrow_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	var maze: MazeGrid = burrow_run.current_maze
+	_assert(maze != null, "setup del test: la stanza 1 dovrebbe avere un labirinto")
+
+	var flower := Enemy.new()
+	flower.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
+	flower.maze = maze
+	flower.spawn_projectile.connect(burrow_run._on_enemy_spawn_projectile)
+	burrow_run.enemy_container.add_child(flower)
+	flower.global_position = burrow_run.player.global_position + Vector2(160.0, 0.0)
+
+	var seen_states := {}
+	var buried_was_untargetable := true
+	var positions: Array = []
+	for i in range(400):
+		await get_tree().physics_frame
+		seen_states[flower.attack_state] = true
+		if flower.attack_state == "sepolto":
+			if flower.monitorable:
+				buried_was_untargetable = false
+		# I primi fotogrammi sono ancora quelli della posizione di
+		# partenza scelta dal test: il fiore si attacca alla parete al
+		# primo _physics_process, che arriva dopo questa attesa.
+		if i > 5 and flower.attack_state == "avanza":
+			positions.append(flower.global_position)
+
+	_assert(seen_states.has("sparisce"), "il Pungiglione dovrebbe sprofondare tra un dardo e l'altro")
+	_assert(seen_states.has("riemerge"), "il Pungiglione dovrebbe rispuntare dopo essere sprofondato")
+	_assert(buried_was_untargetable, "mentre è sotto il pavimento il Pungiglione non dovrebbe essere colpibile")
+
+	# Ogni posizione in cui è emerso deve essere dentro la mappa, non
+	# dentro un muro, e con una parete a ridosso: è la parte che, se si
+	# rompe, fa rispuntare il fiore fuori dalla stanza.
+	var checked := 0
+	for pos in positions:
+		_assert(maze.total_bounds().has_point(pos), "il Pungiglione è rispuntato fuori dalla mappa (%s)" % pos)
+		_assert(maze.is_position_free(pos, flower.radius), "il Pungiglione è rispuntato dentro un muro (%s)" % pos)
+		_assert(
+			not maze.is_position_free(pos, flower.radius + Enemy.WALL_HUG_DISTANCE),
+			"il Pungiglione dovrebbe restare attaccato a una parete (%s)" % pos
+		)
+		checked += 1
+	_assert(checked > 0, "setup del test: il Pungiglione non è mai tornato in superficie")
+
+	# Tornato in superficie deve essere di nuovo colpibile: se
+	# l'interruttore restasse spento resterebbe invulnerabile per sempre.
+	var surfaced := false
+	for i in range(200):
+		await get_tree().physics_frame
+		if flower.attack_state == "avanza":
+			surfaced = true
+			break
+	_assert(surfaced, "setup del test: il Pungiglione non è tornato in superficie")
+	_assert(flower.monitorable, "tornato in superficie il Pungiglione deve essere di nuovo colpibile")
+
+	burrow_run.queue_free()
+	await get_tree().process_frame
+	print("Agguato del Pungiglione: OK")
