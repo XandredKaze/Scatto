@@ -742,7 +742,11 @@ func _ally_move_along_maze(delta: float, dest_pos: Vector2, move_speed: float) -
 	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.ZERO
 	global_position = maze.resolve_move(global_position, dir * move_speed * delta, radius)
 
-func _ally_resolve_combat() -> void:
+# Restituisce true se la scansione è stata davvero eseguita. Il
+# chiamante non se ne serve, ma è ciò che rende verificabile la rinuncia
+# quando l'area è spenta: senza un valore di ritorno l'unico sintomo di
+# una regressione sarebbe un errore di motore, che un test non vede.
+func _ally_resolve_combat() -> bool:
 	# Stesso schema del Player._resolve_combat(): è l'alleato stesso a
 	# scandire le proprie aree sovrapposte, dato che i nemici comuni non
 	# controllano mai le proprie (collision_mask = 0 di default). Il
@@ -751,10 +755,16 @@ func _ally_resolve_combat() -> void:
 	# ognuno al proprio ritmo, esattamente come già avviene per il
 	# contatto nemico -> giocatore.
 	if not alive:
-		return
+		return false
+	# Un Pungiglione in agguato, mentre è sotto il pavimento, spegne la
+	# propria Area2D: lí sotto non tocca e non viene toccato da nessuno.
+	# Chiedere le sovrapposizioni a un'area con il monitoraggio spento è
+	# un errore di motore, quindi la scansione va saltata del tutto.
+	if not monitoring:
+		return false
 	for area in get_overlapping_areas():
 		if not alive:
-			return
+			return false
 		if area == self:
 			continue
 		if area.is_in_group("enemy_projectile"):
@@ -788,6 +798,7 @@ func _ally_resolve_combat() -> void:
 		if area.can_deal_contact_damage():
 			take_damage(area.damage)
 			area.trigger_contact()
+	return true
 
 func _clamp_to_arena() -> void:
 	if arena_bounds.size == Vector2.ZERO:

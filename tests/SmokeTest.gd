@@ -64,6 +64,7 @@ func run_and_quit() -> void:
 	await _test_burrow_pattern()
 	_test_line_of_sight()
 	await _test_flower_never_shoots_through_walls()
+	await _test_buried_ally_flower_survives_combat_scan()
 	await _test_flower_shoots_its_own_colour()
 	await _test_slime_body_trail()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
@@ -3035,3 +3036,82 @@ func _test_flower_never_shoots_through_walls() -> void:
 	wall_run.queue_free()
 	await get_tree().process_frame
 	print("Tiro ostruito del Pungiglione: OK")
+
+
+func _test_buried_ally_flower_survives_combat_scan() -> void:
+	print("--- Test regressione: il Pungiglione alleato sepolto non interroga le proprie aree ---")
+	# Da sepolto il fiore spegne la propria Area2D (sotto il pavimento
+	# non tocca e non viene toccato). Un alleato però scandisce da sé le
+	# sovrapposizioni ad ogni fotogramma, e chiederle a un'area con il
+	# monitoraggio spento è un errore di motore: la scansione va saltata.
+	var buried_run := Run.new()
+	add_child(buried_run)
+	buried_run.begin_new_streak()
+	await get_tree().process_frame
+	for existing in buried_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	buried_run.current_maze = null
+	buried_run.player.maze = null
+	buried_run.player.frozen = true
+
+	var flower := Enemy.new()
+	flower.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
+	flower.maze = null
+	flower.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	flower.spawn_projectile.connect(buried_run._on_enemy_spawn_projectile)
+	buried_run.enemy_container.add_child(flower)
+	flower.global_position = buried_run.player.global_position + Vector2(60.0, 0.0)
+	buried_run._convert_enemy_to_ally(flower)
+
+	# Un ostile a tiro: è ciò che fa sparare l'alleato e, subito dopo,
+	# sprofondare.
+	var victim := Enemy.new()
+	victim.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	victim.maze = null
+	victim.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	victim.max_hp = 100000.0
+	victim.hp = 100000.0
+	victim.speed = 0.0
+	buried_run.enemy_container.add_child(victim)
+	victim.global_position = flower.global_position + Vector2(120.0, 0.0)
+
+	# Il fiore si attacca subito a una parete, quindi può allontanarsi
+	# dal punto in cui il test lo ha messo: la vittima va riavvicinata
+	# dopo, altrimenti finisce fuori dal raggio d'ingaggio dell'alleato
+	# e il fiore non ha nessuno a cui sparare.
+	for i in range(10):
+		await get_tree().physics_frame
+	victim.global_position = flower.global_position + Vector2(120.0, 0.0)
+
+	var saw_buried := false
+	var monitoring_while_buried := true
+	var scanned_while_buried := false
+	for i in range(400):
+		await get_tree().physics_frame
+		if flower.is_burrowed():
+			saw_buried = true
+			if flower.monitoring:
+				monitoring_while_buried = false
+			# La rinuncia alla scansione è il punto: eseguirla con l'area
+			# spenta è un errore di motore, che nessuna asserzione
+			# vedrebbe. Il valore di ritorno la rende verificabile.
+			if flower._ally_resolve_combat():
+				scanned_while_buried = true
+
+	_assert(saw_buried, "setup del test: il Pungiglione alleato non è mai sprofondato")
+	_assert(monitoring_while_buried, "da sepolto il Pungiglione dovrebbe avere l'area spenta")
+	_assert(not scanned_while_buried, "da sepolto l'alleato non deve interrogare le proprie aree: il monitoraggio è spento")
+	_assert(flower.alive, "il Pungiglione alleato non dovrebbe morire durante il test")
+	# Tornato su, riprende a funzionare come alleato a tutti gli effetti.
+	var surfaced := false
+	for i in range(200):
+		await get_tree().physics_frame
+		if not flower.is_burrowed() and flower.monitoring:
+			surfaced = true
+			break
+	_assert(surfaced, "tornato in superficie il Pungiglione alleato deve riaccendere la propria area")
+
+	buried_run.queue_free()
+	await get_tree().process_frame
+	print("Pungiglione alleato sepolto: OK")
