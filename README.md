@@ -2,6 +2,12 @@
 
 Un roguelike top-down realizzato in **Godot 4.3** costruito su una rinuncia: si parte con lo *scatto* come unico attacco — non esiste un tasto per colpire, bisogna scattare addosso agli avversari restando invulnerabili per la durata dello scatto — ma addomesticare un nemico lo sostituisce con gli attacchi speciali degli alleati.
 
+## Schermata del titolo
+
+All'avvio si apre la classica schermata del titolo: il logo, il nome **A.M.I.C.** e l'invito lampeggiante a premere un tasto. "Un tasto qualsiasi" è da prendere alla lettera — tastiera, controller o mouse — e da lí si passa alla scelta del salvataggio. La si vede una volta sola, all'accensione: tornando all'Hub o cambiando salvataggio non ci si ripassa.
+
+Il logo (`assets/images/amic_logo.png`) è ritagliato: lo sfondo attorno al soggetto è trasparente e non nero, altrimenti sulla schermata comparirebbe un riquadro squadrato attorno al disegno.
+
 ## Salvataggi
 
 All'avvio, **prima dell'Hub**, si sceglie su quale dei **tre slot** giocare. Ogni slot ha i propri progressi — archivio dei potenziamenti, bestiario, statistiche — completamente indipendenti dagli altri, e la riga di ciascuno riassume che cosa contiene prima di sceglierlo (run vinte, serie migliore, potenziamenti e creature scoperte) oppure dichiara che è vuoto.
@@ -138,6 +144,7 @@ godot --path .
 project.godot
 scenes/Main.tscn              # unica scena "fisica": tutto il resto è costruito da codice
 assets/audio/mines.mp3        # sottofondo musicale delle run (importato con il loop attivo)
+assets/images/amic_logo.png   # logo della schermata del titolo (sfondo ritagliato)
 scripts/
   Main.gd                     # coordina Hub <-> Run
   core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice
@@ -148,7 +155,7 @@ scripts/
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
   core/GameSettings.gd        # impostazioni (audio, video, assegnazione tasti): applicazione e persistenza
-  ui/                         # scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Vignette, HudSigil
+  ui/                         # titolo, scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Vignette, HudSigil
 tests/SmokeTest.gd            # test end-to-end eseguibile in headless (vedi sotto)
 ```
 

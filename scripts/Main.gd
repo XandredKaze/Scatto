@@ -20,7 +20,19 @@ func _ready() -> void:
 		add_child(tester)
 		tester.run_and_quit()
 	else:
-		_show_slot_select()
+		_show_title()
+
+# La prima cosa che si vede all'avvio: logo, nome del gioco e invito a
+# premere un tasto. Si mostra una volta sola, all'accensione: tornando
+# all'Hub o cambiando salvataggio non si ripassa di qui.
+func _show_title() -> void:
+	get_tree().paused = false
+	_clear_world()
+	var title := TitleScreen.new()
+	Palette.apply_theme(title)
+	title.start_pressed.connect(_show_slot_select)
+	world.add_child(title)
+	current_screen = title
 
 # Prima dell'Hub si sceglie su quale dei tre salvataggi giocare: da lí
 # in poi ogni progresso registrato finisce in quello slot.

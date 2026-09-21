@@ -66,6 +66,7 @@ func run_and_quit() -> void:
 	await _test_flower_never_shoots_through_walls()
 	await _test_buried_ally_flower_survives_combat_scan()
 	await _test_defeated_creatures_disappear()
+	await _test_title_screen()
 	_test_save_slots()
 	await _test_save_slot_screen()
 	await _test_hub_change_slot_entry()
@@ -2885,6 +2886,8 @@ func _test_burrow_pattern() -> void:
 	var positions: Array = []
 	for i in range(400):
 		await get_tree().physics_frame
+		if not is_instance_valid(flower):
+			break
 		seen_states[flower.attack_state] = true
 		if flower.attack_state == "sepolto":
 			if flower.monitorable:
@@ -2918,6 +2921,8 @@ func _test_burrow_pattern() -> void:
 	var surfaced := false
 	for i in range(200):
 		await get_tree().physics_frame
+		if not is_instance_valid(flower):
+			break
 		if flower.attack_state == "avanza":
 			surfaced = true
 			break
@@ -3064,7 +3069,13 @@ func _test_buried_ally_flower_survives_combat_scan() -> void:
 	flower.maze = null
 	flower.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
 	flower.spawn_projectile.connect(buried_run._on_enemy_spawn_projectile)
+	# Vita enorme: il test guarda il ciclo di sprofondamento, e un fiore
+	# che muore a metà non solo lo interromperebbe — da quando le
+	# creature sconfitte si liberano da sole, lascerebbe il test a
+	# leggere un nodo ormai distrutto.
+	flower.max_hp = 100000.0
 	buried_run.enemy_container.add_child(flower)
+	flower.hp = flower.max_hp
 	flower.global_position = buried_run.player.global_position + Vector2(60.0, 0.0)
 	buried_run._convert_enemy_to_ally(flower)
 
@@ -3093,6 +3104,8 @@ func _test_buried_ally_flower_survives_combat_scan() -> void:
 	var scanned_while_buried := false
 	for i in range(400):
 		await get_tree().physics_frame
+		if not is_instance_valid(flower):
+			break
 		if flower.is_burrowed():
 			saw_buried = true
 			if flower.monitoring:
@@ -3111,9 +3124,12 @@ func _test_buried_ally_flower_survives_combat_scan() -> void:
 	var surfaced := false
 	for i in range(200):
 		await get_tree().physics_frame
+		if not is_instance_valid(flower):
+			break
 		if not flower.is_burrowed() and flower.monitoring:
 			surfaced = true
 			break
+	_assert(is_instance_valid(flower), "setup del test: il Pungiglione alleato non doveva morire durante la prova")
 	_assert(surfaced, "tornato in superficie il Pungiglione alleato deve riaccendere la propria area")
 
 	buried_run.queue_free()
@@ -3323,3 +3339,72 @@ func _test_hub_change_slot_entry() -> void:
 	hub.queue_free()
 	await get_tree().process_frame
 	print("Voce 'Cambia salvataggio' nell'Hub: OK")
+
+
+func _test_title_screen() -> void:
+	print("--- Test schermata del titolo ---")
+	var title := TitleScreen.new()
+	Palette.apply_theme(title)
+	add_child(title)
+	await get_tree().process_frame
+
+	_assert(title.logo.texture != null, "la schermata del titolo dovrebbe mostrare il logo")
+	# Il logo è ritagliato: lo sfondo attorno al soggetto è trasparente,
+	# non nero. Se tornasse a essere pieno, sulla schermata del titolo
+	# comparirebbe un riquadro squadrato attorno al disegno.
+	var logo_image: Image = title.logo.texture.get_image()
+	for corner in [Vector2i(0, 0), Vector2i(logo_image.get_width() - 1, 0), Vector2i(0, logo_image.get_height() - 1), Vector2i(logo_image.get_width() - 1, logo_image.get_height() - 1)]:
+		_assert(
+			logo_image.get_pixelv(corner).a == 0.0,
+			"l'angolo %s del logo dovrebbe essere trasparente, non un riquadro pieno" % corner
+		)
+	_assert(title.title_label.text == "A.M.I.C.", "il titolo dovrebbe essere 'A.M.I.C.', invece è '%s'" % title.title_label.text)
+	_assert("Premi un tasto" in title.prompt_label.text, "manca l'invito a premere un tasto: '%s'" % title.prompt_label.text)
+
+	# L'invito lampeggia: è il segnale che la schermata sta aspettando
+	# qualcosa e non che il gioco si è piantato sul logo.
+	title._process(0.0)
+	var alpha_before: float = title.prompt_label.modulate.a
+	title._process(0.5)
+	_assert(
+		not is_equal_approx(alpha_before, title.prompt_label.modulate.a),
+		"l'invito dovrebbe lampeggiare (opacità ferma a %.2f)" % alpha_before
+	)
+
+	# "Un tasto qualsiasi" alla lettera: tastiera, controller o mouse.
+	var started: Array = []
+	title.start_pressed.connect(func(): started.append(true))
+	var pad := InputEventJoypadButton.new()
+	pad.button_index = JOY_BUTTON_A
+	pad.pressed = true
+	title._unhandled_input(pad)
+	await get_tree().process_frame
+	_assert(started.size() == 1, "un tasto del controller dovrebbe far partire la demo")
+
+	# Una seconda pressione non deve far ripartire niente: il passaggio
+	# alla schermata successiva avviene una volta sola.
+	var key := InputEventKey.new()
+	key.keycode = KEY_SPACE
+	key.pressed = true
+	title._unhandled_input(key)
+	await get_tree().process_frame
+	_assert(started.size() == 1, "la schermata del titolo non deve annunciare la partenza più di una volta")
+
+	# Il rilascio di un tasto non conta: solo la pressione.
+	var fresh := TitleScreen.new()
+	Palette.apply_theme(fresh)
+	add_child(fresh)
+	await get_tree().process_frame
+	var released: Array = []
+	fresh.start_pressed.connect(func(): released.append(true))
+	var key_up := InputEventKey.new()
+	key_up.keycode = KEY_SPACE
+	key_up.pressed = false
+	fresh._unhandled_input(key_up)
+	await get_tree().process_frame
+	_assert(released.is_empty(), "il rilascio di un tasto non dovrebbe far partire la demo")
+
+	title.queue_free()
+	fresh.queue_free()
+	await get_tree().process_frame
+	print("Schermata del titolo: OK")
