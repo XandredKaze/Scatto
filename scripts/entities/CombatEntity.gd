@@ -31,8 +31,15 @@ var rim_color: Color = Palette.RIM_HOSTILE
 # La collisione non ne risente: è puro disegno.
 var body_offset := Vector2.ZERO
 
+# Quanto ci mette una creatura sconfitta a sparire dalla stanza. Non è
+# un ritardo gratuito: in quel tempo si dissolve e si accascia, cosí si
+# vede DOVE è caduta invece di vederla svanire di colpo. Da morta non è
+# già più né un bersaglio né una minaccia.
+const DEATH_FADE := 0.35
+
 var hp := 0.0
 var alive := true
+var death_timer := 0.0
 var hit_flash := 0.0
 var contact_timer := 0.0
 # Chi questo avversario sta attaccando: il giocatore o uno dei suoi
@@ -63,6 +70,12 @@ func take_damage(amount: float) -> void:
 	if hp <= 0.0:
 		hp = 0.0
 		alive = false
+		death_timer = DEATH_FADE
+		# Nell'istante stesso in cui cade smette di essere un bersaglio
+		# e un pericolo: spegne la propria area, cosí durante la
+		# dissolvenza non colpisce e non può essere colpita.
+		monitorable = false
+		monitoring = false
 		defeated.emit()
 
 # Bersaglio di un avversario ostile: il giocatore oppure uno degli alleati
@@ -115,6 +128,17 @@ func _process(delta: float) -> void:
 		hit_flash -= delta
 	if contact_timer > 0.0:
 		contact_timer -= delta
+	if not alive and death_timer > 0.0:
+		death_timer -= delta
+		# La dissolvenza passa da modulate e scale invece che dai singoli
+		# _draw: cosí vale identica per ogni specie e per il boss, senza
+		# doverla riscrivere dentro ognuna delle loro sagome.
+		var remaining: float = clamp(death_timer / DEATH_FADE, 0.0, 1.0)
+		modulate.a = remaining
+		scale = Vector2.ONE * (0.55 + 0.45 * remaining)
+		if death_timer <= 0.0:
+			queue_free()
+			return
 	queue_redraw()
 
 # Le creature si disegnano come nel riferimento estetico: una massa
@@ -160,7 +184,8 @@ func _draw_pale_face() -> void:
 	draw_circle(face_center + Vector2(eye_dx, 0.0), eye_r, Palette.VOID)
 
 func _draw_hp_bar() -> void:
-	if max_hp <= 0.0:
+	# Una creatura sconfitta non ha più una vita da mostrare.
+	if max_hp <= 0.0 or not alive:
 		return
 	var w := radius * 2.0
 	var ratio: float = clamp(hp / max_hp, 0.0, 1.0)

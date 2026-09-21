@@ -448,8 +448,8 @@ func _convert_enemy_to_ally(enemy: Enemy) -> void:
 func _on_ally_defeated(ally) -> void:
 	allies.erase(ally)
 	var fallen_name: String = ally.display_name
-	if is_instance_valid(ally):
-		ally.queue_free()
+	# Non va rimosso qui: come ogni creatura sconfitta si dissolve da sé
+	# (CombatEntity.DEATH_FADE) invece di sparire di colpo.
 	_sync_granted_ability()
 	hud.show_banner("Il tuo alleato %s è caduto in battaglia." % fallen_name, 2.5)
 	if player.has_vincolo_vitale:
@@ -583,6 +583,11 @@ func _on_boss_defeated(boss) -> void:
 	var was_special: bool = boss.is_special
 	var boss_name: String = boss.display_name
 	current_boss = null
+	# Il boss invece viene rimosso subito, senza dissolvenza: la
+	# schermata di fine run copre lo schermo nello stesso istante, quindi
+	# la dissolvenza non si vedrebbe comunque, e lasciarlo nell'albero
+	# rimetterebbe in discussione una garanzia che il gioco già dà —
+	# finita la run, la sala del boss è vuota.
 	boss.queue_free()
 	# Come per la fine di una stanza normale: nessun proiettile del boss
 	# deve restare in volo e il giocatore resta fermo sulla schermata di

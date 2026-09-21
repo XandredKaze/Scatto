@@ -65,6 +65,7 @@ func run_and_quit() -> void:
 	_test_line_of_sight()
 	await _test_flower_never_shoots_through_walls()
 	await _test_buried_ally_flower_survives_combat_scan()
+	await _test_defeated_creatures_disappear()
 	await _test_flower_shoots_its_own_colour()
 	await _test_slime_body_trail()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
@@ -3115,3 +3116,71 @@ func _test_buried_ally_flower_survives_combat_scan() -> void:
 	buried_run.queue_free()
 	await get_tree().process_frame
 	print("Pungiglione alleato sepolto: OK")
+
+
+func _test_defeated_creatures_disappear() -> void:
+	print("--- Test regressione: le creature sconfitte spariscono dalla stanza ---")
+	# Prima restavano a terra come cadaveri fino al cambio stanza: la
+	# stanza si riempiva di corpi e non si capiva più chi fosse ancora
+	# vivo.
+	var death_run := Run.new()
+	add_child(death_run)
+	death_run.begin_new_streak()
+	await get_tree().process_frame
+	for existing in death_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	death_run.current_maze = null
+	death_run.player.maze = null
+
+	var victim := Enemy.new()
+	victim.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	victim.maze = null
+	victim.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	death_run.enemy_container.add_child(victim)
+	victim.global_position = death_run.player.global_position + Vector2(500.0, 0.0)
+	await get_tree().process_frame
+
+	victim.take_damage(victim.max_hp)
+	_assert(not victim.alive, "il nemico colpito a morte dovrebbe risultare sconfitto")
+	# Nell'istante in cui cade smette di essere un bersaglio: durante la
+	# dissolvenza non deve poter colpire né essere colpito.
+	_assert(not victim.monitorable, "un nemico sconfitto non deve restare bersagliabile mentre si dissolve")
+	_assert(not victim.can_deal_contact_damage(), "un nemico sconfitto non deve più fare danno da contatto")
+
+	# La stanza va considerata ripulita subito, senza aspettare che il
+	# corpo finisca di dissolversi.
+	death_run._check_room_cleared()
+	_assert(death_run.room_cleared, "un corpo che si sta dissolvendo non deve tenere la stanza per occupata")
+
+	# In headless i fotogrammi scorrono molto più in fretta di 60 al
+	# secondo, quindi non si contano: si aspetta il tempo reale della
+	# dissolvenza con un tetto largo di fotogrammi.
+	var frames_needed := 600
+	for i in range(frames_needed):
+		await get_tree().process_frame
+		if not is_instance_valid(victim):
+			break
+	_assert(not is_instance_valid(victim), "il nemico sconfitto dovrebbe essere sparito entro %.2fs" % CombatEntity.DEATH_FADE)
+	for leftover in death_run.enemy_container.get_children():
+		_assert(leftover.alive, "nella stanza è rimasto il corpo di una creatura sconfitta")
+
+	# Vale anche per un alleato caduto: sparisce come tutti gli altri.
+	var fallen_ally := Enemy.new()
+	fallen_ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
+	fallen_ally.maze = null
+	fallen_ally.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	death_run.enemy_container.add_child(fallen_ally)
+	fallen_ally.global_position = death_run.player.global_position + Vector2(-90.0, 0.0)
+	death_run._convert_enemy_to_ally(fallen_ally)
+	await get_tree().process_frame
+	fallen_ally.take_damage(fallen_ally.max_hp)
+	for i in range(frames_needed):
+		await get_tree().process_frame
+		if not is_instance_valid(fallen_ally):
+			break
+	_assert(not is_instance_valid(fallen_ally), "anche un alleato caduto dovrebbe sparire dalla stanza")
+
+	death_run.queue_free()
+	await get_tree().process_frame
+	print("Sparizione delle creature sconfitte: OK")

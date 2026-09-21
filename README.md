@@ -34,6 +34,8 @@ Tutto il gioco pesca da un unico linguaggio cromatico (`scripts/data/Palette.gd`
 2. **l'unico colore acceso è il cremisi**, usato con parsimonia perché faccia da faro per l'occhio: sangue, stendardi, bracieri, barra della vita, preavvisi d'attacco del boss;
 3. **le creature sono masse scure con un volto pallido e un profilo luminoso**, e si leggono per silhouette invece che per colore pieno. Il colore del profilo dice anche da che parte stanno: cremisi se ostili, acciaio freddo se alleate, oro se dorate.
 
+Una creatura sconfitta **sparisce dalla stanza**: si dissolve e si accascia in poco più di un terzo di secondo, e in quell'istante smette di essere sia un bersaglio sia un pericolo. Quello che resta sul pavimento è il sangue, non il corpo.
+
 Ne fanno parte anche l'**oscuramento ai bordi dello schermo** (la luce sembra venire da dove si trova il giocatore e spegnersi verso i lati; è disegnato a fasce e non con uno shader, perché il progetto gira in GL Compatibility), il **sangue che resta a terra** dove le creature cadono e dove il giocatore incassa colpi — e che si azzera a ogni stanza nuova — e la **falce di luce** che segna il fendente dello scatto.
 
 Il giocatore è la figura incappucciata dal mantello cremisi: l'unica della scena col rosso pieno addosso, cosí resta individuabile anche in mezzo alla mischia.
