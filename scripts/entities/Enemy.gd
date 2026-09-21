@@ -103,6 +103,12 @@ const BURROW_MAX_DISTANCE := 180.0
 const WALL_HUG_DISTANCE := 34.0
 const BURROW_ATTEMPTS := 40
 const BURROW_ANCHOR_RETRIES := 30
+# Margine con cui si verifica la linea di tiro: è il raggio del dardo.
+# Un colpo che sfiora lo spigolo del muro non arriverebbe comunque.
+const SHOT_CLEARANCE := 5.0
+# Quanto aspetta prima di riprovare dopo aver rinunciato a un tiro
+# ostruito. Breve: il tempo vero lo passa sotto il pavimento.
+const BLOCKED_SHOT_RETRY := 0.25
 var burrow_target := Vector2.ZERO
 var _anchored_to_wall := false
 var _anchor_attempts := 0
@@ -486,7 +492,8 @@ func _pattern_agguato(delta: float, target: Node, from_ally: bool, anchor: Vecto
 		# non trova un appiglio valido riprova al fotogramma dopo invece
 		# di rassegnarsi: restare in mezzo al corridoio sarebbe proprio
 		# il difetto da evitare.
-		var spot: Vector2 = _pick_burrow_spot(global_position, 0.0, BURROW_MAX_DISTANCE)
+		var target_position: Vector2 = target.global_position if target != null else Vector2.ZERO
+		var spot: Vector2 = _pick_burrow_spot(global_position, 0.0, BURROW_MAX_DISTANCE, target_position, target != null)
 		_anchor_attempts += 1
 		if spot != global_position:
 			global_position = spot
@@ -500,13 +507,39 @@ func _pattern_agguato(delta: float, target: Node, from_ally: bool, anchor: Vecto
 	attack_timer -= delta
 	if attack_timer > 0.0 or target == null:
 		return
+
+	if not has_clear_shot(target.global_position):
+		# C'è una parete di mezzo: sparare sarebbe solo uno spreco, e
+		# restare lí a insistere il difetto peggiore, visto che questo
+		# nemico non insegue. Si sposta cercando un punto da cui la
+		# preda sia davvero a tiro.
+		attack_timer = BLOCKED_SHOT_RETRY
+		_relocate(anchor, target.global_position, true)
+		return
+
 	attack_timer = attack_cooldown
 	var to_target: Vector2 = target.global_position - global_position
 	var dir: Vector2 = to_target.normalized() if to_target.length() > 0.001 else Vector2.RIGHT
 	heading = dir
 	spawn_projectile.emit(global_position, dir, projectile_speed, damage, from_ally, color)
+	_relocate(anchor, target.global_position, true)
 
-	burrow_target = _pick_burrow_spot(anchor, BURROW_MIN_DISTANCE, BURROW_MAX_DISTANCE)
+# La preda è davvero a tiro, o c'è un muro di mezzo? Senza questo
+# controllo il fiore scarica dardi contro una parete restandosene
+# dall'altra parte, e — non inseguendo nessuno — potrebbe non smettere
+# mai.
+func has_clear_shot(target_position: Vector2) -> bool:
+	return _has_sight_between(global_position, target_position)
+
+func _has_sight_between(from_position: Vector2, to_position: Vector2) -> bool:
+	if maze == null:
+		return true
+	return maze.has_line_of_sight(from_position, to_position, SHOT_CLEARANCE)
+
+# Sprofonda e rispunta altrove. Se conosce la posizione della preda
+# cerca un punto da cui averla davvero a tiro.
+func _relocate(around: Vector2, sight_to: Vector2, require_sight: bool) -> void:
+	burrow_target = _pick_burrow_spot(around, BURROW_MIN_DISTANCE, BURROW_MAX_DISTANCE, sight_to, require_sight)
 	if burrow_target != global_position:
 		_start_attack_state("sparisce", BURROW_SINK)
 
@@ -533,13 +566,24 @@ func is_burrowed() -> bool:
 # Un punto dove rispuntare: dentro la mappa, largo abbastanza da
 # contenere il fiore, e con una parete a ridosso. Se non ne trova uno
 # valido resta dov'è: meglio fermo che incastrato in un muro.
-func _pick_burrow_spot(around: Vector2, min_distance: float, max_distance: float) -> Vector2:
-	for i in range(BURROW_ATTEMPTS):
-		var angle: float = randf() * TAU
-		var distance: float = lerp(min_distance, max_distance, randf())
-		var candidate: Vector2 = around + Vector2.RIGHT.rotated(angle) * distance
-		if _is_wall_hug_spot(candidate):
+func _pick_burrow_spot(around: Vector2, min_distance: float, max_distance: float, sight_to: Vector2 = Vector2.ZERO, require_sight: bool = false) -> Vector2:
+	# Due passate: prima si cerca un appiglio da cui la preda sia
+	# davvero a tiro; se in giro non ce n'è, ci si accontenta di un
+	# appiglio qualunque — continuare a spostarsi è sempre meglio che
+	# restare inchiodati dietro un muro.
+	for pass_index in range(2):
+		var needs_sight: bool = require_sight and pass_index == 0
+		for i in range(BURROW_ATTEMPTS):
+			var angle: float = randf() * TAU
+			var distance: float = lerp(min_distance, max_distance, randf())
+			var candidate: Vector2 = around + Vector2.RIGHT.rotated(angle) * distance
+			if not _is_wall_hug_spot(candidate):
+				continue
+			if needs_sight and not _has_sight_between(candidate, sight_to):
+				continue
 			return candidate
+		if not require_sight:
+			break
 	return global_position
 
 func _is_wall_hug_spot(pos: Vector2) -> bool:

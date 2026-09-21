@@ -183,6 +183,49 @@ func get_path(from_pos: Vector2, to_pos: Vector2) -> PackedVector2Array:
 	var to_cell := world_to_cell(to_pos)
 	return astar.get_point_path(_cell_id(from_cell.x, from_cell.y), _cell_id(to_cell.x, to_cell.y))
 
+# Vero se tra i due punti non si frappone alcuna parete. Serve a chi
+# spara da fermo (il Pungiglione) per non scaricare dardi contro un muro
+# restandosene al sicuro dall'altra parte senza mai colpire nulla.
+# `clearance` allarga le pareti del raggio del proiettile: un tiro che
+# sfiora lo spigolo non arriverebbe comunque a destinazione.
+func has_line_of_sight(from_pos: Vector2, to_pos: Vector2, clearance: float = 0.0) -> bool:
+	for rect in wall_rects:
+		if _segment_intersects_rect(from_pos, to_pos, rect.grow(clearance)):
+			return false
+	return true
+
+# Intersezione segmento/rettangolo col metodo delle lastre: si restringe
+# l'intervallo di percorrenza del segmento asse per asse e si guarda se
+# ne resta qualcosa dentro il rettangolo.
+func _segment_intersects_rect(a: Vector2, b: Vector2, rect: Rect2) -> bool:
+	if rect.has_point(a) or rect.has_point(b):
+		return true
+	var direction: Vector2 = b - a
+	var t_min := 0.0
+	var t_max := 1.0
+	for axis in range(2):
+		var origin: float = a[axis]
+		var step: float = direction[axis]
+		var low: float = rect.position[axis]
+		var high: float = rect.end[axis]
+		if absf(step) < 0.00001:
+			# Segmento parallelo a questo asse: o è già dentro la fascia
+			# del rettangolo, o non la attraverserà mai.
+			if origin < low or origin > high:
+				return false
+			continue
+		var t1: float = (low - origin) / step
+		var t2: float = (high - origin) / step
+		if t1 > t2:
+			var swap: float = t1
+			t1 = t2
+			t2 = swap
+		t_min = max(t_min, t1)
+		t_max = min(t_max, t2)
+		if t_min > t_max:
+			return false
+	return true
+
 func _cell_id(x: int, y: int) -> int:
 	return y * cols + x
 

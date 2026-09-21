@@ -62,6 +62,8 @@ func run_and_quit() -> void:
 	await _test_swarm_charge_pattern()
 	await _test_hop_shockwave_pattern()
 	await _test_burrow_pattern()
+	_test_line_of_sight()
+	await _test_flower_never_shoots_through_walls()
 	await _test_flower_shoots_its_own_colour()
 	await _test_slime_body_trail()
 	await _test_room_clear_freezes_player_and_clears_projectiles()
@@ -2920,3 +2922,116 @@ func _test_burrow_pattern() -> void:
 	burrow_run.queue_free()
 	await get_tree().process_frame
 	print("Agguato del Pungiglione: OK")
+
+
+func _test_line_of_sight() -> void:
+	print("--- Test regressione: linea di tiro attraverso le pareti ---")
+	var maze := MazeGrid.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1234
+	maze.generate(6, 5, 300.0, rng)
+	_assert(maze.wall_rects.size() > 0, "setup del test: il labirinto dovrebbe avere pareti")
+
+	var wall: Rect2 = maze.wall_rects[0]
+	var center: Vector2 = wall.get_center()
+	# Attraverso il lato corto del muro: da una parte all'altra.
+	var across: Vector2 = Vector2(0.0, 1.0) if wall.size.x >= wall.size.y else Vector2(1.0, 0.0)
+	_assert(
+		not maze.has_line_of_sight(center - across * 60.0, center + across * 60.0),
+		"un segmento che attraversa una parete non dovrebbe avere linea di tiro"
+	)
+	# Lungo il muro, senza attraversarlo: la vista è libera.
+	var along := Vector2(across.y, across.x)
+	var side: Vector2 = center + across * 60.0
+	_assert(
+		maze.has_line_of_sight(side, side + along * 40.0),
+		"un segmento che costeggia una parete senza attraversarla dovrebbe avere linea di tiro"
+	)
+
+	# Il margine allarga le pareti: un tiro che sfiora lo spigolo non
+	# arriverebbe comunque, e va considerato ostruito.
+	var half: float = (wall.size.y if across.y > 0.0 else wall.size.x) * 0.5
+	var graze: Vector2 = center + across * (half + 3.0)
+	_assert(maze.has_line_of_sight(graze, graze + along * 40.0, 0.0), "senza margine un tiro che sfiora il muro passa")
+	_assert(
+		not maze.has_line_of_sight(graze, graze + along * 40.0, 8.0),
+		"con il margine del proiettile un tiro che sfiora il muro va considerato ostruito"
+	)
+
+	var cell: Vector2 = maze.cell_center(2, 2)
+	_assert(maze.has_line_of_sight(cell, cell + Vector2(20.0, 0.0)), "due punti nella stessa cella dovrebbero vedersi")
+	print("Linea di tiro: OK")
+
+func _test_flower_never_shoots_through_walls() -> void:
+	print("--- Test regressione: il Pungiglione non spara contro i muri ---")
+	var wall_run := Run.new()
+	add_child(wall_run)
+	wall_run.begin_new_streak()
+	await get_tree().process_frame
+	for existing in wall_run.enemy_container.get_children():
+		existing.queue_free()
+	await get_tree().process_frame
+	wall_run._clear_container(wall_run.projectile_container)
+	var maze: MazeGrid = wall_run.current_maze
+
+	# Si cerca una parete con spazio libero da entrambe le parti: il
+	# giocatore di qua, il fiore di là, e nessuna linea di tiro.
+	var flower_spot := Vector2.ZERO
+	var player_spot := Vector2.ZERO
+	var found := false
+	for wall in maze.wall_rects:
+		var across: Vector2 = Vector2(0.0, 1.0) if wall.size.x >= wall.size.y else Vector2(1.0, 0.0)
+		var center: Vector2 = wall.get_center()
+		var a: Vector2 = center - across * 70.0
+		var b: Vector2 = center + across * 70.0
+		# Fuori dal labirinto non ci sono pareti, quindi "libero" non
+		# vuol dire niente: la scena da ricostruire è dentro la stanza.
+		if not maze.total_bounds().has_point(a) or not maze.total_bounds().has_point(b):
+			continue
+		if not maze.is_position_free(a, 16.0) or not maze.is_position_free(b, 16.0):
+			continue
+		if maze.has_line_of_sight(a, b, Enemy.SHOT_CLEARANCE):
+			continue
+		flower_spot = a
+		player_spot = b
+		found = true
+		break
+	_assert(found, "setup del test: non è stata trovata una parete con spazio libero da entrambe le parti")
+
+	wall_run.player.frozen = true
+	wall_run.player.global_position = player_spot
+
+	var flower := Enemy.new()
+	flower.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
+	flower.maze = maze
+	var shots: Array = []
+	flower.spawn_projectile.connect(func(pos, dir, spd, dmg, from_ally, col): shots.append(pos))
+	wall_run.enemy_container.add_child(flower)
+	flower.global_position = flower_spot
+	# Già ancorato: il test vuole vederlo partire proprio da dietro il
+	# muro, non farlo spostare subito dall'ancoraggio iniziale.
+	flower._anchored_to_wall = true
+	flower.attack_timer = 0.0
+	_assert(not flower.has_clear_shot(player_spot), "setup del test: da lí il fiore non dovrebbe avere linea di tiro")
+
+	for i in range(400):
+		await get_tree().physics_frame
+
+	# L'invariante è questa: ogni dardo partito deve avere avuto la
+	# preda davvero a tiro. Sparare dietro un muro è lavoro sprecato che
+	# non arriverà mai a destinazione.
+	for shot_origin in shots:
+		_assert(
+			maze.has_line_of_sight(shot_origin, wall_run.player.global_position, Enemy.SHOT_CLEARANCE),
+			"un dardo è partito da %s, dove il giocatore era dietro un muro" % shot_origin
+		)
+	# E non deve restarsene lí a insistere: se il tiro è ostruito si
+	# sposta a cercare un angolo.
+	_assert(
+		flower.global_position.distance_to(flower_spot) > 1.0,
+		"con il tiro ostruito il Pungiglione dovrebbe spostarsi invece di insistere"
+	)
+
+	wall_run.queue_free()
+	await get_tree().process_frame
+	print("Tiro ostruito del Pungiglione: OK")
