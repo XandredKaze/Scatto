@@ -55,11 +55,19 @@ func _init() -> void:
 
 func _draw() -> void:
 	if maze != null:
-		_draw_floor(maze.total_bounds())
+		_draw_maze_floor()
 		_draw_props()
 		_draw_walls(maze.wall_rects)
 	else:
 		_draw_open_arena()
+
+# Nelle mappe il pavimento c'è solo dove si cammina, sale e corridoi: il
+# vuoto fra una sala e l'altra resta il nero di fondo, ed è quel buio a far
+# leggere le sale come luoghi separati invece che come un unico blocco.
+func _draw_maze_floor() -> void:
+	for cell in maze.open_cells():
+		draw_rect(maze.cell_rect(cell), Palette.STONE_DEEP)
+	_draw_floor_details()
 
 func _draw_open_arena() -> void:
 	draw_rect(Rect2(Vector2.ZERO, arena_size), Palette.VOID)
@@ -84,6 +92,9 @@ func _arena_wall_rects() -> Array:
 
 func _draw_floor(bounds: Rect2) -> void:
 	draw_rect(bounds, Palette.STONE_DEEP)
+	_draw_floor_details()
+
+func _draw_floor_details() -> void:
 	for tile in _floor_tiles:
 		draw_rect(tile.rect, tile.color)
 		# Fuga: due lati per lastra bastano a chiudere la griglia e
@@ -210,7 +221,9 @@ func _build_floor_tiles(bounds: Rect2, rng: RandomNumberGenerator) -> void:
 				min(TILE_SIZE, bounds.end.x - x),
 				min(TILE_SIZE, bounds.end.y - y)
 			))
-			_floor_tiles.append({"rect": rect, "color": _slab_color(rect.get_center(), rng)})
+			# Niente lastre nel vuoto fra le sale.
+			if maze == null or maze.is_open_cell(maze.world_to_cell(rect.get_center())):
+				_floor_tiles.append({"rect": rect, "color": _slab_color(rect.get_center(), rng)})
 			x += TILE_SIZE
 		y += TILE_SIZE
 
@@ -281,9 +294,12 @@ func _build_props(bounds: Rect2, rng: RandomNumberGenerator) -> void:
 	for rect in wall_rects:
 		if rect.size.x < rect.size.y or rect.size.x < 160.0:
 			continue
-		# Solo i muri che hanno pavimento davanti a sé: su quello più in
-		# basso lo stendardo penderebbe fuori dalla stanza, invisibile.
+		# Solo i muri che hanno davanti a sé il pavimento di una sala: sul
+		# bordo inferiore di una sala lo stendardo penderebbe nel vuoto, e
+		# in un corridoio ingombrerebbe il passaggio.
 		if rect.end.y >= bounds.end.y - 40.0:
+			continue
+		if maze != null and not maze.is_room_point(Vector2(rect.get_center().x, rect.end.y + 30.0)):
 			continue
 		var roll: float = rng.randf()
 		if roll < 0.14:

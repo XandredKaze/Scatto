@@ -1,39 +1,45 @@
 class_name MazeGrid
 extends RefCounted
 
-# Struttura della mappa: un complesso di SALE rettangolari collegate fra
-# loro da varchi, non più un labirinto di corridoi.
+# Struttura della mappa: SALE sparse nel buio, collegate da CORRIDOI.
 #
-# La griglia di celle viene suddivisa ricorsivamente (BSP) in blocchi
-# rettangolari; ogni blocco diventa una sala con l'interno completamente
-# aperto, e ogni taglio della suddivisione lascia un varco nel muro che
-# separa le due metà. L'albero dei tagli garantisce da solo che tutte le
-# sale siano collegate; qualche varco in più (extra_door_chance) chiude
-# degli anelli, cosí non si passa sempre e solo per la stessa porta.
+# La griglia di celle viene suddivisa ricorsivamente (BSP) in zone; in
+# ogni zona si ricava una sala più piccola della zona stessa, in una
+# posizione a caso, cosí fra una sala e l'altra resta sempre del vuoto
+# (almeno due celle) e le sale non formano mai un unico blocco compatto.
+# Ogni taglio della suddivisione collega le due metà con un corridoio
+# largo una cella fra le due sale più vicine: l'albero dei tagli basta a
+# rendere tutto raggiungibile. Qualche corridoio in più chiude degli
+# anelli, cosí non si torna sempre per la stessa strada.
 #
-# Una sala è la SALA DEL PREMIO: la più lontana dallo spawn fra quelle con
-# un solo varco. Quel varco ospita la porta di uscita (vedi ExitGate), che
-# resta chiusa finché la mappa non è ripulita: è l'unico modo di
-# raggiungere la mappa successiva, e nessun nemico vi viene generato
-# (sarebbe irraggiungibile e la mappa non si potrebbe mai ripulire).
+# Le celle che non sono né sala né corridoio sono VUOTO: non ci si entra
+# (is_position_free le rifiuta, e i muri le chiudono) e non si disegnano.
 #
-# Le pareti sono rappresentate sia come segmenti Rect2 (collisione e
-# disegno) sia come grafo di celle collegate (per il pathfinding dei
-# nemici tramite AStar2D). Nessun nodo della scena: è puro dato/logica,
-# cosí è testabile senza avviare l'albero di gioco.
+# Una sala è la SALA DEL PREMIO: la più lontana dallo spawn fra quelle
+# raggiunte da un solo corridoio. L'imbocco di quel corridoio ospita la
+# porta di uscita (vedi ExitGate), chiusa finché la mappa non è ripulita:
+# è l'unico modo di raggiungere la mappa successiva, e nessun nemico vi
+# viene generato (sarebbe irraggiungibile, e la porta non si aprirebbe).
+#
+# Le pareti sono sia segmenti Rect2 (collisione e disegno) sia grafo di
+# celle collegate (pathfinding AStar2D). Nessun nodo della scena: è puro
+# dato/logica, cosí è testabile senza avviare l'albero di gioco.
 
-# Lato minimo di una sala, in celle. Due celle bastano a farne una sala
-# invece di un corridoio, e su una griglia 8x6 lasciano spazio a un buon
-# numero di stanze di taglie diverse.
-const MIN_ROOM_CELLS := 2
-# Un'area fino a questa superficie (in celle) può restare intera invece di
-# essere divisa ancora, con probabilità HALL_CHANCE: sono i saloni.
-const MAX_HALL_CELLS := 12
-const HALL_CHANCE := 0.4
-# Larghezza del passaggio lasciato libero in un varco. Il varco occupa un
-# lato intero di cella (cell_size), troppo per leggersi come una porta:
-# due spallette di muro lo stringono fino a questa misura.
-const DOOR_WIDTH := 132.0
+# Lato di una sala, in celle.
+const MIN_ROOM_CELLS := 3
+const MAX_ROOM_CELLS := 6
+# Lato minimo di una zona della suddivisione: una sala minima più una
+# cella di vuoto per parte. È questo margine a tenere le sale separate.
+const MIN_ZONE_CELLS := 5
+# Una zona ancora divisibile ma già piccola può restare intera: la sua
+# sala avrà molto vuoto attorno, e la mappa risulta meno regolare.
+const ZONE_STOP_CHANCE := 0.25
+# Corridoi oltre a quelli indispensabili, per chiudere qualche anello.
+const EXTRA_CORRIDORS := 2
+const EXTRA_CORRIDOR_CHANCE := 0.6
+
+const VOID_CELL := -1
+const CORRIDOR_CELL := -2
 
 var cols: int
 var rows: int
@@ -53,13 +59,16 @@ var astar: AStar2D
 var extra_blockers: Array = []
 
 var rooms: Array = []        # Array[Rect2i], in coordinate di cella
-var doorways: Array = []     # Array[{a: Vector2i, b: Vector2i}]
+var doorways: Array = []     # Array[{a: cella fuori, b: cella della sala}]
+var spawn_cell: Vector2i = Vector2i.ZERO
+var spawn_room_index: int = -1
 var exit_room_index: int = -1
-var gate_doorway: Dictionary = {}  # {a: cella fuori, b: cella dentro la sala del premio}
+var gate_doorway: Dictionary = {}  # {a: cella del corridoio, b: cella dentro la sala del premio}
 
-var _room_of_cell: Array = []
+var _kind: Array = []        # _kind[y][x]: indice della sala, CORRIDOR_CELL o VOID_CELL
+var _linked := {}            # coppie di sale già unite da un corridoio
 
-func generate(p_cols: int, p_rows: int, p_cell_size: float, rng: RandomNumberGenerator, spawn_cell: Vector2i = Vector2i(0, 0), extra_door_chance: float = 0.22) -> void:
+func generate(p_cols: int, p_rows: int, p_cell_size: float, rng: RandomNumberGenerator, spawn_hint: Vector2i = Vector2i(0, 0)) -> void:
 	cols = p_cols
 	rows = p_rows
 	cell_size = p_cell_size
@@ -67,84 +76,222 @@ func generate(p_cols: int, p_rows: int, p_cell_size: float, rng: RandomNumberGen
 	rooms.clear()
 	doorways.clear()
 	extra_blockers.clear()
+	_linked = {}
 	exit_room_index = -1
+	spawn_room_index = -1
 	gate_doorway = {}
-	_reset_openings()
+	_reset_grid()
 
-	_split_and_connect(Rect2i(0, 0, cols, rows), rng, true)
-	_open_room_interiors()
-	_build_room_index()
-	_pick_exit_room(spawn_cell)
-	_add_extra_doors(rng, extra_door_chance)
+	_split_zone(Rect2i(0, 0, cols, rows), rng, true)
+	_pick_spawn(spawn_hint)
+	_compute_doorways()
+	_pick_exit_room()
+	_add_extra_corridors(rng)
+	_compute_doorways()
 	_build_wall_rects()
 	_build_astar()
 
-func _reset_openings() -> void:
+func _reset_grid() -> void:
 	open_right = []
 	open_down = []
+	_kind = []
 	for y in range(rows):
 		var right_row: Array = []
 		var down_row: Array = []
+		var kind_row: Array = []
 		for x in range(cols):
 			right_row.append(false)
 			down_row.append(false)
+			kind_row.append(VOID_CELL)
 		open_right.append(right_row)
 		open_down.append(down_row)
+		_kind.append(kind_row)
 
-# --- Suddivisione in sale ----------------------------------------------------
+# --- Suddivisione in zone e sale ---------------------------------------------
 
-# Taglia ricorsivamente `area` in due metà, ricorre su entrambe e lascia un
-# varco sulla linea di taglio. Le foglie della ricorsione sono le sale.
-# Poiché ogni taglio collega le proprie due metà con un varco, l'insieme
-# delle sale risulta un albero: tutte raggiungibili, nessuna isolata.
-func _split_and_connect(area: Rect2i, rng: RandomNumberGenerator, is_root: bool = false) -> void:
-	var can_cut_x: bool = area.size.x >= MIN_ROOM_CELLS * 2
-	var can_cut_y: bool = area.size.y >= MIN_ROOM_CELLS * 2
-	if not can_cut_x and not can_cut_y:
-		rooms.append(area)
-		return
-	# Fermarsi a volte pur potendo ancora tagliare è ciò che dà sale di
-	# taglie diverse (qualche salone 4x3 accanto a stanzette 2x2) invece
-	# di una scacchiera di rettangoli identici. Mai sulle aree troppo
-	# allungate, che diventerebbero corridoi, e mai alla radice: la mappa
-	# potrebbe restare un'unica sala senza varchi, quindi senza porta.
-	var elongated: bool = max(area.size.x, area.size.y) > min(area.size.x, area.size.y) * 2 + 1
-	if not is_root and not elongated and area.size.x * area.size.y <= MAX_HALL_CELLS and rng.randf() < HALL_CHANCE:
-		rooms.append(area)
-		return
+# Taglia ricorsivamente `zone` in due metà, ricorre su entrambe e unisce
+# con un corridoio le due sale più vicine fra le due metà. Restituisce gli
+# indici delle sale nate in questa zona.
+func _split_zone(zone: Rect2i, rng: RandomNumberGenerator, is_root: bool = false) -> Array:
+	var can_cut_x: bool = zone.size.x >= MIN_ZONE_CELLS * 2
+	var can_cut_y: bool = zone.size.y >= MIN_ZONE_CELLS * 2
+	var stop: bool = not can_cut_x and not can_cut_y
+	# Mai alla radice: la mappa resterebbe una sola sala, senza corridoi e
+	# quindi senza porta di uscita.
+	if not stop and not is_root and zone.size.x <= MIN_ZONE_CELLS * 3 and zone.size.y <= MIN_ZONE_CELLS * 3:
+		stop = rng.randf() < ZONE_STOP_CHANCE
+	if stop:
+		return [_place_room(zone, rng)]
 
-	var cut_vertical: bool
+	var cut_x: bool
 	if can_cut_x and can_cut_y:
-		# Si taglia il lato lungo: le sale restano larghe abbastanza da
-		# essere sale, non corridoi.
-		if area.size.x == area.size.y:
-			cut_vertical = rng.randf() < 0.5
+		# Si taglia il lato lungo, cosí le zone restano grosso modo quadrate.
+		if zone.size.x == zone.size.y:
+			cut_x = rng.randf() < 0.5
 		else:
-			cut_vertical = area.size.x > area.size.y
+			cut_x = zone.size.x > zone.size.y
 	else:
-		cut_vertical = can_cut_x
+		cut_x = can_cut_x
 
-	if cut_vertical:
-		var cut: int = rng.randi_range(area.position.x + MIN_ROOM_CELLS, area.end.x - MIN_ROOM_CELLS)
-		_split_and_connect(Rect2i(area.position, Vector2i(cut - area.position.x, area.size.y)), rng)
-		_split_and_connect(Rect2i(Vector2i(cut, area.position.y), Vector2i(area.end.x - cut, area.size.y)), rng)
-		var door_y: int = rng.randi_range(area.position.y, area.end.y - 1)
-		_carve_doorway(Vector2i(cut - 1, door_y), Vector2i(cut, door_y))
+	var first: Rect2i
+	var second: Rect2i
+	if cut_x:
+		var cut: int = rng.randi_range(zone.position.x + MIN_ZONE_CELLS, zone.end.x - MIN_ZONE_CELLS)
+		first = Rect2i(zone.position, Vector2i(cut - zone.position.x, zone.size.y))
+		second = Rect2i(Vector2i(cut, zone.position.y), Vector2i(zone.end.x - cut, zone.size.y))
 	else:
-		var cut_y: int = rng.randi_range(area.position.y + MIN_ROOM_CELLS, area.end.y - MIN_ROOM_CELLS)
-		_split_and_connect(Rect2i(area.position, Vector2i(area.size.x, cut_y - area.position.y)), rng)
-		_split_and_connect(Rect2i(Vector2i(area.position.x, cut_y), Vector2i(area.size.x, area.end.y - cut_y)), rng)
-		var door_x: int = rng.randi_range(area.position.x, area.end.x - 1)
-		_carve_doorway(Vector2i(door_x, cut_y - 1), Vector2i(door_x, cut_y))
+		var cut_y: int = rng.randi_range(zone.position.y + MIN_ZONE_CELLS, zone.end.y - MIN_ZONE_CELLS)
+		first = Rect2i(zone.position, Vector2i(zone.size.x, cut_y - zone.position.y))
+		second = Rect2i(Vector2i(zone.position.x, cut_y), Vector2i(zone.size.x, zone.end.y - cut_y))
 
-func _open_room_interiors() -> void:
-	for room in rooms:
-		for y in range(room.position.y, room.end.y):
-			for x in range(room.position.x, room.end.x - 1):
+	var left: Array = _split_zone(first, rng)
+	var right: Array = _split_zone(second, rng)
+	_connect_nearest(left, right, rng)
+	return left + right
+
+# Una sala più piccola della sua zona, in una posizione a caso al suo
+# interno, con almeno una cella di vuoto per lato quando la zona lo
+# permette: è quel margine a lasciare il buio fra una sala e l'altra.
+func _place_room(zone: Rect2i, rng: RandomNumberGenerator) -> int:
+	var size := Vector2i(_room_extent(zone.size.x, rng), _room_extent(zone.size.y, rng))
+	var pos := Vector2i(
+		_room_offset(zone.position.x, zone.size.x, size.x, rng),
+		_room_offset(zone.position.y, zone.size.y, size.y, rng)
+	)
+	var room := Rect2i(pos, size)
+	var index: int = rooms.size()
+	rooms.append(room)
+	for y in range(room.position.y, room.end.y):
+		for x in range(room.position.x, room.end.x):
+			_kind[y][x] = index
+			if x < room.end.x - 1:
 				open_right[y][x] = true
-		for y in range(room.position.y, room.end.y - 1):
-			for x in range(room.position.x, room.end.x):
+			if y < room.end.y - 1:
 				open_down[y][x] = true
+	return index
+
+func _room_extent(span: int, rng: RandomNumberGenerator) -> int:
+	var top: int = min(MAX_ROOM_CELLS, span - 2)
+	if top >= MIN_ROOM_CELLS:
+		return rng.randi_range(MIN_ROOM_CELLS, top)
+	# Zona più stretta del previsto (griglie piccole): la sala si prende
+	# quello che c'è, rinunciando al margine prima che alla sala.
+	return min(span, MIN_ROOM_CELLS)
+
+func _room_offset(start: int, span: int, extent: int, rng: RandomNumberGenerator) -> int:
+	var slack: int = span - extent
+	if slack >= 2:
+		return rng.randi_range(start + 1, start + slack - 1)
+	return start + slack / 2
+
+# --- Corridoi ----------------------------------------------------------------
+
+func _connect_nearest(group_a: Array, group_b: Array, rng: RandomNumberGenerator) -> void:
+	var best_a := -1
+	var best_b := -1
+	var best_dist := INF
+	for ia in group_a:
+		for ib in group_b:
+			var d: float = _room_distance(ia, ib)
+			if d < best_dist:
+				best_dist = d
+				best_a = ia
+				best_b = ib
+	if best_a < 0:
+		return
+	_carve_path(_corridor_path(rooms[best_a], rooms[best_b], rng))
+	_linked[_pair_key(best_a, best_b)] = true
+
+func _room_distance(ia: int, ib: int) -> float:
+	var a: Rect2i = rooms[ia]
+	var b: Rect2i = rooms[ib]
+	return Vector2(a.get_center()).distance_to(Vector2(b.get_center()))
+
+# Il percorso di un corridoio fra due sale, cella per cella. Se le due
+# sale si fronteggiano (si sovrappongono lungo un asse) il corridoio è
+# dritto; altrimenti piega una volta ad angolo retto. Fra i tracciati
+# possibili (ogni colonna o riga in comune, o le due pieghe) si sceglie
+# quello che corre meno a ridosso di corridoi e sale già scavati: due
+# corridoi affiancati, separati solo da un muretto, sembrano un errore.
+func _corridor_path(a: Rect2i, b: Rect2i, rng: RandomNumberGenerator) -> Array:
+	var candidates: Array = _corridor_candidates(a, b)
+	# Ordine casuale: a parità di punteggio vince un tracciato qualsiasi,
+	# non sempre il primo (che sarebbe sempre sul lato sinistro/alto).
+	for i in range(candidates.size() - 1, 0, -1):
+		var j: int = rng.randi_range(0, i)
+		var swap = candidates[i]
+		candidates[i] = candidates[j]
+		candidates[j] = swap
+	var best: Array = candidates[0]
+	var best_score: int = _crowding(best)
+	for path in candidates:
+		var score: int = _crowding(path)
+		if score < best_score:
+			best_score = score
+			best = path
+	return best
+
+func _corridor_candidates(a: Rect2i, b: Rect2i) -> Array:
+	var lo_x: int = max(a.position.x, b.position.x)
+	var hi_x: int = min(a.end.x, b.end.x) - 1
+	var lo_y: int = max(a.position.y, b.position.y)
+	var hi_y: int = min(a.end.y, b.end.y) - 1
+	var ca: Vector2i = _room_center(a)
+	var cb: Vector2i = _room_center(b)
+	var result: Array = []
+	if lo_x <= hi_x:
+		for x in range(lo_x, hi_x + 1):
+			result.append(_straight(Vector2i(x, ca.y), Vector2i(x, cb.y)))
+		return result
+	if lo_y <= hi_y:
+		for y in range(lo_y, hi_y + 1):
+			result.append(_straight(Vector2i(ca.x, y), Vector2i(cb.x, y)))
+		return result
+	for corner in [Vector2i(cb.x, ca.y), Vector2i(ca.x, cb.y)]:
+		var path: Array = _straight(ca, corner)
+		var tail: Array = _straight(corner, cb)
+		tail.pop_front()
+		path.append_array(tail)
+		result.append(path)
+	return result
+
+# Quante celle nuove del tracciato (quelle che oggi sono vuoto) toccano di
+# lato qualcosa di già scavato che non fa parte del tracciato stesso.
+func _crowding(path: Array) -> int:
+	var on_path := {}
+	for cell in path:
+		on_path[cell] = true
+	var score := 0
+	for cell in path:
+		if _kind[cell.y][cell.x] != VOID_CELL:
+			continue
+		for step in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = cell + step
+			if on_path.has(n) or not _in_grid(n):
+				continue
+			if _kind[n.y][n.x] != VOID_CELL:
+				score += 1
+	return score
+
+func _room_center(room: Rect2i) -> Vector2i:
+	return room.position + room.size / 2
+
+func _straight(from: Vector2i, to: Vector2i) -> Array:
+	var path: Array = [from]
+	var step := Vector2i(signi(to.x - from.x), signi(to.y - from.y))
+	var cur := from
+	while cur != to:
+		cur += step
+		path.append(cur)
+	return path
+
+func _carve_path(path: Array) -> void:
+	for i in range(path.size()):
+		var cell: Vector2i = path[i]
+		if _kind[cell.y][cell.x] == VOID_CELL:
+			_kind[cell.y][cell.x] = CORRIDOR_CELL
+		if i > 0:
+			_carve(path[i - 1], cell)
 
 func _carve(a: Vector2i, b: Vector2i) -> void:
 	if a.y == b.y:
@@ -152,77 +299,149 @@ func _carve(a: Vector2i, b: Vector2i) -> void:
 	else:
 		open_down[min(a.y, b.y)][a.x] = true
 
-func _carve_doorway(a: Vector2i, b: Vector2i) -> void:
-	_carve(a, b)
-	doorways.append({"a": a, "b": b})
-
-# Varchi in più fra sale già collegate: chiudono anelli, cosí il giocatore
-# ha più di una strada. Al massimo un varco per coppia di sale (due porte
-# sullo stesso muro lo farebbero sembrare una linea tratteggiata, e non
-# aggiungono nessuna strada nuova), e mai sulla sala del premio, che deve
-# conservare il suo unico varco — quello con la porta.
-func _add_extra_doors(rng: RandomNumberGenerator, chance: float) -> void:
-	var linked := {}
-	for d in doorways:
-		linked[_room_pair_key(d.a, d.b)] = true
-	var candidates: Array = []
-	for y in range(rows):
-		for x in range(cols - 1):
-			if not open_right[y][x]:
-				candidates.append([Vector2i(x, y), Vector2i(x + 1, y)])
-	for y in range(rows - 1):
-		for x in range(cols):
-			if not open_down[y][x]:
-				candidates.append([Vector2i(x, y), Vector2i(x, y + 1)])
-	# Mescolati: scorrendoli in ordine i varchi extra finirebbero sempre
-	# sul primo tratto di muro di ogni coppia (in alto a sinistra).
-	for i in range(candidates.size() - 1, 0, -1):
-		var j: int = rng.randi_range(0, i)
-		var swap = candidates[i]
-		candidates[i] = candidates[j]
-		candidates[j] = swap
-	for pair in candidates:
-		var a: Vector2i = pair[0]
-		var b: Vector2i = pair[1]
-		if _same_room(a, b) or _touches_exit_room(a, b):
-			continue
-		var key: Vector2i = _room_pair_key(a, b)
-		if linked.has(key):
-			continue
-		if rng.randf() < chance:
-			_carve_doorway(a, b)
-			linked[key] = true
-
-func _room_pair_key(a: Vector2i, b: Vector2i) -> Vector2i:
-	var ra: int = room_at(a)
-	var rb: int = room_at(b)
-	return Vector2i(min(ra, rb), max(ra, rb))
-
-func _same_room(a: Vector2i, b: Vector2i) -> bool:
-	return room_at(a) == room_at(b)
-
-func _touches_exit_room(a: Vector2i, b: Vector2i) -> bool:
-	if exit_room_index < 0:
-		return false
-	return room_at(a) == exit_room_index or room_at(b) == exit_room_index
-
-func _build_room_index() -> void:
-	_room_of_cell = []
-	for y in range(rows):
-		var row: Array = []
-		for x in range(cols):
-			row.append(-1)
-		_room_of_cell.append(row)
+# Corridoi in più fra sale vicine non ancora unite direttamente: chiudono
+# anelli, cosí il giocatore ha più di una strada. Mai verso la sala del
+# premio né attraverso di essa: deve conservare il suo unico imbocco,
+# quello con la porta.
+func _add_extra_corridors(rng: RandomNumberGenerator) -> void:
+	var pairs: Array = []
 	for i in range(rooms.size()):
-		var room: Rect2i = rooms[i]
-		for y in range(room.position.y, room.end.y):
-			for x in range(room.position.x, room.end.x):
-				_room_of_cell[y][x] = i
+		for j in range(i + 1, rooms.size()):
+			if i == exit_room_index or j == exit_room_index:
+				continue
+			if _linked.has(_pair_key(i, j)):
+				continue
+			pairs.append([_room_distance(i, j), i, j])
+	pairs.sort_custom(func(p, q): return p[0] < q[0])
+	var added := 0
+	for pair in pairs:
+		if added >= EXTRA_CORRIDORS:
+			break
+		if rng.randf() > EXTRA_CORRIDOR_CHANCE:
+			continue
+		var path: Array = _corridor_path(rooms[pair[1]], rooms[pair[2]], rng)
+		if exit_room_index >= 0 and path.any(func(c): return _kind[c.y][c.x] == exit_room_index):
+			continue
+		# Un anello è facoltativo: lo si scava solo se passa pulito, senza
+		# costeggiare niente di già scavato.
+		if _crowding(path) > 0:
+			continue
+		_carve_path(path)
+		_linked[_pair_key(pair[1], pair[2])] = true
+		added += 1
+
+func _pair_key(i: int, j: int) -> Vector2i:
+	return Vector2i(min(i, j), max(i, j))
+
+# --- Varchi, spawn e sala del premio -----------------------------------------
+
+# Un varco è un passaggio aperto fra una cella di sala e una cella che non
+# appartiene a quella sala (di solito l'imbocco di un corridoio).
+func _compute_doorways() -> void:
+	doorways.clear()
+	for y in range(rows):
+		for x in range(cols):
+			if x < cols - 1 and open_right[y][x]:
+				_record_doorway(Vector2i(x, y), Vector2i(x + 1, y))
+			if y < rows - 1 and open_down[y][x]:
+				_record_doorway(Vector2i(x, y), Vector2i(x, y + 1))
+
+func _record_doorway(p: Vector2i, q: Vector2i) -> void:
+	var kp: int = _kind[p.y][p.x]
+	var kq: int = _kind[q.y][q.x]
+	if kp == kq:
+		return
+	if kp >= 0:
+		doorways.append({"a": q, "b": p})
+	elif kq >= 0:
+		doorways.append({"a": p, "b": q})
+
+# Lo spawn è al centro della sala più vicina al punto suggerito (di norma
+# un angolo della mappa), cosí la sala del premio finisce dall'altra parte.
+func _pick_spawn(hint: Vector2i) -> void:
+	var best := -1
+	var best_dist := INF
+	for i in range(rooms.size()):
+		var d: float = Vector2(rooms[i].get_center()).distance_to(Vector2(hint))
+		if d < best_dist:
+			best_dist = d
+			best = i
+	spawn_room_index = best
+	if best >= 0:
+		spawn_cell = _room_center(rooms[best])
+
+# La sala del premio è la più lontana dallo spawn (in passi lungo i
+# passaggi aperti, non in linea d'aria) fra quelle con UN SOLO varco:
+# quel varco diventa la porta, e chiuderlo non isola nient'altro.
+func _pick_exit_room() -> void:
+	if rooms.size() < 2:
+		return
+	var dist := _cell_distances(spawn_cell)
+	var best_room := -1
+	var best_dist := -1
+	for i in range(rooms.size()):
+		if i == spawn_room_index or doorways_of_room(i).size() != 1:
+			continue
+		var far := -1
+		for cell in room_cells(i):
+			var d: int = dist.get(cell, -1)
+			if d > far:
+				far = d
+		if far > best_dist:
+			best_dist = far
+			best_room = i
+	if best_room < 0:
+		return
+	exit_room_index = best_room
+	var door: Dictionary = doorways_of_room(best_room)[0]
+	gate_doorway = {"a": door.a, "b": door.b}
+
+func _cell_distances(from: Vector2i) -> Dictionary:
+	var dist := {from: 0}
+	var queue: Array = [from]
+	var head := 0
+	while head < queue.size():
+		var cur: Vector2i = queue[head]
+		head += 1
+		for n in _open_neighbors(cur):
+			if not dist.has(n):
+				dist[n] = int(dist[cur]) + 1
+				queue.append(n)
+	return dist
+
+# --- Interrogazioni su sale e celle ------------------------------------------
 
 func room_at(cell: Vector2i) -> int:
-	if cell.x < 0 or cell.x >= cols or cell.y < 0 or cell.y >= rows:
+	if not _in_grid(cell):
 		return -1
-	return _room_of_cell[cell.y][cell.x]
+	var k: int = _kind[cell.y][cell.x]
+	return k if k >= 0 else -1
+
+func is_open_cell(cell: Vector2i) -> bool:
+	return _in_grid(cell) and _kind[cell.y][cell.x] != VOID_CELL
+
+func is_corridor_cell(cell: Vector2i) -> bool:
+	return _in_grid(cell) and _kind[cell.y][cell.x] == CORRIDOR_CELL
+
+func _in_grid(cell: Vector2i) -> bool:
+	return cell.x >= 0 and cell.x < cols and cell.y >= 0 and cell.y < rows
+
+# Vero se il punto cade dentro una sala (non in un corridoio né nel vuoto).
+func is_room_point(pos: Vector2) -> bool:
+	if not total_bounds().has_point(pos):
+		return false
+	return room_at(world_to_cell(pos)) >= 0
+
+func open_cells() -> Array:
+	var result: Array = []
+	for y in range(rows):
+		for x in range(cols):
+			if _kind[y][x] != VOID_CELL:
+				result.append(Vector2i(x, y))
+	return result
+
+func cell_rect(cell: Vector2i) -> Rect2:
+	return Rect2(origin + Vector2(cell) * cell_size, Vector2(cell_size, cell_size))
 
 func room_cells(index: int) -> Array:
 	var result: Array = []
@@ -241,85 +460,34 @@ func doorways_of_room(index: int) -> Array:
 			result.append(d)
 	return result
 
-# --- Sala del premio e porta di uscita ---------------------------------------
-
-# La sala del premio è la più lontana dallo spawn (in passi lungo i
-# passaggi aperti, non in linea d'aria) fra quelle con UN SOLO varco:
-# quel varco diventa la porta, e chiudendolo non si isola nient'altro.
-func _pick_exit_room(spawn_cell: Vector2i) -> void:
-	if rooms.size() < 2:
-		return
-	var dist := _cell_distances(spawn_cell)
-	var best_room := -1
-	var best_dist := -1
-	for i in range(rooms.size()):
-		if doorways_of_room(i).size() != 1:
-			continue
-		var far := -1
-		for cell in room_cells(i):
-			var d: int = dist.get(cell, -1)
-			if d > far:
-				far = d
-		if far > best_dist:
-			best_dist = far
-			best_room = i
-	if best_room < 0:
-		return
-	exit_room_index = best_room
-	var door: Dictionary = doorways_of_room(best_room)[0]
-	# `b` è sempre la cella dentro la sala del premio: chi attraversa la
-	# porta va da `a` verso `b`.
-	if room_at(door.a) == best_room:
-		gate_doorway = {"a": door.b, "b": door.a}
-	else:
-		gate_doorway = {"a": door.a, "b": door.b}
-
-func _cell_distances(from: Vector2i) -> Dictionary:
-	var dist := {from: 0}
-	var queue: Array = [from]
-	var head := 0
-	while head < queue.size():
-		var cur: Vector2i = queue[head]
-		head += 1
-		for n in _open_neighbors(cur):
-			if not dist.has(n):
-				dist[n] = int(dist[cur]) + 1
-				queue.append(n)
-	return dist
-
 func exit_room_cells() -> Array:
 	return room_cells(exit_room_index)
 
 func has_exit_gate() -> bool:
 	return exit_room_index >= 0 and not gate_doorway.is_empty()
 
-# Il rettangolo di passaggio libero lasciato da un varco: è lí che si
-# installa la porta di uscita (mentre è chiusa diventa un blocco in
+# Il rettangolo di passaggio libero all'imbocco della sala del premio: è lí
+# che si installa la porta (mentre è chiusa diventa un blocco in
 # `extra_blockers`, e lí si disegna la grata).
 func gate_rect() -> Rect2:
 	if not has_exit_gate():
 		return Rect2()
 	return doorway_gap_rect(gate_doorway.a, gate_doorway.b)
 
+# Il passaggio fra due celle adiacenti è largo quanto un corridoio: il lato
+# della cella meno mezzo muro per parte (le pareti del corridoio).
 func doorway_gap_rect(a: Vector2i, b: Vector2i) -> Rect2:
 	var t := wall_thickness
-	var half := DOOR_WIDTH * 0.5
+	var half: float = (cell_size - t) * 0.5
 	if a.y == b.y:
 		var x: float = origin.x + float(max(a.x, b.x)) * cell_size
 		var center_y: float = origin.y + (float(a.y) + 0.5) * cell_size
-		return Rect2(Vector2(x - t * 0.5, center_y - half), Vector2(t, DOOR_WIDTH))
+		return Rect2(Vector2(x - t * 0.5, center_y - half), Vector2(t, half * 2.0))
 	var y: float = origin.y + float(max(a.y, b.y)) * cell_size
 	var center_x: float = origin.x + (float(a.x) + 0.5) * cell_size
-	return Rect2(Vector2(center_x - half, y - t * 0.5), Vector2(DOOR_WIDTH, t))
+	return Rect2(Vector2(center_x - half, y - t * 0.5), Vector2(half * 2.0, t))
 
-func is_gate_doorway(a: Vector2i, b: Vector2i) -> bool:
-	if not has_exit_gate():
-		return false
-	var ga: Vector2i = gate_doorway.a
-	var gb: Vector2i = gate_doorway.b
-	return (a == ga and b == gb) or (a == gb and b == ga)
-
-# --- Geometria e interrogazioni ----------------------------------------------
+# --- Geometria e movimento ---------------------------------------------------
 
 func _open_neighbors(cell: Vector2i) -> Array:
 	var result: Array = []
@@ -356,28 +524,29 @@ func find_farthest_cell(from: Vector2i) -> Vector2i:
 			farthest = cell
 	return farthest
 
+# Una cella a caso dentro una sala (mai in un corridoio né nel vuoto),
+# esclusa ogni cella di `exclude`.
 func random_cell(rng: RandomNumberGenerator, exclude: Array = []) -> Vector2i:
-	var attempts := 0
-	while attempts < 200:
-		var c := Vector2i(rng.randi_range(0, cols - 1), rng.randi_range(0, rows - 1))
-		if not exclude.has(c):
-			return c
-		attempts += 1
-	# Ripiego deterministico: la prima cella ammessa trovata scorrendo la
-	# griglia. Tirare a caso e arrendersi su (0,0) rischierebbe di metterci
-	# un nemico proprio dove non deve stare (la sala del premio, chiusa
-	# dalla porta: la mappa non si potrebbe più ripulire).
-	for y in range(rows):
-		for x in range(cols):
-			var c := Vector2i(x, y)
-			if not exclude.has(c):
-				return c
-	return Vector2i(0, 0)
+	var candidates: Array = []
+	for i in range(rooms.size()):
+		for cell in room_cells(i):
+			if not exclude.has(cell):
+				candidates.append(cell)
+	if candidates.is_empty():
+		return spawn_cell
+	return candidates[rng.randi_range(0, candidates.size() - 1)]
 
 func total_bounds() -> Rect2:
 	return Rect2(origin, Vector2(cols, rows) * cell_size)
 
 func is_position_free(pos: Vector2, radius: float) -> bool:
+	# Il vuoto fra le sale non è spazio percorribile: chiunque ci finisse
+	# (un Pungiglione che rispunta, un proiettile, una macchia di sangue
+	# del decoro) sarebbe fuori dalla mappa.
+	if not total_bounds().has_point(pos):
+		return false
+	if not is_open_cell(world_to_cell(pos)):
+		return false
 	for rect in wall_rects:
 		if _circle_intersects_rect(pos, radius, rect):
 			return false
@@ -412,7 +581,14 @@ func get_path(from_pos: Vector2, to_pos: Vector2) -> PackedVector2Array:
 		return PackedVector2Array()
 	var from_cell := world_to_cell(from_pos)
 	var to_cell := world_to_cell(to_pos)
-	return astar.get_point_path(_cell_id(from_cell.x, from_cell.y), _cell_id(to_cell.x, to_cell.y))
+	var from_id := _cell_id(from_cell.x, from_cell.y)
+	var to_id := _cell_id(to_cell.x, to_cell.y)
+	# Nel vuoto non ci sono punti del grafo: chiederne il percorso darebbe
+	# errore. Non dovrebbe mai succedere (nessuno può stare nel vuoto), ma
+	# un percorso vuoto è un ripiego innocuo.
+	if not astar.has_point(from_id) or not astar.has_point(to_id):
+		return PackedVector2Array()
+	return astar.get_point_path(from_id, to_id)
 
 # Vero se tra i due punti non si frappone alcuna parete. Serve a chi
 # spara da fermo (il Pungiglione) per non scaricare dardi contro un muro
@@ -438,18 +614,18 @@ func _segment_intersects_rect(a: Vector2, b: Vector2, rect: Rect2) -> bool:
 	var t_min := 0.0
 	var t_max := 1.0
 	for axis in range(2):
-		var origin: float = a[axis]
+		var start: float = a[axis]
 		var step: float = direction[axis]
 		var low: float = rect.position[axis]
 		var high: float = rect.end[axis]
 		if absf(step) < 0.00001:
 			# Segmento parallelo a questo asse: o è già dentro la fascia
 			# del rettangolo, o non la attraverserà mai.
-			if origin < low or origin > high:
+			if start < low or start > high:
 				return false
 			continue
-		var t1: float = (low - origin) / step
-		var t2: float = (high - origin) / step
+		var t1: float = (low - start) / step
+		var t2: float = (high - start) / step
 		if t1 > t2:
 			var swap: float = t1
 			t1 = t2
@@ -467,7 +643,8 @@ func _build_astar() -> void:
 	astar = AStar2D.new()
 	for y in range(rows):
 		for x in range(cols):
-			astar.add_point(_cell_id(x, y), cell_center(x, y))
+			if _kind[y][x] != VOID_CELL:
+				astar.add_point(_cell_id(x, y), cell_center(x, y))
 	for y in range(rows):
 		for x in range(cols):
 			if x < cols - 1 and open_right[y][x]:
@@ -475,59 +652,48 @@ func _build_astar() -> void:
 			if y < rows - 1 and open_down[y][x]:
 				astar.connect_points(_cell_id(x, y), _cell_id(x, y + 1))
 
+# Un muro su ogni lato di cella che separa spazio percorribile da ciò che
+# non lo è (il vuoto, il bordo della mappa, o un'altra cella percorribile
+# non collegata). I lati consecutivi sulla stessa linea si fondono in un
+# unico blocco: meno rettangoli da controllare a ogni passo e nessuna
+# giuntura visibile fra una cella e l'altra.
 func _build_wall_rects() -> void:
 	wall_rects.clear()
 	var t := wall_thickness
-	for y in range(rows):
-		wall_rects.append(_vertical_wall_rect(0, y, t))
-		wall_rects.append(_vertical_wall_rect(cols, y, t))
-		for x in range(cols - 1):
-			if not open_right[y][x]:
-				wall_rects.append(_vertical_wall_rect(x + 1, y, t))
-	for x in range(cols):
-		wall_rects.append(_horizontal_wall_rect(x, 0, t))
-		wall_rects.append(_horizontal_wall_rect(x, rows, t))
-		for y in range(rows - 1):
-			if not open_down[y][x]:
-				wall_rects.append(_horizontal_wall_rect(x, y + 1, t))
-	_build_doorway_jambs(t)
-
-# Spallette che stringono ogni varco fino a DOOR_WIDTH: un'apertura larga
-# quanto un lato di cella non si leggerebbe come una porta, e la grata
-# dell'uscita avrebbe l'aria di una recinzione.
-func _build_doorway_jambs(t: float) -> void:
-	for d in doorways:
-		var a: Vector2i = d.a
-		var b: Vector2i = d.b
-		var half := DOOR_WIDTH * 0.5
-		if a.y == b.y:
-			var x: float = origin.x + float(max(a.x, b.x)) * cell_size
-			var span_start: float = origin.y + float(a.y) * cell_size - t * 0.5
-			var span_end: float = span_start + cell_size + t
-			var center_y: float = origin.y + (float(a.y) + 0.5) * cell_size
-			_append_jamb(Rect2(Vector2(x - t * 0.5, span_start), Vector2(t, center_y - half - span_start)))
-			_append_jamb(Rect2(Vector2(x - t * 0.5, center_y + half), Vector2(t, span_end - center_y - half)))
-		else:
-			var y: float = origin.y + float(max(a.y, b.y)) * cell_size
-			var span_start_x: float = origin.x + float(a.x) * cell_size - t * 0.5
-			var span_end_x: float = span_start_x + cell_size + t
-			var center_x: float = origin.x + (float(a.x) + 0.5) * cell_size
-			_append_jamb(Rect2(Vector2(span_start_x, y - t * 0.5), Vector2(center_x - half - span_start_x, t)))
-			_append_jamb(Rect2(Vector2(center_x + half, y - t * 0.5), Vector2(span_end_x - center_x - half, t)))
-
-func _append_jamb(rect: Rect2) -> void:
-	if rect.size.x > 0.5 and rect.size.y > 0.5:
-		wall_rects.append(rect)
-
-func _vertical_wall_rect(grid_x: int, y: int, t: float) -> Rect2:
-	var cx: float = origin.x + float(grid_x) * cell_size
-	var cy: float = origin.y + float(y) * cell_size
-	return Rect2(Vector2(cx - t / 2.0, cy - t / 2.0), Vector2(t, cell_size + t))
-
-func _horizontal_wall_rect(x: int, grid_y: int, t: float) -> Rect2:
-	var cx: float = origin.x + float(x) * cell_size
-	var cy: float = origin.y + float(grid_y) * cell_size
-	return Rect2(Vector2(cx - t / 2.0, cy - t / 2.0), Vector2(cell_size + t, t))
+	for y in range(rows + 1):
+		var run_start := -1
+		for x in range(cols + 1):
+			var wall := false
+			if x < cols:
+				var above_open: bool = is_open_cell(Vector2i(x, y - 1))
+				var below_open: bool = is_open_cell(Vector2i(x, y))
+				var linked: bool = above_open and below_open and open_down[y - 1][x]
+				wall = (above_open or below_open) and not linked
+			if wall and run_start < 0:
+				run_start = x
+			elif not wall and run_start >= 0:
+				wall_rects.append(Rect2(
+					origin + Vector2(float(run_start) * cell_size - t * 0.5, float(y) * cell_size - t * 0.5),
+					Vector2(float(x - run_start) * cell_size + t, t)
+				))
+				run_start = -1
+	for x in range(cols + 1):
+		var run_start := -1
+		for y in range(rows + 1):
+			var wall := false
+			if y < rows:
+				var left_open: bool = is_open_cell(Vector2i(x - 1, y))
+				var right_open: bool = is_open_cell(Vector2i(x, y))
+				var linked: bool = left_open and right_open and open_right[y][x - 1]
+				wall = (left_open or right_open) and not linked
+			if wall and run_start < 0:
+				run_start = y
+			elif not wall and run_start >= 0:
+				wall_rects.append(Rect2(
+					origin + Vector2(float(x) * cell_size - t * 0.5, float(run_start) * cell_size - t * 0.5),
+					Vector2(t, float(y - run_start) * cell_size + t)
+				))
+				run_start = -1
 
 func _circle_intersects_rect(pos: Vector2, radius: float, rect: Rect2) -> bool:
 	var closest_x: float = clamp(pos.x, rect.position.x, rect.end.x)

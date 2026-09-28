@@ -42,9 +42,9 @@ Chi giocava prima che gli slot esistessero non perde niente: al primo avvio il v
 
 ### Mappe a sale collegate
 
-Le mappe 1-5 sono **complessi di sale collegate fra loro**, generati proceduralmente (8x6 celle, molto più grandi dello schermo): la griglia viene divisa in sale rettangolari di taglie diverse — stanzette, saloni, qualche galleria — separate da muri con varchi, più qualche varco in più che chiude un anello cosí non si passa sempre per la stessa porta. La telecamera resta sempre centrata sul giocatore e lo segue ovunque si muova; i nemici inseguono seguendo un percorso reale da una sala all'altra attraverso i varchi, non in linea retta.
+Le mappe 1-5 sono **sale sparse nel buio, collegate da corridoi**, generate proceduralmente (22x16 celle da 150 px, molto più grandi dello schermo). La griglia viene divisa in zone e in ogni zona si ricava una sala più piccola della zona, in una posizione a caso: fra una sala e l'altra resta sempre almeno una fascia di vuoto di due celle, e di solito più di metà della mappa è buio. Le sale (da 3x3 a 6x6 celle) sono unite da corridoi larghi una cella, tracciati in modo da non correre attaccati ad altri corridoi o sale; qualche corridoio in più chiude un anello, cosí non si torna sempre per la stessa strada. Il vuoto non si attraversa e non si disegna. La telecamera resta sempre centrata sul giocatore e lo segue ovunque si muova; i nemici inseguono seguendo un percorso reale da una sala all'altra attraverso i corridoi, non in linea retta.
 
-La sala più lontana dallo spawn è la **sala del premio**: ha un solo varco, chiuso da una **porta di uscita** con un sigillo cremisi. La porta resta chiusa (e blocca davvero giocatore, nemici, alleati e proiettili) finché nella mappa c'è un nemico ostile in piedi: si apre non appena sono stati tutti sconfitti e/o resi alleati. Aperta, la grata rientra negli stipiti e la soglia si accende di brace, riconoscibile anche da lontano. Nella sala del premio non viene mai generato nessun nemico.
+La sala più lontana dallo spawn è la **sala del premio**: vi arriva un solo corridoio, e il suo imbocco è chiuso da una **porta di uscita** con un sigillo cremisi. La porta resta chiusa (e blocca davvero giocatore, nemici, alleati e proiettili) finché nella mappa c'è un nemico ostile in piedi: si apre non appena sono stati tutti sconfitti e/o resi alleati. Aperta, la grata rientra negli stipiti e la soglia si accende di brace, riconoscibile anche da lontano. Nella sala del premio non viene mai generato nessun nemico.
 
 Visivamente le stanze sono una **cripta gotica**: pavimento di lastre di pietra tagliata, fredde e quasi nere, segnate da fughe, crepe e sangue rappreso; muri come blocchi di muratura più scuri del pavimento, con lo spigolo superiore appena illuminato e un'ombra netta proiettata a terra; e, appesi alle pareti lunghe, stendardi cremisi e bracieri che sono le uniche fonti di colore acceso. Il decoro è generato una volta per stanza e la collisione resta quella rettangolare sotto il cofano, cosí il movimento resta preciso e prevedibile.
 
@@ -152,7 +152,7 @@ assets/images/amic_logo.png   # logo della schermata del titolo (sfondo ritaglia
 scripts/
   Main.gd                     # coordina Hub <-> Run
   core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice
-  core/MazeGrid.gd            # mappa a sale collegate: generazione, sala del premio, collisione, pathfinding
+  core/MazeGrid.gd            # mappa a sale sparse e corridoi: generazione, sala del premio, collisione, pathfinding
   autoload/SaveManager.gd     # persistenza su user://: tre slot di progressi + impostazioni in comune
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   data/Palette.gd             # linguaggio cromatico unico del gioco + tema dell'interfaccia

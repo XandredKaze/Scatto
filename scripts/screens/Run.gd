@@ -12,18 +12,20 @@ extends Node2D
 
 signal return_to_hub_requested
 
-# Mappe 1-5: un complesso di sale rettangolari collegate da varchi (vedi
-# MazeGrid), molto più grande dello schermo. Muri spessi per l'aspetto da
-# cripta di pietra (vedi ArenaVisual per il rendering).
+# Mappe 1-5: sale sparse nel buio, collegate da corridoi larghi una cella
+# (vedi MazeGrid), molto più grandi dello schermo. Muri spessi per
+# l'aspetto da cripta di pietra (vedi ArenaVisual per il rendering).
 #
 # La sala più lontana dallo spawn è la SALA DEL PREMIO: il suo unico varco
 # è chiuso dalla porta di uscita, che si apre soltanto quando nella mappa
 # non resta un solo nemico ostile in piedi (sconfitto o diventato alleato).
 # La ricompensa si riceve attraversando quella porta, non alla caduta
 # dell'ultimo nemico: il premio sta oltre la soglia.
-const MAZE_COLS := 8
-const MAZE_ROWS := 6
-const CELL_SIZE := 300.0
+const MAZE_COLS := 22
+const MAZE_ROWS := 16
+# Una cella è anche la larghezza di un corridoio: 150 px meno i muri
+# lasciano un passaggio comodo anche al Corazzato, senza farne un salone.
+const CELL_SIZE := 150.0
 const WALL_THICKNESS := 34.0
 # Sala del boss (6): arena aperta (niente pareti interne) ma comunque
 # più grande della finestra di gioco, cosí anche lí la camera segue il
@@ -230,13 +232,13 @@ func _generate_room(n: int) -> void:
 	reward_delivered = false
 	player.unfreeze()
 
-	# Lo spawn è noto prima di generare: è da lí che si misura quale sala
-	# è la più lontana, e quindi quale ospita il premio dietro la porta.
-	var spawn_cell := Vector2i(0, MAZE_ROWS - 1)
-
+	# Lo spawn è nella sala più vicina all'angolo in basso a sinistra (la
+	# cella d'angolo potrebbe essere vuoto): da lí si misura quale sala è
+	# la più lontana, e quindi quale ospita il premio dietro la porta.
 	var maze := MazeGrid.new()
 	maze.wall_thickness = WALL_THICKNESS
-	maze.generate(MAZE_COLS, MAZE_ROWS, CELL_SIZE, rng, spawn_cell)
+	maze.generate(MAZE_COLS, MAZE_ROWS, CELL_SIZE, rng, Vector2i(0, MAZE_ROWS - 1))
+	var spawn_cell: Vector2i = maze.spawn_cell
 	current_maze = maze
 	arena_rect = Rect2()
 

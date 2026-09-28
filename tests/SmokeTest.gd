@@ -2025,68 +2025,67 @@ func _test_boss_attack_patterns() -> void:
 	await get_tree().physics_frame
 
 func _test_maze_grid() -> void:
-	print("--- Test MazeGrid (generazione, collisione, pathfinding) ---")
+	print("--- Test MazeGrid (sale sparse, corridoi, collisione, pathfinding) ---")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 12345
 
 	var maze := MazeGrid.new()
-	maze.generate(7, 6, 160.0, rng)
+	maze.wall_thickness = Run.WALL_THICKNESS
+	maze.generate(Run.MAZE_COLS, Run.MAZE_ROWS, Run.CELL_SIZE, rng, Vector2i(0, Run.MAZE_ROWS - 1))
 
-	_assert(maze.wall_rects.size() > 0, "il labirinto non ha generato pareti")
+	_assert(maze.wall_rects.size() > 0, "la mappa non ha generato pareti")
+	var open: Array = maze.open_cells()
+	_assert(open.size() > 0, "la mappa non ha celle percorribili")
 
-	# Connettività: ogni cella deve essere raggiungibile da (0,0) via BFS
-	# sulle sole connessioni aperte (nessuna isola scollegata).
-	var reached := {Vector2i(0, 0): true}
-	var queue: Array = [Vector2i(0, 0)]
-	var head := 0
-	while head < queue.size():
-		var cur: Vector2i = queue[head]
-		head += 1
-		for n in maze._open_neighbors(cur):
-			if not reached.has(n):
-				reached[n] = true
-				queue.append(n)
-	_assert(reached.size() == maze.cols * maze.rows, "il labirinto ha celle non raggiungibili (%d su %d)" % [reached.size(), maze.cols * maze.rows])
+	# Connettività: ogni cella percorribile (sala o corridoio) deve essere
+	# raggiungibile dallo spawn lungo i passaggi aperti (nessuna isola).
+	var reached := maze._cell_distances(maze.spawn_cell)
+	_assert(reached.size() == open.size(), "la mappa ha celle percorribili non raggiungibili (%d su %d)" % [reached.size(), open.size()])
+	_assert(maze.room_at(maze.spawn_cell) >= 0, "lo spawn dovrebbe essere dentro una sala")
 
-	# Il centro di ogni cella deve essere libero (mai dentro una parete).
-	var all_centers_free := true
+	# Il centro di ogni cella percorribile deve essere libero; il vuoto no.
+	for cell in open:
+		_assert(maze.is_position_free(maze.cell_center(cell.x, cell.y), 12.0), "il centro della cella percorribile %s risulta dentro una parete" % cell)
 	for y in range(maze.rows):
 		for x in range(maze.cols):
-			if not maze.is_position_free(maze.cell_center(x, y), 12.0):
-				all_centers_free = false
-	_assert(all_centers_free, "il centro di almeno una cella risulta dentro una parete")
+			if not maze.is_open_cell(Vector2i(x, y)):
+				_assert(not maze.is_position_free(maze.cell_center(x, y), 4.0), "il vuoto in (%d,%d) non dovrebbe essere percorribile" % [x, y])
 
-	# Il centro di una parete perimetrale deve essere bloccato.
-	var boundary_point: Vector2 = maze.origin + Vector2(0.0, maze.cell_size * 0.5)
-	_assert(not maze.is_position_free(boundary_point, 12.0), "il muro perimetrale non blocca la posizione")
+	# Fuori dai confini della mappa non si va.
+	_assert(not maze.is_position_free(maze.origin - Vector2(10.0, 10.0), 4.0), "fuori dalla mappa non dovrebbe essere percorribile")
 
-	# resolve_move non deve mai spingere un'entità dentro una parete.
-	var far_move := maze.resolve_move(maze.cell_center(0, 0), Vector2(2000, 0), 12.0)
-	_assert(maze.is_position_free(far_move, 12.0), "resolve_move ha lasciato l'entità dentro una parete")
-	_assert(far_move.x < maze.origin.x + maze.cell_size * float(maze.cols), "resolve_move non ha bloccato il movimento al muro perimetrale")
+	# resolve_move non deve mai spingere un'entità dentro una parete o nel
+	# vuoto, per quanto lungo sia lo spostamento.
+	var start: Vector2 = maze.cell_center(maze.spawn_cell.x, maze.spawn_cell.y)
+	for dir in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
+		var far_move := maze.resolve_move(start, dir * 3000.0, 12.0)
+		_assert(maze.is_position_free(far_move, 12.0), "resolve_move ha lasciato l'entità in una parete o nel vuoto (%s)" % far_move)
 
-	# Pathfinding: il percorso tra due celle deve esistere ed essere
-	# composto solo da passi verso celle adiacenti aperte.
-	var farthest := maze.find_farthest_cell(Vector2i(0, 0))
-	_assert(farthest != Vector2i(0, 0), "find_farthest_cell dovrebbe trovare una cella diversa dall'origine")
-	var path := maze.get_path(maze.cell_center(0, 0), maze.cell_center(farthest.x, farthest.y))
+	# Pathfinding: il percorso verso la cella più lontana deve esistere ed
+	# essere fatto solo di passi fra celle adiacenti.
+	var farthest := maze.find_farthest_cell(maze.spawn_cell)
+	_assert(farthest != maze.spawn_cell, "find_farthest_cell dovrebbe trovare una cella diversa dallo spawn")
+	var path := maze.get_path(start, maze.cell_center(farthest.x, farthest.y))
 	_assert(path.size() >= 2, "il percorso verso la cella più lontana dovrebbe avere almeno 2 punti")
 	for i in range(path.size() - 1):
 		_assert(maze.world_to_cell(path[i]).distance_to(maze.world_to_cell(path[i + 1])) <= 1.5, "il percorso salta tra celle non adiacenti")
 
-	# --- Struttura a sale ---------------------------------------------------
-	# La mappa non è più un labirinto di corridoi: è un insieme di sale
-	# rettangolari, ognuna aperta al suo interno, separate da muri con
-	# varchi. Senza questi controlli la suddivisione potrebbe degenerare
-	# in un'unica sala (nessuna porta possibile) o lasciare celle senza
-	# sala, e nessun altro test se ne accorgerebbe.
-	_assert(maze.rooms.size() >= 4, "la mappa dovrebbe essere divisa in almeno 4 sale, trovate %d" % maze.rooms.size())
-	for y in range(maze.rows):
-		for x in range(maze.cols):
-			_assert(maze.room_at(Vector2i(x, y)) >= 0, "la cella (%d,%d) non appartiene a nessuna sala" % [x, y])
+	# --- Sale sparse -------------------------------------------------------
+	# Le sale non devono formare un unico blocco: fra due sale qualsiasi
+	# c'è almeno una fascia di vuoto (o di corridoio) larga due celle, e
+	# buona parte della mappa è buio. Senza questi controlli la
+	# suddivisione potrebbe tornare a impacchettare le sale una contro
+	# l'altra e nessun altro test se ne accorgerebbe.
+	_assert(maze.rooms.size() >= 4, "la mappa dovrebbe avere almeno 4 sale, trovate %d" % maze.rooms.size())
+	for i in range(maze.rooms.size()):
+		for j in range(i + 1, maze.rooms.size()):
+			var grown: Rect2i = maze.rooms[i].grow(1)
+			_assert(not grown.intersects(maze.rooms[j]), "le sale %d e %d sono attaccate (%s, %s): servono almeno due celle di vuoto fra loro" % [i, j, maze.rooms[i], maze.rooms[j]])
+	var void_cells: int = maze.cols * maze.rows - open.size()
+	var void_ratio: float = float(void_cells) / float(maze.cols * maze.rows)
+	_assert(void_ratio >= 0.3, "la mappa dovrebbe essere per buona parte vuota fra le sale (vuoto al %d%%)" % int(void_ratio * 100.0))
 
-	# Interno di ogni sala completamente aperto: due celle adiacenti della
-	# stessa sala devono essere sempre collegate.
+	# Interno di ogni sala completamente aperto.
 	for i in range(maze.rooms.size()):
 		for cell in maze.room_cells(i):
 			for step in [Vector2i(1, 0), Vector2i(0, 1)]:
@@ -2095,14 +2094,16 @@ func _test_maze_grid() -> void:
 					continue
 				_assert(maze._open_neighbors(cell).has(other), "dentro la sala %d le celle %s e %s non sono collegate" % [i, cell, other])
 
-	# Ogni varco mette in comunicazione due sale diverse.
+	# Ogni varco va da una sala a qualcosa che non è quella sala.
 	_assert(maze.doorways.size() >= maze.rooms.size() - 1, "servono almeno %d varchi per collegare %d sale, trovati %d" % [maze.rooms.size() - 1, maze.rooms.size(), maze.doorways.size()])
 	for d in maze.doorways:
+		_assert(maze.room_at(d.b) >= 0, "un varco non ha la sua cella interna in una sala (%s)" % d.b)
 		_assert(maze.room_at(d.a) != maze.room_at(d.b), "un varco collega due celle della stessa sala (%s-%s)" % [d.a, d.b])
 
 	# Sala del premio: esiste, ha un solo varco (quello con la porta) e
 	# `gate_doorway.b` è la cella che ci si trova dentro.
 	_assert(maze.has_exit_gate(), "la mappa dovrebbe avere una sala del premio con la sua porta")
+	_assert(maze.exit_room_index != maze.spawn_room_index, "la sala del premio non può essere quella dello spawn")
 	_assert(maze.doorways_of_room(maze.exit_room_index).size() == 1, "la sala del premio deve avere un solo varco, ne ha %d" % maze.doorways_of_room(maze.exit_room_index).size())
 	_assert(maze.room_at(maze.gate_doorway.b) == maze.exit_room_index, "gate_doorway.b dovrebbe essere la cella dentro la sala del premio")
 	_assert(maze.room_at(maze.gate_doorway.a) != maze.exit_room_index, "gate_doorway.a dovrebbe essere la cella fuori dalla sala del premio")
@@ -2111,7 +2112,7 @@ func _test_maze_grid() -> void:
 	_assert(min(gate.size.x, gate.size.y) <= maze.wall_thickness + 0.01, "la porta dovrebbe essere spessa quanto il muro (%s)" % gate)
 	_assert(max(gate.size.x, gate.size.y) < maze.cell_size, "il varco della porta dovrebbe essere più stretto di un lato di cella (%s)" % gate)
 
-	print("Struttura a sale: %d x %d celle, %d sale, %d varchi, %d segmenti muro, tutte connesse, pathfinding OK" % [maze.cols, maze.rows, maze.rooms.size(), maze.doorways.size(), maze.wall_rects.size()])
+	print("Mappa: %d x %d celle, %d sale, %d varchi, vuoto al %d%%, %d segmenti muro, tutto connesso, pathfinding OK" % [maze.cols, maze.rows, maze.rooms.size(), maze.doorways.size(), int(void_ratio * 100.0), maze.wall_rects.size()])
 
 func _test_exit_gate_blocks_until_cleared() -> void:
 	print("--- Test: la porta di uscita resta chiusa finché la mappa non è ripulita ---")
@@ -2193,7 +2194,9 @@ func _test_maze_integration() -> void:
 	var farthest_cell: Vector2i = maze_run.current_maze.find_farthest_cell(maze_run.current_maze.world_to_cell(spawn_pos))
 	var farthest_pos: Vector2 = maze_run.current_maze.cell_center(farthest_cell.x, farthest_cell.y)
 	var farthest_path_len: int = maze_run.current_maze.get_path(spawn_pos, farthest_pos).size()
-	var min_expected_hops: int = (maze_run.MAZE_COLS + maze_run.MAZE_ROWS) / 2
+	# Almeno un quarto dell'estensione della mappa: su centinaia di mappe
+	# generate il punto più lontano non è mai sceso sotto le 18 celle.
+	var min_expected_hops: int = (maze_run.MAZE_COLS + maze_run.MAZE_ROWS) / 4
 	_assert(farthest_path_len >= min_expected_hops, "il punto più lontano dallo spawn è troppo vicino lungo il percorso (%d celle, attese almeno %d)" % [farthest_path_len, min_expected_hops])
 
 	var bounds: Rect2 = maze_run.current_maze.total_bounds()
@@ -2265,13 +2268,14 @@ func _test_maze_enemy_closes_final_gap() -> void:
 	rng.seed = 7
 	var maze := MazeGrid.new()
 	maze.generate(6, 6, 160.0, rng)
+	var cell: Vector2i = maze.spawn_cell
 
 	var p := Player.new()
 	add_child(p)
 	p.maze = maze
-	# Il giocatore è vicino a un angolo della cella (0,0), non al centro:
+	# Il giocatore è vicino a un angolo della cella, non al centro:
 	# esattamente la situazione che prima faceva bloccare il nemico.
-	p.global_position = maze.cell_center(0, 0) + Vector2(50.0, 50.0)
+	p.global_position = maze.cell_center(cell.x, cell.y) + Vector2(50.0, 50.0)
 
 	var e := Enemy.new()
 	e.maze = maze
@@ -2279,7 +2283,7 @@ func _test_maze_enemy_closes_final_gap() -> void:
 	add_child(e)
 	# Il nemico parte già nella stessa cella del giocatore, dal lato
 	# opposto: get_path() tra i due restituisce subito un solo punto.
-	e.global_position = maze.cell_center(0, 0) + Vector2(-50.0, -50.0)
+	e.global_position = maze.cell_center(cell.x, cell.y) + Vector2(-50.0, -50.0)
 	await get_tree().physics_frame
 
 	var dist_start: float = e.global_position.distance_to(p.global_position)
@@ -2312,10 +2316,11 @@ func _test_maze_dash_no_tunneling() -> void:
 	var p := Player.new()
 	add_child(p)
 	p.maze = maze
-	# Cella d'angolo (0,0): il muro perimetrale è sempre immediatamente a
-	# nord e a ovest, indipendentemente da come è stato generato il resto
-	# del labirinto, quindi lo scatto verso l'alto lo colpisce di sicuro.
-	p.global_position = maze.cell_center(0, 0)
+	# Cella nell'angolo in alto a sinistra di una sala: il muro della sala
+	# è sempre immediatamente a nord, e oltre c'è il vuoto, quindi lo
+	# scatto verso l'alto lo colpisce di sicuro.
+	var corner: Vector2i = maze.rooms[0].position
+	p.global_position = maze.cell_center(corner.x, corner.y)
 	await get_tree().physics_frame
 
 	p.start_dash(Vector2.UP)
@@ -2494,6 +2499,11 @@ func _defeat_current_boss() -> String:
 	boss.take_damage(99999.0)
 	run._on_enemy_defeated(boss)
 	return boss_id
+
+# Arena aperta per i test degli schemi d'attacco: l'intera estensione della
+# mappa reale, cosí qualsiasi punto di spawn del giocatore ci cade dentro.
+func _open_test_arena() -> Rect2:
+	return Rect2(Vector2.ZERO, Vector2(Run.MAZE_COLS, Run.MAZE_ROWS) * Run.CELL_SIZE)
 
 func _assert(condition: bool, message: String) -> void:
 	if not condition:
@@ -2721,7 +2731,7 @@ func _test_flower_shoots_its_own_colour() -> void:
 	var flower := Enemy.new()
 	flower.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
 	flower.maze = null
-	flower.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	flower.arena_bounds = _open_test_arena()
 	flower.spawn_projectile.connect(shot_run._on_enemy_spawn_projectile)
 	shot_run.enemy_container.add_child(flower)
 	# Dentro il raggio di tiro e pronto a sparare.
@@ -2841,7 +2851,7 @@ func _test_bite_pattern() -> void:
 	var slime := Enemy.new()
 	slime.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
 	slime.maze = null
-	slime.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	slime.arena_bounds = _open_test_arena()
 	bite_run.enemy_container.add_child(slime)
 	# Esattamente a portata di morso: i due corpi NON si sovrappongono,
 	# quindi qualunque danno subito può venire solo dal morso e non dal
@@ -2896,7 +2906,7 @@ func _test_swarm_charge_pattern() -> void:
 	var insect := Enemy.new()
 	insect.setup_from_data(GameData.ENEMY_TYPES["sciame"], false)
 	insect.maze = null
-	insect.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	insect.arena_bounds = _open_test_arena()
 	swarm_run.enemy_container.add_child(insect)
 	insect.global_position = swarm_run.player.global_position + Vector2(200.0, 0.0)
 
@@ -2960,7 +2970,7 @@ func _test_hop_shockwave_pattern() -> void:
 	var brute := Enemy.new()
 	brute.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
 	brute.maze = null
-	brute.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	brute.arena_bounds = _open_test_arena()
 	var waves: Array = []
 	brute.shockwave.connect(func(origin, radius, dmg, from_ally): waves.append({"origin": origin, "radius": radius, "dmg": dmg, "from_ally": from_ally}))
 	hop_run.enemy_container.add_child(brute)
@@ -3110,29 +3120,33 @@ func _test_flower_never_shoots_through_walls() -> void:
 	wall_run._clear_container(wall_run.projectile_container)
 	var maze: MazeGrid = wall_run.current_maze
 
-	# Si cerca una parete con spazio libero da entrambe le parti: il
-	# giocatore di qua, il fiore di là, e nessuna linea di tiro.
+	# Si cerca la situazione di gioco: giocatore vicino, ma dietro un
+	# muro. Fra le coppie di celle percorribili vicine si prende la più
+	# vicina senza linea di tiro — di solito le due celle ai lati di una
+	# curva di corridoio, dove lo spigolo copre la vista. (Con le sale
+	# sparse nel buio quasi ogni muro ha il vuoto da un lato: cercare uno
+	# spazio libero appena al di là di un muro non troverebbe niente.)
 	var flower_spot := Vector2.ZERO
 	var player_spot := Vector2.ZERO
 	var found := false
-	for wall in maze.wall_rects:
-		var across: Vector2 = Vector2(0.0, 1.0) if wall.size.x >= wall.size.y else Vector2(1.0, 0.0)
-		var center: Vector2 = wall.get_center()
-		var a: Vector2 = center - across * 70.0
-		var b: Vector2 = center + across * 70.0
-		# Fuori dal labirinto non ci sono pareti, quindi "libero" non
-		# vuol dire niente: la scena da ricostruire è dentro la stanza.
-		if not maze.total_bounds().has_point(a) or not maze.total_bounds().has_point(b):
-			continue
-		if not maze.is_position_free(a, 16.0) or not maze.is_position_free(b, 16.0):
-			continue
-		if maze.has_line_of_sight(a, b, Enemy.SHOT_CLEARANCE):
-			continue
-		flower_spot = a
-		player_spot = b
-		found = true
-		break
-	_assert(found, "setup del test: non è stata trovata una parete con spazio libero da entrambe le parti")
+	var best_dist := INF
+	var open: Array = maze.open_cells()
+	for c in open:
+		for d in open:
+			if absi(c.x - d.x) > 3 or absi(c.y - d.y) > 3 or c == d:
+				continue
+			var a: Vector2 = maze.cell_center(c.x, c.y)
+			var b: Vector2 = maze.cell_center(d.x, d.y)
+			var dist: float = a.distance_to(b)
+			if dist >= best_dist:
+				continue
+			if maze.has_line_of_sight(a, b, Enemy.SHOT_CLEARANCE):
+				continue
+			flower_spot = a
+			player_spot = b
+			best_dist = dist
+			found = true
+	_assert(found, "setup del test: non è stata trovata una coppia di punti vicini separati da un muro")
 
 	wall_run.player.frozen = true
 	wall_run.player.global_position = player_spot
@@ -3189,11 +3203,16 @@ func _test_buried_ally_flower_survives_combat_scan() -> void:
 	buried_run.current_maze = null
 	buried_run.player.maze = null
 	buried_run.player.frozen = true
+	# Vicino al bordo sinistro dell'arena aperta: il fiore deve avere una
+	# parete a portata per attaccarvisi e sprofondare. Lo spawn della mappa
+	# può cadere ovunque, lontano da ogni bordo, e il test non deve
+	# dipendere da dove capita.
+	buried_run.player.global_position = Vector2(150.0, 1650.0)
 
 	var flower := Enemy.new()
 	flower.setup_from_data(GameData.ENEMY_TYPES["pungiglione"], false)
 	flower.maze = null
-	flower.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	flower.arena_bounds = _open_test_arena()
 	flower.spawn_projectile.connect(buried_run._on_enemy_spawn_projectile)
 	# Vita enorme: il test guarda il ciclo di sprofondamento, e un fiore
 	# che muore a metà non solo lo interromperebbe — da quando le
@@ -3210,7 +3229,7 @@ func _test_buried_ally_flower_survives_combat_scan() -> void:
 	var victim := Enemy.new()
 	victim.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
 	victim.maze = null
-	victim.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	victim.arena_bounds = _open_test_arena()
 	victim.max_hp = 100000.0
 	victim.hp = 100000.0
 	victim.speed = 0.0
@@ -3281,7 +3300,7 @@ func _test_defeated_creatures_disappear() -> void:
 	var victim := Enemy.new()
 	victim.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
 	victim.maze = null
-	victim.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	victim.arena_bounds = _open_test_arena()
 	death_run.enemy_container.add_child(victim)
 	victim.global_position = death_run.player.global_position + Vector2(500.0, 0.0)
 	await get_tree().process_frame
@@ -3314,7 +3333,7 @@ func _test_defeated_creatures_disappear() -> void:
 	var fallen_ally := Enemy.new()
 	fallen_ally.setup_from_data(GameData.ENEMY_TYPES["corazzato"], false)
 	fallen_ally.maze = null
-	fallen_ally.arena_bounds = Rect2(Vector2.ZERO, Vector2(2400, 1800))
+	fallen_ally.arena_bounds = _open_test_arena()
 	death_run.enemy_container.add_child(fallen_ally)
 	fallen_ally.global_position = death_run.player.global_position + Vector2(-90.0, 0.0)
 	death_run._convert_enemy_to_ally(fallen_ally)
