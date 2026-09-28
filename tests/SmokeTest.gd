@@ -19,6 +19,7 @@ func run_and_quit() -> void:
 	await _test_hub_subpanel_navigation()
 	_test_maze_grid()
 	await _test_maze_integration()
+	await _test_exit_gate_blocks_until_cleared()
 	await _test_maze_dash_no_tunneling()
 	await _test_maze_enemy_closes_final_gap()
 	await _test_all_boss_moves()
@@ -94,7 +95,7 @@ func run_and_quit() -> void:
 	print("Nemico dorato forzato presente: ", has_golden)
 	_assert(has_golden, "il nemico dorato forzato non è comparso nella stanza 1")
 
-	_clear_five_rooms_to_boss()
+	await _clear_five_rooms_to_boss()
 
 	print("--- Test icone potenziamenti attivi in HUD (solo durante la run) ---")
 	# 5 scelte di fine stanza + 1 bottino garantito dal nemico dorato forzato.
@@ -126,14 +127,14 @@ func run_and_quit() -> void:
 	run._on_continue_pressed()
 	_assert(run.boss_container.get_child_count() == 0, "il boss sconfitto è ancora presente dopo aver iniziato la nuova run")
 	_assert(run.streak_run_index == 2, "streak_run_index atteso 2, trovato %d" % run.streak_run_index)
-	_clear_five_rooms_to_boss()
+	await _clear_five_rooms_to_boss()
 	_assert(not run.current_boss.is_special, "il boss della run 2 non dovrebbe essere speciale")
 	print("Run 2: boss normale confermato")
 	_defeat_current_boss()
 
 	run._on_continue_pressed()
 	_assert(run.streak_run_index == 3, "streak_run_index atteso 3, trovato %d" % run.streak_run_index)
-	_clear_five_rooms_to_boss()
+	await _clear_five_rooms_to_boss()
 	_assert(run.current_boss.is_special, "il boss della run 3 DOVREBBE essere speciale")
 	print("Run 3: boss SPECIALE confermato (", run.current_boss.display_name, ")")
 	var special_boss_id := _defeat_current_boss()
@@ -372,13 +373,10 @@ func _test_ally_taming() -> void:
 	targets[2].take_damage(99999.0)
 	tame_run._on_enemy_defeated(targets[2])
 	_assert(tame_run.room_cleared, "la stanza dovrebbe risultare ripulita ignorando gli alleati ancora vivi")
-	_assert(tame_run.player.frozen, "il giocatore dovrebbe restare fermo dopo la pulizia della stanza")
-
-	# Il resto del test verifica un'altra regressione (lo scatto non deve
-	# mai colpire un alleato): sblocca qui il giocatore, cosí non si
-	# confonde con l'immobilità dovuta alla pulizia della stanza appena
-	# verificata sopra.
-	tame_run.player.unfreeze()
+	_assert(tame_run.exit_gate.is_open, "la porta di uscita dovrebbe aprirsi ignorando gli alleati ancora vivi")
+	# Ripulita la mappa il giocatore resta libero: deve raggiungere la
+	# porta, il premio (e il congelamento sulla scelta) arrivano alla soglia.
+	_assert(not tame_run.player.frozen, "il giocatore deve restare libero di raggiungere la porta dopo la pulizia")
 
 	# Lo scatto del giocatore non deve mai danneggiare un proprio alleato.
 	var ally_hp_before: float = targets[0].hp
@@ -463,9 +461,10 @@ func _test_taming_last_enemy_clears_room() -> void:
 	_assert(not solo_run.room_cleared, "setup del test: la stanza non dovrebbe risultare ripulita prima dell'addomesticamento")
 	solo_run._on_tame_requested()
 	_assert(last_enemy.is_ally, "l'unico nemico della stanza dovrebbe diventare alleato")
-	_assert(solo_run.room_cleared, "addomesticare l'ultimo nemico ostile dovrebbe ripulire la stanza (ricompensa consegnata)")
+	_assert(solo_run.room_cleared, "addomesticare l'ultimo nemico ostile dovrebbe ripulire la mappa")
+	_assert(solo_run.exit_gate != null and solo_run.exit_gate.is_open, "addomesticare l'ultimo nemico ostile dovrebbe aprire la porta di uscita")
 
-	print("Addomesticare l'ultimo nemico: OK (ricompensa consegnata)")
+	print("Addomesticare l'ultimo nemico: OK (porta di uscita aperta)")
 	solo_run.queue_free()
 	await get_tree().process_frame
 
@@ -512,9 +511,10 @@ func _test_ally_kill_clears_room() -> void:
 			break
 
 	_assert(not last_hostile.alive, "setup del test: l'alleato dovrebbe aver finito l'ultimo nemico ostile")
-	_assert(kill_run.room_cleared, "un'uccisione dell'alleato dovrebbe ripulire la stanza (ricompensa consegnata)")
+	_assert(kill_run.room_cleared, "un'uccisione dell'alleato dovrebbe ripulire la mappa")
+	_assert(kill_run.exit_gate != null and kill_run.exit_gate.is_open, "un'uccisione dell'alleato dovrebbe aprire la porta di uscita")
 
-	print("Uccisione dell'alleato: OK (ricompensa consegnata)")
+	print("Uccisione dell'alleato: OK (porta di uscita aperta)")
 	kill_run.queue_free()
 	await get_tree().process_frame
 
@@ -623,7 +623,7 @@ func _test_ranged_ally_keeps_behavior() -> void:
 	var final_dist: float = ranged_ally.global_position.distance_to(hostile.global_position)
 	print("Distanza finale alleato<->bersaglio: ", final_dist)
 	_assert(final_dist > 100.0, "l'alleato \"ranged\" si è avvicinato a distanza di mischia invece di sparare da lontano")
-	_assert(ranged_run.room_cleared, "un'uccisione a distanza dell'alleato dovrebbe ripulire la stanza (ricompensa consegnata)")
+	_assert(ranged_run.room_cleared, "un'uccisione a distanza dell'alleato dovrebbe ripulire la mappa (porta di uscita aperta)")
 
 	print("Comportamento a distanza dell'alleato: OK")
 	ranged_run.queue_free()
@@ -1694,7 +1694,7 @@ func _test_special_attack_key_bindings() -> void:
 	print("Binding addomesticamento/attacchi speciali su pulsanti distinti: OK")
 
 func _test_room_clear_freezes_player_and_clears_projectiles() -> void:
-	print("--- Test regressione: la pulizia della stanza ferma il giocatore e rimuove i proiettili in volo ---")
+	print("--- Test: pulizia mappa -> porta aperta e giocatore libero; soglia -> premio e giocatore fermo ---")
 	var freeze_run := Run.new()
 	add_child(freeze_run)
 	freeze_run.begin_new_streak()
@@ -1714,23 +1714,33 @@ func _test_room_clear_freezes_player_and_clears_projectiles() -> void:
 	_kill_all_room_enemies_of(freeze_run)
 	await get_tree().process_frame
 
-	_assert(freeze_run.room_cleared, "setup del test: la stanza dovrebbe risultare ripulita")
-	_assert(freeze_run.player.frozen, "la pulizia della stanza dovrebbe congelare il giocatore")
-	_assert(freeze_run.projectile_container.get_child_count() == 0, "la pulizia della stanza dovrebbe rimuovere ogni proiettile in volo")
+	_assert(freeze_run.room_cleared, "setup del test: la mappa dovrebbe risultare ripulita")
+	_assert(freeze_run.projectile_container.get_child_count() == 0, "la pulizia della mappa dovrebbe rimuovere ogni proiettile in volo")
+	# Finché la soglia non è attraversata il giocatore deve restare
+	# padrone di sé: è lui che deve raggiungere la porta appena aperta.
+	_assert(not freeze_run.player.frozen, "il giocatore non deve essere congelato prima di aver attraversato la porta")
+	_assert(not freeze_run.powerup_choice_screen.visible, "la scelta del potenziamento non deve comparire prima della soglia")
+
+	# Attraversata la soglia: premio, giocatore fermo, niente più da fare.
+	await _cross_exit_gate_of(freeze_run)
+	_assert(freeze_run.reward_delivered, "attraversare la porta dovrebbe consegnare il premio")
+	_assert(freeze_run.powerup_choice_screen.visible, "attraversare la porta dovrebbe mostrare la scelta del potenziamento")
+	_assert(freeze_run.player.frozen, "attraversare la porta dovrebbe congelare il giocatore sulla scelta")
 	_assert(not freeze_run.player.can_dash(), "il giocatore congelato non dovrebbe poter scattare")
 	_assert(not freeze_run.player.can_tame(), "il giocatore congelato non dovrebbe poter addomesticare")
 
+	pos_before = freeze_run.player.global_position
 	for i in range(5):
 		await get_tree().physics_frame
 	_assert(freeze_run.player.global_position == pos_before, "il giocatore congelato non dovrebbe muoversi")
 
-	# Scegliendo il potenziamento e passando alla stanza successiva il
+	# Scegliendo il potenziamento e passando alla mappa successiva il
 	# giocatore riprende il controllo.
 	var choice: Dictionary = GameData.get_regular_powerup_pool()[0]
 	freeze_run._on_powerup_selected(choice.id)
-	_assert(not freeze_run.player.frozen, "il giocatore dovrebbe riprendere il controllo nella stanza successiva")
+	_assert(not freeze_run.player.frozen, "il giocatore dovrebbe riprendere il controllo nella mappa successiva")
 
-	print("Congelamento del giocatore e pulizia dei proiettili alla fine stanza: OK")
+	print("Porta aperta con giocatore libero, premio e congelamento alla soglia: OK")
 	freeze_run.queue_free()
 	await get_tree().process_frame
 
@@ -2064,7 +2074,105 @@ func _test_maze_grid() -> void:
 	for i in range(path.size() - 1):
 		_assert(maze.world_to_cell(path[i]).distance_to(maze.world_to_cell(path[i + 1])) <= 1.5, "il percorso salta tra celle non adiacenti")
 
-	print("MazeGrid: %d x %d celle, %d segmenti muro, tutte connesse, pathfinding OK" % [maze.cols, maze.rows, maze.wall_rects.size()])
+	# --- Struttura a sale ---------------------------------------------------
+	# La mappa non è più un labirinto di corridoi: è un insieme di sale
+	# rettangolari, ognuna aperta al suo interno, separate da muri con
+	# varchi. Senza questi controlli la suddivisione potrebbe degenerare
+	# in un'unica sala (nessuna porta possibile) o lasciare celle senza
+	# sala, e nessun altro test se ne accorgerebbe.
+	_assert(maze.rooms.size() >= 4, "la mappa dovrebbe essere divisa in almeno 4 sale, trovate %d" % maze.rooms.size())
+	for y in range(maze.rows):
+		for x in range(maze.cols):
+			_assert(maze.room_at(Vector2i(x, y)) >= 0, "la cella (%d,%d) non appartiene a nessuna sala" % [x, y])
+
+	# Interno di ogni sala completamente aperto: due celle adiacenti della
+	# stessa sala devono essere sempre collegate.
+	for i in range(maze.rooms.size()):
+		for cell in maze.room_cells(i):
+			for step in [Vector2i(1, 0), Vector2i(0, 1)]:
+				var other: Vector2i = cell + step
+				if maze.room_at(other) != i:
+					continue
+				_assert(maze._open_neighbors(cell).has(other), "dentro la sala %d le celle %s e %s non sono collegate" % [i, cell, other])
+
+	# Ogni varco mette in comunicazione due sale diverse.
+	_assert(maze.doorways.size() >= maze.rooms.size() - 1, "servono almeno %d varchi per collegare %d sale, trovati %d" % [maze.rooms.size() - 1, maze.rooms.size(), maze.doorways.size()])
+	for d in maze.doorways:
+		_assert(maze.room_at(d.a) != maze.room_at(d.b), "un varco collega due celle della stessa sala (%s-%s)" % [d.a, d.b])
+
+	# Sala del premio: esiste, ha un solo varco (quello con la porta) e
+	# `gate_doorway.b` è la cella che ci si trova dentro.
+	_assert(maze.has_exit_gate(), "la mappa dovrebbe avere una sala del premio con la sua porta")
+	_assert(maze.doorways_of_room(maze.exit_room_index).size() == 1, "la sala del premio deve avere un solo varco, ne ha %d" % maze.doorways_of_room(maze.exit_room_index).size())
+	_assert(maze.room_at(maze.gate_doorway.b) == maze.exit_room_index, "gate_doorway.b dovrebbe essere la cella dentro la sala del premio")
+	_assert(maze.room_at(maze.gate_doorway.a) != maze.exit_room_index, "gate_doorway.a dovrebbe essere la cella fuori dalla sala del premio")
+	var gate: Rect2 = maze.gate_rect()
+	_assert(gate.size.x > 0.0 and gate.size.y > 0.0, "il varco della porta non ha una superficie valida (%s)" % gate)
+	_assert(min(gate.size.x, gate.size.y) <= maze.wall_thickness + 0.01, "la porta dovrebbe essere spessa quanto il muro (%s)" % gate)
+	_assert(max(gate.size.x, gate.size.y) < maze.cell_size, "il varco della porta dovrebbe essere più stretto di un lato di cella (%s)" % gate)
+
+	print("Struttura a sale: %d x %d celle, %d sale, %d varchi, %d segmenti muro, tutte connesse, pathfinding OK" % [maze.cols, maze.rows, maze.rooms.size(), maze.doorways.size(), maze.wall_rects.size()])
+
+func _test_exit_gate_blocks_until_cleared() -> void:
+	print("--- Test: la porta di uscita resta chiusa finché la mappa non è ripulita ---")
+	var gate_run := Run.new()
+	add_child(gate_run)
+	gate_run.begin_new_streak()
+	await get_tree().process_frame
+
+	var maze: MazeGrid = gate_run.current_maze
+	_assert(maze.has_exit_gate(), "la mappa 1 dovrebbe avere una porta di uscita")
+	_assert(gate_run.exit_gate != null, "Run dovrebbe aver installato il nodo della porta")
+	_assert(not gate_run.exit_gate.is_open, "la porta dovrebbe partire chiusa")
+	_assert(maze.extra_blockers.has(gate_run.exit_gate.gap_rect), "la porta chiusa dovrebbe essere registrata fra gli ostacoli del livello")
+
+	# Nessun nemico nella sala del premio: sta dietro una porta chiusa,
+	# quindi un nemico lí dentro sarebbe irraggiungibile e la porta non si
+	# aprirebbe mai. È il modo in cui la run si bloccherebbe per sempre.
+	var exit_cells: Array = maze.exit_room_cells()
+	_assert(exit_cells.size() > 0, "la sala del premio dovrebbe avere celle")
+	for e in gate_run.enemy_container.get_children():
+		var cell: Vector2i = maze.world_to_cell(e.global_position)
+		_assert(not exit_cells.has(cell), "un nemico è stato generato dentro la sala del premio (cella %s)" % cell)
+
+	# La porta chiusa ferma per davvero: si spinge il giocatore contro la
+	# soglia con lo stesso codice di movimento che usa in gioco
+	# (MazeGrid.resolve_move) e non deve passare.
+	var outside: Vector2i = maze.gate_doorway.a
+	var inside: Vector2i = maze.gate_doorway.b
+	var outside_pos: Vector2 = maze.cell_center(outside.x, outside.y)
+	var inside_pos: Vector2 = maze.cell_center(inside.x, inside.y)
+	var push: Vector2 = (inside_pos - outside_pos).normalized() * 40.0
+	var pos: Vector2 = outside_pos
+	for i in range(40):
+		pos = maze.resolve_move(pos, push, gate_run.player.radius)
+	_assert(maze.room_at(maze.world_to_cell(pos)) != maze.exit_room_index, "la porta chiusa non ha fermato il giocatore (arrivato a %s)" % pos)
+	print("Porta chiusa: passaggio negato (fermo a %.0f px dalla soglia)" % pos.distance_to(inside_pos))
+
+	# Anche i proiettili si fermano: la porta è un ostacolo a tutti gli effetti.
+	_assert(not maze.has_line_of_sight(outside_pos, inside_pos, 4.0), "la porta chiusa dovrebbe interrompere la linea di tiro")
+
+	# Ripulita la mappa la porta si apre e il blocco spare.
+	_kill_all_room_enemies_of(gate_run)
+	await get_tree().process_frame
+	_assert(gate_run.room_cleared, "la mappa dovrebbe risultare ripulita")
+	_assert(gate_run.exit_gate.is_open, "la porta dovrebbe aprirsi appena ripulita la mappa")
+	_assert(not maze.extra_blockers.has(gate_run.exit_gate.gap_rect), "aprendo la porta il blocco dovrebbe essere rimosso dagli ostacoli")
+	_assert(not gate_run.reward_delivered, "il premio non deve arrivare prima di aver attraversato la porta")
+
+	# Ora si passa: stessa spinta di prima, stesso codice di movimento.
+	pos = outside_pos
+	for i in range(40):
+		pos = maze.resolve_move(pos, push, gate_run.player.radius)
+	_assert(maze.room_at(maze.world_to_cell(pos)) == maze.exit_room_index, "con la porta aperta il giocatore dovrebbe raggiungere la sala del premio (arrivato a %s)" % pos)
+
+	await _cross_exit_gate_of(gate_run)
+	_assert(gate_run.reward_delivered, "attraversare la porta aperta dovrebbe consegnare il premio")
+	_assert(gate_run.powerup_choice_screen.visible, "attraversata la porta dovrebbe comparire la scelta del potenziamento")
+
+	print("Porta di uscita: chiusa fino alla pulizia, premio alla soglia: OK")
+	gate_run.queue_free()
+	await get_tree().process_frame
 
 func _test_maze_integration() -> void:
 	print("--- Test integrazione labirinto nel gioco reale (Run) ---")
@@ -2131,6 +2239,7 @@ func _test_maze_integration() -> void:
 	# aperta (niente labirinto) ma resta più grande dello schermo.
 	for i in range(5):
 		maze_run._debug_kill_all()
+		await _cross_exit_gate_of(maze_run)
 		if maze_run.powerup_choice_screen.visible:
 			maze_run._on_powerup_selected(GameData.get_regular_powerup_pool()[0].id)
 	_assert(maze_run.room_number == 6, "non si è arrivati alla sala del boss (stanza %d)" % maze_run.room_number)
@@ -2349,13 +2458,29 @@ func _test_real_dash_collision() -> void:
 func _clear_five_rooms_to_boss() -> void:
 	for i in range(1, 6):
 		_kill_all_room_enemies()
-		# La ricompensa viene consegnata subito alla pulizia della stanza,
-		# senza dover raggiungere alcun punto: la schermata di scelta deve
-		# comparire immediatamente dopo l'ultimo nemico sconfitto.
-		_assert(run.room_cleared, "la stanza %d non risulta ripulita" % run.room_number)
-		_assert(run.powerup_choice_screen.visible, "schermata scelta potenziamento non mostrata (stanza %d)" % i)
+		# Ripulire la mappa apre la porta, non consegna il premio: quello
+		# arriva attraversando la soglia, quindi il test ci porta davvero
+		# il giocatore invece di chiamare la consegna a mano.
+		_assert(run.room_cleared, "la mappa %d non risulta ripulita" % run.room_number)
+		_assert(not run.powerup_choice_screen.visible, "la scelta del potenziamento non deve comparire prima di aver attraversato la porta (mappa %d)" % i)
+		await _cross_exit_gate_of(run)
+		_assert(run.powerup_choice_screen.visible, "schermata scelta potenziamento non mostrata dopo aver attraversato la porta (mappa %d)" % i)
 		var choice: Dictionary = GameData.get_regular_powerup_pool()[0]
 		run._on_powerup_selected(choice.id)
+
+# Porta il giocatore oltre la porta di uscita, nella sala del premio. Non
+# consegna la ricompensa a mano: sposta il giocatore e lascia che sia il
+# motore a eseguire Run._process(), cosí il test copre davvero il
+# rilevamento dell'attraversamento e non solo la consegna.
+func _cross_exit_gate_of(target_run: Run) -> void:
+	var maze: MazeGrid = target_run.current_maze
+	_assert(maze != null and maze.has_exit_gate(), "la mappa dovrebbe avere una porta di uscita da attraversare")
+	var inside: Vector2i = maze.gate_doorway.b
+	target_run.player.global_position = maze.cell_center(inside.x, inside.y)
+	for i in range(5):
+		await get_tree().process_frame
+		if target_run.reward_delivered:
+			break
 
 func _kill_all_room_enemies() -> void:
 	for e in run.enemy_container.get_children():

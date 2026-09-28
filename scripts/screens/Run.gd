@@ -12,9 +12,15 @@ extends Node2D
 
 signal return_to_hub_requested
 
-# Stanze 1-5: labirinto procedurale, molto più grande dello schermo.
-# Corridoi larghi e spessore delle pareti maggiorato per l'aspetto da
-# galleria mineraria (vedi ArenaVisual per il rendering roccioso).
+# Mappe 1-5: un complesso di sale rettangolari collegate da varchi (vedi
+# MazeGrid), molto più grande dello schermo. Muri spessi per l'aspetto da
+# cripta di pietra (vedi ArenaVisual per il rendering).
+#
+# La sala più lontana dallo spawn è la SALA DEL PREMIO: il suo unico varco
+# è chiuso dalla porta di uscita, che si apre soltanto quando nella mappa
+# non resta un solo nemico ostile in piedi (sconfitto o diventato alleato).
+# La ricompensa si riceve attraversando quella porta, non alla caduta
+# dell'ultimo nemico: il premio sta oltre la soglia.
 const MAZE_COLS := 8
 const MAZE_ROWS := 6
 const CELL_SIZE := 300.0
@@ -69,7 +75,12 @@ var player: Player
 var current_boss: Boss = null
 var room_number := 1
 var streak_run_index := 0
+# `room_cleared`: nessun nemico ostile in piedi, quindi la porta di uscita
+# è aperta. `reward_delivered`: la soglia è stata attraversata e il premio
+# consegnato. Fra i due momenti il giocatore è libero di muoversi per
+# raggiungere la porta (e, se vuole, di guardarsi intorno).
 var room_cleared := false
+var reward_delivered := false
 var run_start_snapshot: Dictionary = {}
 
 var current_maze: MazeGrid = null
@@ -87,6 +98,7 @@ var projectile_container: Node2D
 var effect_container: Node2D
 var arena_visual: ArenaVisual
 var blood_decals: BloodDecals
+var exit_gate: ExitGate = null
 var vignette: Vignette
 var music_player: AudioStreamPlayer
 var ui_layer: CanvasLayer
@@ -215,15 +227,20 @@ func _generate_room(n: int) -> void:
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
+	reward_delivered = false
 	player.unfreeze()
+
+	# Lo spawn è noto prima di generare: è da lí che si misura quale sala
+	# è la più lontana, e quindi quale ospita il premio dietro la porta.
+	var spawn_cell := Vector2i(0, MAZE_ROWS - 1)
 
 	var maze := MazeGrid.new()
 	maze.wall_thickness = WALL_THICKNESS
-	maze.generate(MAZE_COLS, MAZE_ROWS, CELL_SIZE, rng)
+	maze.generate(MAZE_COLS, MAZE_ROWS, CELL_SIZE, rng, spawn_cell)
 	current_maze = maze
 	arena_rect = Rect2()
 
-	var spawn_cell := Vector2i(0, MAZE_ROWS - 1)
+	_install_exit_gate(maze)
 
 	arena_visual.maze = maze
 	# Ogni stanza è un luogo nuovo: il sangue della precedente non la segue.
@@ -238,6 +255,10 @@ func _generate_room(n: int) -> void:
 
 	var excluded_cells: Array = [spawn_cell]
 	excluded_cells.append_array(maze._open_neighbors(spawn_cell))
+	# La sala del premio sta dietro una porta chiusa: un nemico generato
+	# lí sarebbe irraggiungibile e la mappa non si potrebbe mai ripulire,
+	# quindi la porta non si aprirebbe mai. Resta vuota per definizione.
+	excluded_cells.append_array(maze.exit_room_cells())
 
 	_reposition_allies_maze(maze, spawn_cell, excluded_cells)
 
@@ -258,6 +279,55 @@ func _generate_room(n: int) -> void:
 		hud.show_banner("Senti una presenza dorata nella stanza...", 2.5)
 	else:
 		hud.show_banner("Stanza %d di 5" % n)
+
+# --- Porta di uscita -------------------------------------------------------
+
+# Installa la porta nel varco della sala del premio e la registra fra gli
+# ostacoli del livello: da questo momento nessuno passa, nemmeno un
+# proiettile, finché la mappa non è ripulita.
+func _install_exit_gate(maze: MazeGrid) -> void:
+	_remove_exit_gate()
+	if not maze.has_exit_gate():
+		return
+	var rect: Rect2 = maze.gate_rect()
+	maze.extra_blockers.append(rect)
+	exit_gate = ExitGate.new()
+	exit_gate.setup(rect)
+	add_child(exit_gate)
+	# Dietro alle creature ma davanti al pavimento: la grata è parte
+	# dell'architettura, chi la attraversa le passa sopra.
+	move_child(exit_gate, blood_decals.get_index() + 1)
+
+func _remove_exit_gate() -> void:
+	if exit_gate != null and is_instance_valid(exit_gate):
+		exit_gate.queue_free()
+	exit_gate = null
+
+func _open_exit_gate() -> void:
+	if exit_gate == null or not is_instance_valid(exit_gate):
+		return
+	if current_maze != null:
+		# Il blocco va via nello stesso istante in cui la grata inizia a
+		# salire: chi è già appoggiato alla porta non deve trovarsela
+		# ancora addosso per il mezzo secondo dell'animazione.
+		current_maze.extra_blockers.erase(exit_gate.gap_rect)
+	exit_gate.open()
+
+# Vero quando il giocatore ha messo piede oltre la soglia, cioè dentro la
+# sala del premio.
+func _player_beyond_gate() -> bool:
+	if current_maze == null or not current_maze.has_exit_gate():
+		return false
+	if player == null or not player.alive:
+		return false
+	var cell: Vector2i = current_maze.world_to_cell(player.global_position)
+	return current_maze.room_at(cell) == current_maze.exit_room_index
+
+func _process(_delta: float) -> void:
+	if not room_cleared or reward_delivered or current_boss != null:
+		return
+	if _player_beyond_gate():
+		_deliver_room_reward()
 
 func _configure_camera_limits(bounds: Rect2) -> void:
 	if player.camera == null:
@@ -377,14 +447,29 @@ func _check_room_cleared() -> void:
 			return
 	room_cleared = true
 	# Nessun proiettile in volo (nemico, alleato o dell'ultimo attacco
-	# speciale) deve restare a schermo una volta ripulita la stanza, e il
-	# giocatore resta fermo finché non sceglie il potenziamento: non c'è
-	# più nulla da combattere.
+	# speciale) deve restare a schermo una volta ripulita la mappa: non
+	# c'è più nulla da combattere.
+	_clear_container(projectile_container)
+	# Il giocatore NON viene congelato: deve poter raggiungere la porta
+	# appena aperta. Il premio lo aspetta oltre la soglia.
+	if exit_gate == null or not is_instance_valid(exit_gate):
+		# Nessuna porta in questa mappa (generazione degenere, una sola
+		# sala): la ricompensa va consegnata comunque, altrimenti la run
+		# si bloccherebbe qui per sempre.
+		_deliver_room_reward()
+		return
+	_open_exit_gate()
+	hud.show_banner("Il varco si è aperto: raggiungi la porta.", 3.5)
+
+# Il premio si riceve subito dopo aver attraversato la porta, non alla
+# caduta dell'ultimo nemico: da qui in avanti non c'è più niente da fare
+# nella mappa, quindi il giocatore resta fermo sulla scelta.
+func _deliver_room_reward() -> void:
+	if reward_delivered:
+		return
+	reward_delivered = true
 	_clear_container(projectile_container)
 	player.freeze()
-	# La ricompensa viene consegnata subito, senza dover raggiungere un
-	# punto della stanza: non appena l'ultimo nemico ostile cade, si
-	# passa direttamente alla scelta del potenziamento.
 	var choices := _roll_powerup_choices(3)
 	powerup_choice_screen.show()
 	powerup_choice_screen.show_choices(choices, room_number)
@@ -644,7 +729,10 @@ func _start_boss_room() -> void:
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
 	room_cleared = false
+	reward_delivered = false
 	player.unfreeze()
+	# La sala del boss non ha porte da attraversare: si esce sconfiggendolo.
+	_remove_exit_gate()
 
 	current_maze = null
 	arena_rect = Rect2(Vector2(WALL_MARGIN, WALL_MARGIN), BOSS_ARENA_SIZE - Vector2(WALL_MARGIN, WALL_MARGIN) * 2.0)

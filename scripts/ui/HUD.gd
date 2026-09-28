@@ -24,6 +24,11 @@ var _last_powerup_summary := ""
 var ally_label: Label
 var tame_pip: ColorRect
 const SPECIAL_ATTACK_KEYS := ["E", "Q"]
+# Banner di notifica, in alto al centro: largo abbastanza per i messaggi
+# più lunghi (es. "Il varco si è aperto: raggiungi la porta.") ma non
+# tanto da invadere la colonna di informazioni in alto a sinistra.
+const BANNER_WIDTH := 720.0
+const BANNER_TOP := 70.0
 var special_attack_labels: Array = []
 var special_attack_pips: Array = []
 
@@ -149,14 +154,22 @@ func _ready() -> void:
 
 	banner_label = Label.new()
 	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	banner_label.position = Vector2(-200, 70)
-	banner_label.custom_minimum_size = Vector2(400, 30)
+	banner_label.size = Vector2(BANNER_WIDTH, 30.0)
 	banner_label.add_theme_font_size_override("font_size", 22)
 	banner_label.add_theme_color_override("font_color", Palette.EMBER)
 	banner_label.hide()
 	banner_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(banner_label)
+	# Centrato sulla finestra vera, non sulle ancore: questo Control sta
+	# sotto un CanvasLayer e le sue ancore non gli danno una larghezza
+	# (resta 0x0, come per la Vignette), quindi "al centro" finiva a x = 0
+	# e la prima metà di ogni messaggio usciva dallo schermo.
+	_layout_banner()
+	get_viewport().size_changed.connect(_layout_banner)
+
+func _layout_banner() -> void:
+	var width: float = get_viewport_rect().size.x
+	banner_label.position = Vector2((width - BANNER_WIDTH) * 0.5, BANNER_TOP)
 
 func show_banner(text: String, duration: float = 2.0) -> void:
 	banner_label.text = text

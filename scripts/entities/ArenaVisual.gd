@@ -19,7 +19,7 @@ extends Node2D
 var arena_size := Vector2(1280, 720):
 	set(value):
 		arena_size = value
-		# Nella sala del boss (nessun labirinto) è questa misura a
+		# Nella sala del boss (nessuna mappa a sale) è questa misura a
 		# definire la stanza: cambiarla deve rigenerare il decoro.
 		if maze == null:
 			_build_geometry()
@@ -33,7 +33,7 @@ var maze: MazeGrid = null:
 		queue_redraw()
 
 # Lato della lastra di pavimento. Grande abbastanza da tenere basso il
-# numero di primitive su un labirinto da 2400x1800 px, piccolo abbastanza
+# numero di primitive su una mappa da 2400x1800 px, piccolo abbastanza
 # perché la muratura si legga come tale.
 const TILE_SIZE := 75.0
 const WALL_LIP := 0.42  # quota del muro occupata dalla "faccia" illuminata
@@ -70,7 +70,7 @@ func _draw_open_arena() -> void:
 
 # I muri dell'arena aperta sono le quattro fasce di bordo: non esistono in
 # MazeGrid (lí la collisione è il rettangolo `arena_rect` di Run), quindi
-# si ricavano qui per poterli disegnare con la stessa muratura del labirinto.
+# si ricavano qui per poterli disegnare con la stessa muratura delle mappe.
 func _arena_wall_rects() -> Array:
 	var m := wall_margin
 	return [

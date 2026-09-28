@@ -40,9 +40,11 @@ Chi giocava prima che gli slot esistessero non perde niente: al primo avvio il v
 - **Menu e scelta dei potenziamenti**: navigabili anche da controller con lo stick/D-pad, confermando con il tasto A/Croce e tornando indietro con B/Cerchio. Ogni menu (Hub, scelta del potenziamento, archivio, bestiario, tutorial, fine run) mette a fuoco automaticamente l'opzione predefinita, cosí il pad ha sempre un punto di partenza da cui navigare. Archivio, Bestiario e Tutorial elencano più voci di quante ne stiano a schermo: qui lo stick sinistro/D-pad su/giù scorre direttamente la vista (niente da selezionare riga per riga), mentre B/Cerchio chiude il pannello in qualsiasi momento.
 - **Pausa**: `Esc` o il tasto Start/Opzioni del controller, in qualsiasi momento durante una run (tranne sopra un altro menu già aperto, come la scelta del potenziamento). Il menu di pausa offre quattro opzioni, navigabili anch'esse da controller: **Riprendi** (torna esattamente da dove eri), **Riprova la run dall'inizio** (rigioca la stanza 1 di questa run con le statistiche che avevi quando l'hai iniziata, senza i potenziamenti presi nel frattempo), **Impostazioni** (le stesse dell'Hub — volume, video, comandi — senza dover abbandonare la run) e **Torna all'Hub** (abbandona la run e interrompe la serie, come morire).
 
-### Stanze e labirinto
+### Mappe a sale collegate
 
-Le stanze 1-5 sono **labirinti generati proceduralmente** (8x6 celle, molto più grandi dello schermo) con corridoi larghi e qualche anello per evitare vicoli ciechi frustranti. La telecamera resta sempre centrata sul giocatore e lo segue ovunque si muova; i nemici della stanza inseguono seguendo un percorso reale attraverso i corridoi, non in linea retta.
+Le mappe 1-5 sono **complessi di sale collegate fra loro**, generati proceduralmente (8x6 celle, molto più grandi dello schermo): la griglia viene divisa in sale rettangolari di taglie diverse — stanzette, saloni, qualche galleria — separate da muri con varchi, più qualche varco in più che chiude un anello cosí non si passa sempre per la stessa porta. La telecamera resta sempre centrata sul giocatore e lo segue ovunque si muova; i nemici inseguono seguendo un percorso reale da una sala all'altra attraverso i varchi, non in linea retta.
+
+La sala più lontana dallo spawn è la **sala del premio**: ha un solo varco, chiuso da una **porta di uscita** con un sigillo cremisi. La porta resta chiusa (e blocca davvero giocatore, nemici, alleati e proiettili) finché nella mappa c'è un nemico ostile in piedi: si apre non appena sono stati tutti sconfitti e/o resi alleati. Aperta, la grata rientra negli stipiti e la soglia si accende di brace, riconoscibile anche da lontano. Nella sala del premio non viene mai generato nessun nemico.
 
 Visivamente le stanze sono una **cripta gotica**: pavimento di lastre di pietra tagliata, fredde e quasi nere, segnate da fughe, crepe e sangue rappreso; muri come blocchi di muratura più scuri del pavimento, con lo spigolo superiore appena illuminato e un'ombra netta proiettata a terra; e, appesi alle pareti lunghe, stendardi cremisi e bracieri che sono le uniche fonti di colore acceso. Il decoro è generato una volta per stanza e la collisione resta quella rettangolare sotto il cofano, cosí il movimento resta preciso e prevedibile.
 
@@ -79,7 +81,7 @@ Le versioni corrotte condividono la sagoma del boss di base e se ne distinguono 
 
 La **sesta stanza** (il boss) è invece un'unica arena aperta, senza pareti interne, ma comunque più grande dello schermo: lo spazio per schivare gli attacchi del boss non è mai limitato al primo piano visibile.
 
-Non appena sconfiggi l'ultimo nemico ostile di una stanza, la ricompensa (la scelta del potenziamento) viene consegnata immediatamente: non serve raggiungere alcun punto della mappa per riscattarla. In quel momento resti fermo sul posto e ogni proiettile ancora in volo (nemico, alleato o del tuo ultimo attacco speciale) sparisce; riprendi il controllo non appena scegli il potenziamento e la stanza successiva (o la sala del boss) comincia. Lo stesso vale alla sconfitta del boss, sulla schermata di fine run.
+Non appena cade (o diventa alleato) l'ultimo nemico ostile della mappa, ogni proiettile ancora in volo (nemico, alleato o del tuo ultimo attacco speciale) sparisce e la porta di uscita si apre; tu resti libero di muoverti per raggiungerla. La ricompensa (la scelta del potenziamento) si riceve **subito dopo aver attraversato la porta**: in quel momento resti fermo sul posto, e riprendi il controllo non appena scegli il potenziamento e la mappa successiva (o la sala del boss) comincia. Alla sconfitta del boss, invece, si passa direttamente alla schermata di fine run.
 
 ### Struttura di una run
 
@@ -103,7 +105,7 @@ Ogni specie ha il proprio modo di arrivare a colpire, non solo il proprio aspett
 - **Corazzato** — colpisce come prima, ma **non cammina più: avanza a balzi**, e ogni atterraggio scarica a terra una piccola onda d'urto che prende chi gli sta intorno. Stargli lontano non basta più del tutto.
 - **Sciame** — a tiro della preda **si ferma a caricare per un secondo e mezzo**, puntandola con un mirino che si allunga mentre le ali impazziscono, poi si lancia in picchiata come uno scatto. La carica è lunga apposta: è ciò che rende l'attacco schivabile invece che inevitabile.
 
-Gli schemi valgono anche quando la creatura combatte come tua alleata, rivolti contro gli ostili. L'unica eccezione è il Pungiglione: da alleato usa lo sprofondamento anche per starti dietro (rispunta vicino a te quando è rimasto indietro), perché un fiore inchiodato a una parete in fondo al labirinto sarebbe un alleato perso.
+Gli schemi valgono anche quando la creatura combatte come tua alleata, rivolti contro gli ostili. L'unica eccezione è il Pungiglione: da alleato usa lo sprofondamento anche per starti dietro (rispunta vicino a te quando è rimasto indietro), perché un fiore inchiodato a una parete in fondo alla mappa sarebbe un alleato perso.
 
 ### Nemico dorato
 
@@ -150,11 +152,11 @@ assets/images/amic_logo.png   # logo della schermata del titolo (sfondo ritaglia
 scripts/
   Main.gd                     # coordina Hub <-> Run
   core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice
-  core/MazeGrid.gd            # labirinto procedurale: generazione, collisione, pathfinding
+  core/MazeGrid.gd            # mappa a sale collegate: generazione, sala del premio, collisione, pathfinding
   autoload/SaveManager.gd     # persistenza su user://: tre slot di progressi + impostazioni in comune
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
   data/Palette.gd             # linguaggio cromatico unico del gioco + tema dell'interfaccia
-  entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, SpecialAttackEffect
+  entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, ExitGate, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
   core/GameSettings.gd        # impostazioni (audio, video, assegnazione tasti): applicazione e persistenza
   ui/                         # titolo, scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Vignette, HudSigil
