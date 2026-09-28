@@ -96,6 +96,12 @@ const MUSIC_PATH := "res://assets/audio/mines.mp3"
 # Il cursore del volume nelle Impostazioni agisce a monte, sul bus
 # principale, quindi continua a valere anche su questo.
 const MUSIC_VOLUME_DB := -6.0
+# Cigolio della porta della sala del premio, suonato una volta sola nel
+# momento in cui il varco si apre. Non è posizionale: la porta può trovarsi
+# dall'altra parte della mappa, e il suono serve proprio ad avvisare che si
+# è aperta anche quando non è sullo schermo.
+const DOOR_SOUND_PATH := "res://assets/audio/porta.mp3"
+const DOOR_SOUND_VOLUME_DB := -2.0
 
 var player: Player
 var current_boss: Boss = null
@@ -127,6 +133,7 @@ var blood_decals: BloodDecals
 var exit_gate: ExitGate = null
 var vignette: Vignette
 var music_player: AudioStreamPlayer
+var door_sound_player: AudioStreamPlayer
 var ui_layer: CanvasLayer
 var hud: HUD
 var powerup_choice_screen: PowerupChoiceScreen
@@ -168,6 +175,11 @@ func _build_scene_tree() -> void:
 	music_player.volume_db = MUSIC_VOLUME_DB
 	add_child(music_player)
 	music_player.play()
+
+	door_sound_player = AudioStreamPlayer.new()
+	door_sound_player.stream = load(DOOR_SOUND_PATH)
+	door_sound_player.volume_db = DOOR_SOUND_VOLUME_DB
+	add_child(door_sound_player)
 
 	ui_layer = CanvasLayer.new()
 	add_child(ui_layer)
@@ -330,7 +342,7 @@ func _remove_exit_gate() -> void:
 	exit_gate = null
 
 func _open_exit_gate() -> void:
-	if exit_gate == null or not is_instance_valid(exit_gate):
+	if exit_gate == null or not is_instance_valid(exit_gate) or exit_gate.is_open:
 		return
 	if current_maze != null:
 		# Il blocco va via nello stesso istante in cui la grata inizia a
@@ -338,6 +350,7 @@ func _open_exit_gate() -> void:
 		# ancora addosso per il mezzo secondo dell'animazione.
 		current_maze.extra_blockers.erase(exit_gate.gap_rect)
 	exit_gate.open()
+	door_sound_player.play()
 
 # Vero quando il giocatore ha messo piede oltre la soglia, cioè dentro la
 # sala del premio.

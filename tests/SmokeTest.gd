@@ -2154,11 +2154,15 @@ func _test_exit_gate_blocks_until_cleared() -> void:
 	# Anche i proiettili si fermano: la porta è un ostacolo a tutti gli effetti.
 	_assert(not maze.has_line_of_sight(outside_pos, inside_pos, 4.0), "la porta chiusa dovrebbe interrompere la linea di tiro")
 
+	_assert(gate_run.door_sound_player.stream != null, "il cigolio della porta dovrebbe essere caricato")
+	_assert(not gate_run.door_sound_player.playing, "il cigolio non deve partire finché la porta è chiusa")
+
 	# Ripulita la mappa la porta si apre e il blocco spare.
 	_kill_all_room_enemies_of(gate_run)
 	await get_tree().process_frame
 	_assert(gate_run.room_cleared, "la mappa dovrebbe risultare ripulita")
 	_assert(gate_run.exit_gate.is_open, "la porta dovrebbe aprirsi appena ripulita la mappa")
+	_assert(gate_run.door_sound_player.playing, "aprendosi la porta dovrebbe cigolare")
 	_assert(not maze.extra_blockers.has(gate_run.exit_gate.gap_rect), "aprendo la porta il blocco dovrebbe essere rimosso dagli ostacoli")
 	_assert(not gate_run.reward_delivered, "il premio non deve arrivare prima di aver attraversato la porta")
 

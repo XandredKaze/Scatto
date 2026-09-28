@@ -127,7 +127,7 @@ Dall'Hub si raggiungono anche:
 
 Note:
 
-- Il gioco ha un **sottofondo musicale durante le run** (`assets/audio/mines.mp3`, riprodotto in loop): parte quando inizia una run e si ferma tornando all'Hub, che resta silenzioso. Il loop riparte dal secondo 16 invece che da zero, cosí l'introduzione del brano si sente una volta sola a inizio run e poi gira solo il tema. Non ci sono ancora effetti sonori. Il cursore del volume agisce sul bus audio principale, quindi regola anche la musica.
+- Il gioco ha un **sottofondo musicale durante le run** (`assets/audio/mines.mp3`, riprodotto in loop): parte quando inizia una run e si ferma tornando all'Hub, che resta silenzioso. Il loop riparte dal secondo 16 invece che da zero, cosí l'introduzione del brano si sente una volta sola a inizio run e poi gira solo il tema. L'unico effetto sonoro è il **cigolio della porta** (`assets/audio/porta.mp3`): si sente una volta sola, nel momento in cui il varco della sala del premio si apre, a volume pieno ovunque si trovi il giocatore sulla mappa, così avvisa dell'apertura anche quando la porta è fuori dallo schermo. Il cursore del volume agisce sul bus audio principale, quindi regola sia la musica sia il cigolio.
 - Eseguendo il gioco **dentro l'editor di Godot** la finestra può essere gestita dall'editor stesso (nelle versioni che incorporano l'anteprima di gioco) e non lasciarsi ridimensionare dal gioco: in quel caso le Impostazioni lo dicono esplicitamente e la scelta resta salvata, valida al primo avvio del gioco da solo. Per provare davvero il cambio di risoluzione conviene lanciare l'eseguibile esportato, o disattivare l'anteprima incorporata nell'editor.
 
 ### Tutorial
@@ -163,6 +163,7 @@ project.godot
 bilanciamento.tres            # valori di bilanciamento, da modificare nell'Inspector (vedi sopra)
 scenes/Main.tscn              # unica scena "fisica": tutto il resto è costruito da codice
 assets/audio/mines.mp3        # sottofondo musicale delle run (importato con il loop attivo)
+assets/audio/porta.mp3        # cigolio della porta che si apre (senza loop)
 assets/images/amic_logo.png   # logo della schermata del titolo (sfondo ritagliato)
 scripts/
   Main.gd                     # coordina Hub <-> Run
