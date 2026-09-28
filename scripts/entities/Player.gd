@@ -42,7 +42,7 @@ static var DASH_DURATION: float:
 static var BASE_DASH_COOLDOWN: float:
 	get: return BalanceConfig.current().giocatore_ricarica_scatto
 static var HIT_IFRAME: float:
-	get: return BalanceConfig.current().giocatore_invulnerabilità_dopo_colpo
+	get: return BalanceConfig.current().giocatore_invulnerabilità
 static var KNOCKBACK: float:
 	get: return BalanceConfig.current().giocatore_respinta
 static var TAME_COOLDOWN: float:
@@ -264,7 +264,7 @@ func dash_damage() -> float:
 	var dmg := BASE_DASH_DAMAGE + dash_damage_bonus
 	if has_furia:
 		var missing_ratio: float = clamp(1.0 - hp / max_hp, 0.0, 1.0)
-		dmg *= 1.0 + missing_ratio * BalanceConfig.current().potenziamento_furia_danno_massimo / 100.0
+		dmg *= 1.0 + missing_ratio * BalanceConfig.current().furia_danno / 100.0
 	return dmg
 
 func is_invulnerable() -> bool:

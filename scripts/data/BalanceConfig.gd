@@ -51,7 +51,7 @@ static func use(config: BalanceConfig) -> void:
 ## Cariche di scatto disponibili a inizio serie.
 @export_range(1, 10, 1, "or_greater") var giocatore_cariche_scatto := 1
 ## Secondi di invulnerabilità dopo aver subito un colpo.
-@export_range(0.0, 5.0, 0.05, "or_greater") var giocatore_invulnerabilità_dopo_colpo := 0.8
+@export_range(0.0, 5.0, 0.05, "or_greater") var giocatore_invulnerabilità := 0.8
 ## Quanto un colpo subito ti spinge indietro, in pixel.
 @export_range(0.0, 200.0, 1.0, "or_greater") var giocatore_respinta := 20.0
 
@@ -101,12 +101,12 @@ static func use(config: BalanceConfig) -> void:
 ## Secondi fra una raffica e l'altra.
 @export_range(0.05, 30.0, 0.05, "or_greater") var speciale_raffica_ricarica := 1.1
 @export_subgroup("Versione potenziata (due alleati dello stesso tipo)", "potenziato_")
-## Moltiplicatore di danno di Morso Selvaggio e Colpo Corazzato potenziati.
-@export_range(1.0, 10.0, 0.05, "or_greater") var potenziato_moltiplicatore_danno := 1.75
+## Moltiplicatore del danno di Morso Selvaggio e Colpo Corazzato potenziati.
+@export_range(1.0, 10.0, 0.05, "or_greater") var potenziato_danno := 1.75
 ## Dardo Velenoso potenziato spara un secondo dardo, deviato di questi gradi.
-@export_range(0.0, 90.0, 0.5) var potenziato_scarto_secondo_dardo := 14.32
-## Proiettili di Sciame Vendicativo potenziato.
-@export_range(1, 64, 1, "or_greater") var potenziato_proiettili_raffica := 10
+@export_range(0.0, 90.0, 0.5) var potenziato_scarto_dardo := 14.32
+## Proiettili di Sciame Vendicativo potenziato (al posto di quelli normali).
+@export_range(1, 64, 1, "or_greater") var potenziato_proiettili := 10
 
 # =============================================================================
 @export_group("Nemici")
@@ -117,11 +117,11 @@ static func use(config: BalanceConfig) -> void:
 ## Danno di ogni morso.
 @export_range(0, 500, 1, "or_greater") var strisciante_danno := 8.0
 ## Secondi minimi fra due colpi da contatto.
-@export_range(0.05, 10.0, 0.05, "or_greater") var strisciante_ricarica_contatto := 0.6
+@export_range(0.05, 10.0, 0.05, "or_greater") var strisciante_ricarica := 0.6
 ## Secondi in cui si ferma a caricare il morso: è il momento buono per colpirlo.
-@export_range(0.0, 5.0, 0.01, "or_greater") var strisciante_preparazione_morso := 0.3
+@export_range(0.0, 5.0, 0.01, "or_greater") var strisciante_preparazione := 0.3
 ## Secondi di pausa dopo il morso, prima di tornare a inseguire.
-@export_range(0.0, 5.0, 0.01, "or_greater") var strisciante_recupero_morso := 0.45
+@export_range(0.0, 5.0, 0.01, "or_greater") var strisciante_recupero := 0.45
 
 @export_subgroup("Pungiglione", "pungiglione_")
 @export_range(1, 5000, 1, "or_greater") var pungiglione_vita := 20.0
@@ -135,10 +135,11 @@ static func use(config: BalanceConfig) -> void:
 @export_range(0.05, 30.0, 0.05, "or_greater") var pungiglione_ricarica_tiro := 1.4
 ## Velocità dei dardi, in pixel al secondo.
 @export_range(10, 3000, 10, "or_greater") var pungiglione_velocità_dardo := 260.0
-## Distanza minima, in pixel, fra dove sprofonda e dove rispunta.
-@export_range(0, 1000, 5, "or_greater") var pungiglione_sprofondamento_min := 70.0
+## Tra un dardo e l'altro sprofonda e rispunta più in là: distanza minima,
+## in pixel, fra i due punti.
+@export_range(0, 1000, 5, "or_greater") var pungiglione_rispunta_min := 70.0
 ## Distanza massima, in pixel, fra dove sprofonda e dove rispunta.
-@export_range(0, 2000, 5, "or_greater") var pungiglione_sprofondamento_max := 180.0
+@export_range(0, 2000, 5, "or_greater") var pungiglione_rispunta_max := 180.0
 
 @export_subgroup("Corazzato", "corazzato_")
 @export_range(1, 5000, 1, "or_greater") var corazzato_vita := 75.0
@@ -147,11 +148,12 @@ static func use(config: BalanceConfig) -> void:
 ## Danno da contatto.
 @export_range(0, 500, 1, "or_greater") var corazzato_danno := 16.0
 ## Secondi minimi fra due colpi da contatto.
-@export_range(0.05, 10.0, 0.05, "or_greater") var corazzato_ricarica_contatto := 0.8
+@export_range(0.05, 10.0, 0.05, "or_greater") var corazzato_ricarica := 0.8
 ## Prima mappa della run in cui può comparire.
 @export_range(1, 5, 1) var corazzato_dalla_mappa := 3
-## Quanto va più veloce durante il balzo rispetto alla sua velocità.
-@export_range(0.0, 10.0, 0.05, "or_greater") var corazzato_moltiplicatore_balzo := 2.3
+## Durante il balzo va più veloce della sua velocità di questo fattore
+## (compensa i tempi fermi fra un balzo e l'altro).
+@export_range(0.0, 10.0, 0.05, "or_greater") var corazzato_spinta_balzo := 2.3
 ## Raggio dell'onda d'urto a ogni atterraggio, in pixel.
 @export_range(0, 1000, 1, "or_greater") var corazzato_raggio_onda := 54.0
 ## Danno dell'onda d'urto, in percentuale del suo danno da contatto.
@@ -164,7 +166,7 @@ static func use(config: BalanceConfig) -> void:
 ## Danno da contatto.
 @export_range(0, 500, 1, "or_greater") var sciame_danno := 5.0
 ## Secondi minimi fra due colpi da contatto.
-@export_range(0.05, 10.0, 0.05, "or_greater") var sciame_ricarica_contatto := 0.5
+@export_range(0.05, 10.0, 0.05, "or_greater") var sciame_ricarica := 0.5
 ## Prima mappa della run in cui può comparire.
 @export_range(1, 5, 1) var sciame_dalla_mappa := 2
 ## Insetti minimi per sciame.
@@ -172,25 +174,25 @@ static func use(config: BalanceConfig) -> void:
 ## Insetti massimi per sciame.
 @export_range(1, 30, 1, "or_greater") var sciame_gruppo_max := 5
 ## Distanza dalla preda, in pixel, a cui si ferma a caricare la picchiata.
-@export_range(0, 2000, 5, "or_greater") var sciame_portata_carica := 240.0
+@export_range(0, 2000, 5, "or_greater") var sciame_portata := 240.0
 ## Secondi di carica prima della picchiata: è il momento buono per colpirlo.
 @export_range(0.0, 10.0, 0.05, "or_greater") var sciame_durata_carica := 1.5
-## Velocità della picchiata, in pixel al secondo.
-@export_range(10, 3000, 10, "or_greater") var sciame_velocità_picchiata := 520.0
+## Velocità della picchiata (il lancio dopo la carica), in pixel al secondo.
+@export_range(10, 3000, 10, "or_greater") var sciame_velocità_lancio := 520.0
 ## Durata della picchiata, in secondi.
-@export_range(0.02, 5.0, 0.01, "or_greater") var sciame_durata_picchiata := 0.32
+@export_range(0.02, 5.0, 0.01, "or_greater") var sciame_durata_lancio := 0.32
 ## Secondi di pausa dopo la picchiata.
 @export_range(0.0, 10.0, 0.05, "or_greater") var sciame_recupero := 0.7
 
 @export_subgroup("Strisciante Dorato", "dorato_")
 ## Probabilità che compaia in una mappa: una su questo numero.
 @export_range(1, 100000, 1, "or_greater") var dorato_una_su := 4096
-## Moltiplicatore della vita dello Strisciante.
-@export_range(0.1, 50.0, 0.05, "or_greater") var dorato_moltiplicatore_vita := 3.5
-## Moltiplicatore della velocità dello Strisciante.
-@export_range(0.1, 10.0, 0.05, "or_greater") var dorato_moltiplicatore_velocità := 1.3
-## Moltiplicatore del danno dello Strisciante.
-@export_range(0.1, 20.0, 0.05, "or_greater") var dorato_moltiplicatore_danno := 1.5
+## Moltiplicatore della vita dello Strisciante normale (3.5 = tre volte e mezza).
+@export_range(0.1, 50.0, 0.05, "or_greater") var dorato_vita := 3.5
+## Moltiplicatore della velocità dello Strisciante normale.
+@export_range(0.1, 10.0, 0.05, "or_greater") var dorato_velocità := 1.3
+## Moltiplicatore del danno dello Strisciante normale.
+@export_range(0.1, 20.0, 0.05, "or_greater") var dorato_danno := 1.5
 
 # =============================================================================
 @export_group("Boss")
@@ -236,54 +238,73 @@ static func use(config: BalanceConfig) -> void:
 @export_range(0, 500, 1, "or_greater") var spettro_corrotto_danno := 18.0
 
 # =============================================================================
-@export_group("Potenziamenti", "potenziamento_")
-## Lama Rapida: danno da scatto in più.
-@export_range(0, 200, 1, "or_greater") var potenziamento_lama_rapida_danno := 6.0
-## Passo Veloce: velocità di movimento in più.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_passo_veloce_velocità := 15.0
-## Scatto Lungo: distanza dello scatto in più.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_scatto_lungo_distanza := 25.0
-## Cuore di Ferro: punti vita massimi in più.
-@export_range(0, 1000, 1, "or_greater") var potenziamento_cuore_di_ferro_vita := 25.0
-## Zanne Affilate: danno degli attacchi speciali in più.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_zanne_affilate_danno := 15.0
-## Richiamo Rapido: riduzione del tempo di recupero dell'addomesticamento.
-@export_range(0, 95, 1, "suffix:%") var potenziamento_richiamo_rapido_riduzione := 20.0
-## Pelle Coriacea: vita massima degli alleati in più.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_pelle_coriacea_vita := 35.0
-## Istinto di Branco: danno inflitto dagli alleati in più.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_istinto_di_branco_danno := 30.0
-## Scatto Fulmine: riduzione del tempo di ricarica dello scatto.
-@export_range(0, 95, 1, "suffix:%") var potenziamento_scatto_fulmine_riduzione := 20.0
-## Scatto Fantasma: secondi di invulnerabilità in più dopo lo scatto.
-@export_range(0.0, 5.0, 0.01, "or_greater") var potenziamento_scatto_fantasma_invulnerabilità := 0.15
-## Doppio Scatto: cariche di scatto in più.
-@export_range(1, 10, 1, "or_greater") var potenziamento_doppio_scatto_cariche := 1
-## Furia: danno da scatto in più quando si è quasi senza vita (cresce man mano
-## che si perde vita, fino a questo valore).
-@export_range(0, 1000, 1, "or_greater", "suffix:%") var potenziamento_furia_danno_massimo := 50.0
-## Eco Selvaggia: riduzione del tempo di recupero degli attacchi speciali.
-@export_range(0, 95, 1, "suffix:%") var potenziamento_eco_selvaggia_riduzione := 25.0
-## Vincolo Vitale: vita recuperata quando cade un alleato.
-@export_range(0, 1000, 1, "or_greater") var potenziamento_vincolo_vitale_cura := 30.0
-## Passo del Predatore: velocità di movimento in più mentre hai un alleato.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_passo_del_predatore_velocità := 25.0
-## Cuore Dorato (bottino dello Strisciante Dorato): vita massima in più.
-@export_range(0, 1000, 1, "or_greater") var potenziamento_cuore_dorato_vita := 40.0
-## Cuore Dorato: danno da scatto in più.
-@export_range(0, 200, 1, "or_greater") var potenziamento_cuore_dorato_danno := 10.0
-## Benedizione del Custode: raggio dell'onda d'urto dello scatto, in pixel.
-@export_range(0, 1000, 1, "or_greater") var potenziamento_benedizione_raggio := 70.0
-## Benedizione del Custode: danno dell'onda, in percentuale del danno da scatto.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_benedizione_danno := 40.0
-## Corazza di Magma: vita massima in più.
-@export_range(0, 1000, 1, "or_greater") var potenziamento_corazza_di_magma_vita := 80.0
-## Corazza di Magma: danno da scatto in più.
-@export_range(0, 200, 1, "or_greater") var potenziamento_corazza_di_magma_danno := 8.0
-## Velo Spettrale: velocità di movimento in più.
-@export_range(0, 500, 1, "or_greater", "suffix:%") var potenziamento_velo_spettrale_velocità := 25.0
-## Velo Spettrale: secondi di invulnerabilità in più dopo lo scatto.
-@export_range(0.0, 5.0, 0.01, "or_greater") var potenziamento_velo_spettrale_invulnerabilità := 0.2
+@export_group("Potenziamenti")
+@export_subgroup("Lama Rapida", "lama_rapida_")
+## Danno da scatto in più.
+@export_range(0, 200, 1, "or_greater") var lama_rapida_danno := 6.0
+@export_subgroup("Passo Veloce", "passo_veloce_")
+## Velocità di movimento in più.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var passo_veloce_velocità := 15.0
+@export_subgroup("Scatto Lungo", "scatto_lungo_")
+## Distanza dello scatto in più.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var scatto_lungo_distanza := 25.0
+@export_subgroup("Cuore di Ferro", "cuore_di_ferro_")
+## Punti vita massimi in più.
+@export_range(0, 1000, 1, "or_greater") var cuore_di_ferro_vita := 25.0
+@export_subgroup("Zanne Affilate", "zanne_affilate_")
+## Danno degli attacchi speciali degli alleati in più.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var zanne_affilate_danno := 15.0
+@export_subgroup("Richiamo Rapido", "richiamo_rapido_")
+## Riduzione del tempo di recupero dell'addomesticamento.
+@export_range(0, 95, 1, "suffix:%") var richiamo_rapido_riduzione := 20.0
+@export_subgroup("Pelle Coriacea", "pelle_coriacea_")
+## Vita massima degli alleati in più.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var pelle_coriacea_vita := 35.0
+@export_subgroup("Istinto di Branco", "istinto_di_branco_")
+## Danno inflitto dagli alleati in combattimento in più.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var istinto_di_branco_danno := 30.0
+@export_subgroup("Scatto Fulmine", "scatto_fulmine_")
+## Riduzione del tempo di ricarica dello scatto.
+@export_range(0, 95, 1, "suffix:%") var scatto_fulmine_riduzione := 20.0
+@export_subgroup("Scatto Fantasma", "scatto_fantasma_")
+## Secondi di invulnerabilità in più dopo lo scatto.
+@export_range(0.0, 5.0, 0.01, "or_greater") var scatto_fantasma_invulnerabilità := 0.15
+@export_subgroup("Doppio Scatto", "doppio_scatto_")
+## Cariche di scatto in più.
+@export_range(1, 10, 1, "or_greater") var doppio_scatto_cariche := 1
+@export_subgroup("Furia", "furia_")
+## Danno da scatto in più quando si è quasi senza vita: cresce man mano che
+## si perde vita, fino a questo valore.
+@export_range(0, 1000, 1, "or_greater", "suffix:%") var furia_danno := 50.0
+@export_subgroup("Eco Selvaggia", "eco_selvaggia_")
+## Riduzione del tempo di recupero degli attacchi speciali.
+@export_range(0, 95, 1, "suffix:%") var eco_selvaggia_riduzione := 25.0
+@export_subgroup("Vincolo Vitale", "vincolo_vitale_")
+## Vita recuperata quando cade un alleato.
+@export_range(0, 1000, 1, "or_greater") var vincolo_vitale_cura := 30.0
+@export_subgroup("Passo del Predatore", "passo_del_predatore_")
+## Velocità di movimento in più mentre hai almeno un alleato.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var passo_del_predatore_velocità := 25.0
+@export_subgroup("Cuore Dorato (bottino dello Strisciante Dorato)", "cuore_dorato_")
+## Vita massima in più.
+@export_range(0, 1000, 1, "or_greater") var cuore_dorato_vita := 40.0
+## Danno da scatto in più.
+@export_range(0, 200, 1, "or_greater") var cuore_dorato_danno := 10.0
+@export_subgroup("Benedizione del Custode (bottino del Custode Corrotto)", "benedizione_")
+## Raggio dell'onda d'urto che parte a ogni colpo di scatto, in pixel.
+@export_range(0, 1000, 1, "or_greater") var benedizione_raggio := 70.0
+## Danno dell'onda, in percentuale del danno da scatto.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var benedizione_danno := 40.0
+@export_subgroup("Corazza di Magma (bottino del Colosso Corrotto)", "corazza_di_magma_")
+## Vita massima in più.
+@export_range(0, 1000, 1, "or_greater") var corazza_di_magma_vita := 80.0
+## Danno da scatto in più.
+@export_range(0, 200, 1, "or_greater") var corazza_di_magma_danno := 8.0
+@export_subgroup("Velo Spettrale (bottino dello Spettro Corrotto)", "velo_spettrale_")
+## Velocità di movimento in più.
+@export_range(0, 500, 1, "or_greater", "suffix:%") var velo_spettrale_velocità := 25.0
+## Secondi di invulnerabilità in più dopo lo scatto.
+@export_range(0.0, 5.0, 0.01, "or_greater") var velo_spettrale_invulnerabilità := 0.2
 
 # =============================================================================
 @export_group("Ricompense", "ricompense_")

@@ -69,21 +69,21 @@ var charge_dir := Vector2.RIGHT
 # Morso (Strisciante): si ferma a un soffio dalla preda, affonda il
 # colpo, poi riprende a inseguirla.
 static var BITE_WINDUP: float:
-	get: return BalanceConfig.current().strisciante_preparazione_morso
+	get: return BalanceConfig.current().strisciante_preparazione
 const BITE_STRIKE := 0.12
 static var BITE_RECOVER: float:
-	get: return BalanceConfig.current().strisciante_recupero_morso
+	get: return BalanceConfig.current().strisciante_recupero
 const BITE_REACH_BONUS := 6.0
 
 # Carica (Sciame): a tiro si ferma, punta la preda e si lancia.
 static var SWARM_CHARGE_RANGE: float:
-	get: return BalanceConfig.current().sciame_portata_carica
+	get: return BalanceConfig.current().sciame_portata
 static var SWARM_CHARGE_TIME: float:
 	get: return BalanceConfig.current().sciame_durata_carica
 static var SWARM_DASH_TIME: float:
-	get: return BalanceConfig.current().sciame_durata_picchiata
+	get: return BalanceConfig.current().sciame_durata_lancio
 static var SWARM_DASH_SPEED: float:
-	get: return BalanceConfig.current().sciame_velocità_picchiata
+	get: return BalanceConfig.current().sciame_velocità_lancio
 static var SWARM_RECOVER: float:
 	get: return BalanceConfig.current().sciame_recupero
 
@@ -94,7 +94,7 @@ const HOP_CROUCH := 0.22
 const HOP_AIR := 0.4
 const HOP_LAND := 0.3
 static var HOP_SPEED_MULT: float:
-	get: return BalanceConfig.current().corazzato_moltiplicatore_balzo
+	get: return BalanceConfig.current().corazzato_spinta_balzo
 const HOP_HEIGHT := 16.0
 static var HOP_SHOCKWAVE_RADIUS: float:
 	get: return BalanceConfig.current().corazzato_raggio_onda
@@ -107,9 +107,9 @@ const BURROW_SINK := 0.3
 const BURROW_HIDDEN := 0.25
 const BURROW_RISE := 0.3
 static var BURROW_MIN_DISTANCE: float:
-	get: return BalanceConfig.current().pungiglione_sprofondamento_min
+	get: return BalanceConfig.current().pungiglione_rispunta_min
 static var BURROW_MAX_DISTANCE: float:
-	get: return max(BalanceConfig.current().pungiglione_sprofondamento_min, BalanceConfig.current().pungiglione_sprofondamento_max)
+	get: return max(BalanceConfig.current().pungiglione_rispunta_min, BalanceConfig.current().pungiglione_rispunta_max)
 # Quanto vicino a una parete deve rispuntare. Il punto scelto deve
 # starci senza compenetrare il muro ma avercelo a ridosso.
 const WALL_HUG_DISTANCE := 34.0

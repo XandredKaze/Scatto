@@ -92,7 +92,7 @@ static func _refresh() -> void:
 static func _build_enemy_types(c: BalanceConfig) -> Dictionary:
 	var t: Dictionary = _ENEMY_BASE.duplicate(true)
 	_set_stats(t.strisciante, c.strisciante_vita, c.strisciante_velocità, c.strisciante_danno)
-	t.strisciante["contact_cooldown"] = c.strisciante_ricarica_contatto
+	t.strisciante["contact_cooldown"] = c.strisciante_ricarica
 
 	_set_stats(t.pungiglione, c.pungiglione_vita, c.pungiglione_velocità, c.pungiglione_danno)
 	t.pungiglione["keep_distance"] = c.pungiglione_distanza
@@ -100,12 +100,12 @@ static func _build_enemy_types(c: BalanceConfig) -> Dictionary:
 	t.pungiglione["projectile_speed"] = c.pungiglione_velocità_dardo
 
 	_set_stats(t.corazzato, c.corazzato_vita, c.corazzato_velocità, c.corazzato_danno)
-	t.corazzato["contact_cooldown"] = c.corazzato_ricarica_contatto
+	t.corazzato["contact_cooldown"] = c.corazzato_ricarica
 	t.corazzato["min_room"] = c.corazzato_dalla_mappa
 	t.corazzato["desc"] = String(t.corazzato.desc).format({"dalla": _ordinal(c.corazzato_dalla_mappa)})
 
 	_set_stats(t.sciame, c.sciame_vita, c.sciame_velocità, c.sciame_danno)
-	t.sciame["contact_cooldown"] = c.sciame_ricarica_contatto
+	t.sciame["contact_cooldown"] = c.sciame_ricarica
 	t.sciame["min_room"] = c.sciame_dalla_mappa
 	t.sciame["group_min"] = min(c.sciame_gruppo_min, c.sciame_gruppo_max)
 	t.sciame["group_max"] = max(c.sciame_gruppo_min, c.sciame_gruppo_max)
@@ -127,9 +127,9 @@ static func _build_ally_special_attacks(c: BalanceConfig) -> Dictionary:
 
 static func _build_golden_variants(c: BalanceConfig) -> Dictionary:
 	var t: Dictionary = _GOLDEN_BASE.duplicate(true)
-	t.strisciante["hp_mult"] = c.dorato_moltiplicatore_vita
-	t.strisciante["speed_mult"] = c.dorato_moltiplicatore_velocità
-	t.strisciante["damage_mult"] = c.dorato_moltiplicatore_danno
+	t.strisciante["hp_mult"] = c.dorato_vita
+	t.strisciante["speed_mult"] = c.dorato_velocità
+	t.strisciante["damage_mult"] = c.dorato_danno
 	return t
 
 static func _build_bosses(c: BalanceConfig) -> Dictionary:
@@ -146,24 +146,24 @@ static func _build_bosses(c: BalanceConfig) -> Dictionary:
 # qui dai valori in uso, cosí restano vere qualunque cosa si cambi.
 static func _build_powerups(c: BalanceConfig) -> Array:
 	var values := {
-		"lama_rapida": {"danno": _num(c.potenziamento_lama_rapida_danno)},
-		"passo_veloce": {"velocita": _num(c.potenziamento_passo_veloce_velocità)},
-		"scatto_lungo": {"distanza": _num(c.potenziamento_scatto_lungo_distanza)},
-		"cuore_di_ferro": {"vita": _num(c.potenziamento_cuore_di_ferro_vita)},
-		"zanne_affilate": {"danno": _num(c.potenziamento_zanne_affilate_danno)},
-		"richiamo_rapido": {"riduzione": _num(c.potenziamento_richiamo_rapido_riduzione)},
-		"pelle_coriacea": {"vita": _num(c.potenziamento_pelle_coriacea_vita)},
-		"istinto_di_branco": {"danno": _num(c.potenziamento_istinto_di_branco_danno)},
-		"scatto_fulmine": {"riduzione": _num(c.potenziamento_scatto_fulmine_riduzione)},
-		"scatto_fantasma": {"secondi": _num(c.potenziamento_scatto_fantasma_invulnerabilità)},
-		"doppio_scatto": {"cariche_testo": "Aggiunge una carica di scatto." if c.potenziamento_doppio_scatto_cariche == 1 else "Aggiunge %d cariche di scatto." % c.potenziamento_doppio_scatto_cariche},
-		"furia": {"massimo": _num(c.potenziamento_furia_danno_massimo)},
-		"eco_selvaggia": {"riduzione": _num(c.potenziamento_eco_selvaggia_riduzione)},
-		"vincolo_vitale": {"cura": _num(c.potenziamento_vincolo_vitale_cura)},
-		"passo_del_predatore": {"velocita": _num(c.potenziamento_passo_del_predatore_velocità)},
-		"cuore_dorato": {"vita": _num(c.potenziamento_cuore_dorato_vita), "danno": _num(c.potenziamento_cuore_dorato_danno)},
-		"corazza_di_magma": {"vita": _num(c.potenziamento_corazza_di_magma_vita), "danno": _num(c.potenziamento_corazza_di_magma_danno)},
-		"velo_spettrale": {"velocita": _num(c.potenziamento_velo_spettrale_velocità), "secondi": _num(c.potenziamento_velo_spettrale_invulnerabilità)},
+		"lama_rapida": {"danno": _num(c.lama_rapida_danno)},
+		"passo_veloce": {"velocita": _num(c.passo_veloce_velocità)},
+		"scatto_lungo": {"distanza": _num(c.scatto_lungo_distanza)},
+		"cuore_di_ferro": {"vita": _num(c.cuore_di_ferro_vita)},
+		"zanne_affilate": {"danno": _num(c.zanne_affilate_danno)},
+		"richiamo_rapido": {"riduzione": _num(c.richiamo_rapido_riduzione)},
+		"pelle_coriacea": {"vita": _num(c.pelle_coriacea_vita)},
+		"istinto_di_branco": {"danno": _num(c.istinto_di_branco_danno)},
+		"scatto_fulmine": {"riduzione": _num(c.scatto_fulmine_riduzione)},
+		"scatto_fantasma": {"secondi": _num(c.scatto_fantasma_invulnerabilità)},
+		"doppio_scatto": {"cariche_testo": "Aggiunge una carica di scatto." if c.doppio_scatto_cariche == 1 else "Aggiunge %d cariche di scatto." % c.doppio_scatto_cariche},
+		"furia": {"massimo": _num(c.furia_danno)},
+		"eco_selvaggia": {"riduzione": _num(c.eco_selvaggia_riduzione)},
+		"vincolo_vitale": {"cura": _num(c.vincolo_vitale_cura)},
+		"passo_del_predatore": {"velocita": _num(c.passo_del_predatore_velocità)},
+		"cuore_dorato": {"vita": _num(c.cuore_dorato_vita), "danno": _num(c.cuore_dorato_danno)},
+		"corazza_di_magma": {"vita": _num(c.corazza_di_magma_vita), "danno": _num(c.corazza_di_magma_danno)},
+		"velo_spettrale": {"velocita": _num(c.velo_spettrale_velocità), "secondi": _num(c.velo_spettrale_invulnerabilità)},
 	}
 	var result: Array = []
 	for base in _POWERUP_BASE:
@@ -228,11 +228,11 @@ const _ALLY_SPECIAL_BASE := {
 # e Colpo Corazzato, scarto angolare (radianti) del secondo Dardo Velenoso,
 # proiettili di Sciame Vendicativo. Valori in BalanceConfig.
 static var EMPOWERED_DAMAGE_MULT: float:
-	get: return BalanceConfig.current().potenziato_moltiplicatore_danno
+	get: return BalanceConfig.current().potenziato_danno
 static var EMPOWERED_DART_SPREAD: float:
-	get: return deg_to_rad(BalanceConfig.current().potenziato_scarto_secondo_dardo)
+	get: return deg_to_rad(BalanceConfig.current().potenziato_scarto_dardo)
 static var EMPOWERED_SWARM_COUNT: int:
-	get: return BalanceConfig.current().potenziato_proiettili_raffica
+	get: return BalanceConfig.current().potenziato_proiettili
 
 # L'avversario comune con variante dorata: 1 possibilità su GOLDEN_CHANCE_DENOMINATOR
 # di comparire in una stanza al posto (o in aggiunta) allo Strisciante normale.
@@ -422,39 +422,39 @@ static func apply_powerup(id: String, player: Node) -> void:
 	var c: BalanceConfig = BalanceConfig.current()
 	match id:
 		"lama_rapida":
-			player.dash_damage_bonus += c.potenziamento_lama_rapida_danno
+			player.dash_damage_bonus += c.lama_rapida_danno
 		"passo_veloce":
-			player.speed_mult += c.potenziamento_passo_veloce_velocità / 100.0
+			player.speed_mult += c.passo_veloce_velocità / 100.0
 		"scatto_lungo":
-			player.dash_distance_mult += c.potenziamento_scatto_lungo_distanza / 100.0
+			player.dash_distance_mult += c.scatto_lungo_distanza / 100.0
 		"cuore_di_ferro":
-			player.max_hp += c.potenziamento_cuore_di_ferro_vita
-			player.hp += c.potenziamento_cuore_di_ferro_vita
+			player.max_hp += c.cuore_di_ferro_vita
+			player.hp += c.cuore_di_ferro_vita
 		"scatto_fulmine":
-			player.dash_cooldown_mult *= 1.0 - c.potenziamento_scatto_fulmine_riduzione / 100.0
+			player.dash_cooldown_mult *= 1.0 - c.scatto_fulmine_riduzione / 100.0
 		"scatto_fantasma":
-			player.extra_iframes += c.potenziamento_scatto_fantasma_invulnerabilità
+			player.extra_iframes += c.scatto_fantasma_invulnerabilità
 		"doppio_scatto":
-			player.max_dash_charges += c.potenziamento_doppio_scatto_cariche
-			player.dash_charges += c.potenziamento_doppio_scatto_cariche
+			player.max_dash_charges += c.doppio_scatto_cariche
+			player.dash_charges += c.doppio_scatto_cariche
 		"contrattacco":
 			player.has_contrattacco = true
 		"furia":
 			player.has_furia = true
 		"zanne_affilate":
-			player.special_damage_mult += c.potenziamento_zanne_affilate_danno / 100.0
+			player.special_damage_mult += c.zanne_affilate_danno / 100.0
 		"richiamo_rapido":
-			player.tame_cooldown_mult *= 1.0 - c.potenziamento_richiamo_rapido_riduzione / 100.0
+			player.tame_cooldown_mult *= 1.0 - c.richiamo_rapido_riduzione / 100.0
 		"pelle_coriacea":
-			player.ally_hp_mult += c.potenziamento_pelle_coriacea_vita / 100.0
+			player.ally_hp_mult += c.pelle_coriacea_vita / 100.0
 		"istinto_di_branco":
-			player.ally_damage_mult += c.potenziamento_istinto_di_branco_danno / 100.0
+			player.ally_damage_mult += c.istinto_di_branco_danno / 100.0
 		"eco_selvaggia":
-			player.special_cooldown_mult *= 1.0 - c.potenziamento_eco_selvaggia_riduzione / 100.0
+			player.special_cooldown_mult *= 1.0 - c.eco_selvaggia_riduzione / 100.0
 		"vincolo_vitale":
 			player.has_vincolo_vitale = true
 		"passo_del_predatore":
-			player.pack_speed_bonus += c.potenziamento_passo_del_predatore_velocità / 100.0
+			player.pack_speed_bonus += c.passo_del_predatore_velocità / 100.0
 		"richiamo_primordiale":
 			player.has_richiamo_primordiale = true
 		"vincolo_spezzato":
@@ -462,15 +462,15 @@ static func apply_powerup(id: String, player: Node) -> void:
 		"anima_del_branco":
 			player.always_empowered = true
 		"cuore_dorato":
-			player.max_hp += c.potenziamento_cuore_dorato_vita
-			player.hp += c.potenziamento_cuore_dorato_vita
-			player.dash_damage_bonus += c.potenziamento_cuore_dorato_danno
+			player.max_hp += c.cuore_dorato_vita
+			player.hp += c.cuore_dorato_vita
+			player.dash_damage_bonus += c.cuore_dorato_danno
 		"benedizione_del_custode":
 			player.has_shockwave = true
 		"corazza_di_magma":
-			player.max_hp += c.potenziamento_corazza_di_magma_vita
-			player.hp += c.potenziamento_corazza_di_magma_vita
-			player.dash_damage_bonus += c.potenziamento_corazza_di_magma_danno
+			player.max_hp += c.corazza_di_magma_vita
+			player.hp += c.corazza_di_magma_vita
+			player.dash_damage_bonus += c.corazza_di_magma_danno
 		"velo_spettrale":
-			player.speed_mult += c.potenziamento_velo_spettrale_velocità / 100.0
-			player.extra_iframes += c.potenziamento_velo_spettrale_invulnerabilità
+			player.speed_mult += c.velo_spettrale_velocità / 100.0
+			player.extra_iframes += c.velo_spettrale_invulnerabilità

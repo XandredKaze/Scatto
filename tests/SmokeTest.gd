@@ -2524,8 +2524,8 @@ func _test_balance_config_drives_game() -> void:
 	cfg.custode_vita = 1234.0
 	cfg.speciale_morso_danno = 77.0
 	cfg.speciale_dardo_ricarica = 0.9
-	cfg.potenziamento_lama_rapida_danno = 9.0
-	cfg.potenziamento_passo_veloce_velocità = 40.0
+	cfg.lama_rapida_danno = 9.0
+	cfg.passo_veloce_velocità = 40.0
 	cfg.ricompense_scelte = 2
 	cfg.alleati_massimo = 1
 	BalanceConfig.use(cfg)

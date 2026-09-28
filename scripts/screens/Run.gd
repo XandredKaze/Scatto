@@ -42,9 +42,9 @@ const WALL_MARGIN := 48.0
 # Onda d'urto della Benedizione del Custode (raggio, e danno in rapporto a
 # quello dello scatto).
 static var SHOCKWAVE_RADIUS: float:
-	get: return BalanceConfig.current().potenziamento_benedizione_raggio
+	get: return BalanceConfig.current().benedizione_raggio
 static var SHOCKWAVE_RATIO: float:
-	get: return BalanceConfig.current().potenziamento_benedizione_danno / 100.0
+	get: return BalanceConfig.current().benedizione_danno / 100.0
 # Addomesticamento: rende alleato un nemico comune nelle vicinanze (non
 # dorato). Gli alleati restano con te finché non muoiono o non finisci/
 # riavvii la run (persistono invece tra una mappa e l'altra, e tra le
@@ -83,7 +83,7 @@ static var SWARM_DAMAGE: float:
 	get: return BalanceConfig.current().speciale_raffica_danno
 # Vita restituita dal potenziamento "Vincolo Vitale" alla caduta di un alleato.
 static var VINCOLO_VITALE_HEAL: float:
-	get: return BalanceConfig.current().potenziamento_vincolo_vitale_cura
+	get: return BalanceConfig.current().vincolo_vitale_cura
 # Sottofondo musicale, in riproduzione solo durante una run: il lettore è
 # figlio di questo nodo, quindi tornando all'Hub (dove Run viene liberato)
 # la musica si interrompe da sola, senza doverla fermare a mano. Il brano
