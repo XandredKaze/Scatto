@@ -26,6 +26,7 @@ func run_and_quit() -> void:
 	await _test_all_boss_moves()
 	await _test_boss_signals_wired_in_run()
 	await _test_real_dash_collision()
+	await _test_dash_charges_without_cooldown()
 	await _test_boss_attack_patterns()
 	await _test_tutorial_screen_has_no_spoilers()
 	await _test_hud_debug_golden_button()
@@ -1357,7 +1358,9 @@ func _test_special_attack_pacing() -> void:
 
 	# Il danno al secondo di ogni attacco deve reggere il confronto con
 	# l'attacco base: senza scatto sono l'unica offesa rimasta.
-	var dash_dps: float = Player.BASE_DASH_DAMAGE / p.dash_cooldown()
+	# Lo scatto non ha più tempo di recupero: si misura su un ritmo
+	# realistico di uno scatto a segno ogni ~0.55 s, tra mira e movimento.
+	var dash_dps: float = Player.BASE_DASH_DAMAGE / 0.55
 	var dps := {
 		"strisciante": Run.LUNGE_DAMAGE / melee,
 		"pungiglione": Run.DART_DAMAGE / ranged,
@@ -2464,6 +2467,120 @@ func _test_real_dash_collision() -> void:
 	p2.queue_free()
 	e2.queue_free()
 	await get_tree().physics_frame
+
+# Scatta `p` verso destra contro un nemico appena messo davanti, con la
+# vera fisica Area2D, e aspetta la fine dello scatto. `enemy_hp` fissa la
+# vita del nemico (alta per un colpo che non uccide, 1 per un'uccisione).
+func _dash_into_fresh_enemy(p: Player, enemy_hp: float) -> Enemy:
+	var e := Enemy.new()
+	e.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	e.max_hp = enemy_hp
+	e.hp = enemy_hp
+	e.global_position = p.global_position + Vector2(30, 0)
+	add_child(e)
+	p.start_dash(Vector2.RIGHT)
+	for i in range(20):
+		await get_tree().physics_frame
+	return e
+
+func _test_dash_charges_without_cooldown() -> void:
+	print("--- Test: lo scatto non si ricarica col tempo, solo colpendo o uccidendo ---")
+	var cfg := BalanceConfig.new()
+	cfg.giocatore_riserva_scatto = 0.0
+	BalanceConfig.use(cfg)
+
+	var p := Player.new()
+	p.arena_bounds = Rect2(Vector2(48, 48), Vector2(1600, 600))
+	add_child(p)
+	p.global_position = Vector2(200, 300)
+	p.max_dash_charges = 3
+	p.refill_dash_charges()
+
+	# Uno scatto a vuoto consuma la carica e il tempo non la restituisce:
+	# un secondo e mezzo è quasi il triplo della vecchia ricarica (0.55 s).
+	p.start_dash(Vector2.RIGHT)
+	for i in range(90):
+		await get_tree().physics_frame
+	_assert(p.dash_charges == 2, "uno scatto a vuoto non dovrebbe venire ricaricato dal tempo (cariche: %d)" % p.dash_charges)
+
+	# Colpire un nemico (senza ucciderlo) restituisce la carica spesa.
+	var tough := await _dash_into_fresh_enemy(p, 1000.0)
+	_assert(tough.hp < 1000.0, "setup del test: lo scatto avrebbe dovuto colpire il nemico")
+	_assert(p.dash_charges == 2, "colpire un nemico dovrebbe restituire la carica dello scatto (cariche: %d)" % p.dash_charges)
+	tough.queue_free()
+
+	# Senza cariche lo scatto non parte, e con la riserva spenta resta cosí.
+	p.dash_charges = 0
+	_assert(not p.can_dash(), "senza cariche lo scatto non dovrebbe essere disponibile")
+	for i in range(90):
+		await get_tree().physics_frame
+	_assert(p.dash_charges == 0, "con la riserva disattivata le cariche non dovrebbero tornare da sole")
+
+	# Scatto Fulmine: ogni colpo restituisce una carica in più.
+	p.global_position = Vector2(600, 300)
+	p.dash_charges = 1
+	p.apply_powerup("scatto_fulmine")
+	var tough2 := await _dash_into_fresh_enemy(p, 1000.0)
+	_assert(p.dash_charges == 2, "con Scatto Fulmine un colpo dovrebbe restituire 2 cariche (cariche: %d)" % p.dash_charges)
+	tough2.queue_free()
+	p.extra_charges_per_hit = 0
+
+	# Contrattacco: un'uccisione con lo scatto ricarica tutto.
+	p.global_position = Vector2(1000, 300)
+	p.dash_charges = 1
+	p.has_contrattacco = true
+	var frail := await _dash_into_fresh_enemy(p, 1.0)
+	_assert(not frail.alive, "setup del test: lo scatto avrebbe dovuto uccidere il nemico")
+	_assert(p.dash_charges == p.max_dash_charges, "con Contrattacco un'uccisione dovrebbe ricaricare tutte le cariche (cariche: %d)" % p.dash_charges)
+	p.has_contrattacco = false
+
+	# La riserva, se attiva, restituisce una carica dopo il tempo previsto
+	# a zero cariche, e non prima.
+	cfg.giocatore_riserva_scatto = 0.5
+	p.dash_charges = 0
+	for i in range(15):
+		await get_tree().physics_frame
+	_assert(p.dash_charges == 0, "la carica di riserva non dovrebbe arrivare prima del tempo")
+	_assert(p.emergency_charge_progress() > 0.0, "la HUD dovrebbe poter mostrare l'attesa della riserva")
+	for i in range(30):
+		await get_tree().physics_frame
+	_assert(p.dash_charges == 1, "dopo il tempo di riserva dovrebbe tornare una carica (cariche: %d)" % p.dash_charges)
+	for i in range(60):
+		await get_tree().physics_frame
+	_assert(p.dash_charges == 1, "la riserva dovrebbe restituire una carica sola, non ricaricare col tempo (cariche: %d)" % p.dash_charges)
+	p.queue_free()
+	await get_tree().physics_frame
+
+	# Nella run vera: ogni nemico che muore, chiunque l'abbia ucciso,
+	# restituisce una carica; ogni mappa nuova parte con tutte le cariche.
+	cfg.giocatore_riserva_scatto = 0.0
+	var charge_run := Run.new()
+	add_child(charge_run)
+	charge_run.begin_new_streak()
+	await get_tree().process_frame
+	var rp: Player = charge_run.player
+	_assert(rp.dash_charges == rp.max_dash_charges and rp.max_dash_charges == cfg.giocatore_cariche_scatto, "la run dovrebbe partire con tutte le cariche")
+	var victim: Enemy = null
+	for c in charge_run.enemy_container.get_children():
+		if c is Enemy and c.alive and not c.is_ally:
+			victim = c
+			break
+	_assert(victim != null, "setup del test: la mappa dovrebbe avere almeno un nemico")
+	rp.dash_charges = 0
+	victim.take_damage(victim.hp)
+	charge_run._on_enemy_defeated(victim)
+	_assert(rp.dash_charges == 1, "la morte di un nemico dovrebbe restituire una carica (cariche: %d)" % rp.dash_charges)
+	rp.dash_charges = 0
+	charge_run._generate_room(2)
+	_assert(rp.dash_charges == rp.max_dash_charges, "una mappa nuova dovrebbe cominciare con tutte le cariche")
+	rp.dash_charges = 0
+	charge_run._start_boss_room()
+	_assert(rp.dash_charges == rp.max_dash_charges, "la sala del boss dovrebbe cominciare con tutte le cariche")
+
+	charge_run.queue_free()
+	BalanceConfig.use(null)
+	await get_tree().process_frame
+	print("Cariche di scatto senza ricarica a tempo: OK")
 
 func _clear_five_rooms_to_boss() -> void:
 	for i in range(1, 6):

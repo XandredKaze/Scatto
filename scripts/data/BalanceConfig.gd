@@ -46,10 +46,20 @@ static func use(config: BalanceConfig) -> void:
 @export_range(100, 5000, 10, "or_greater") var giocatore_velocità_scatto := 900.0
 ## Quanto dura uno scatto, in secondi. Durante lo scatto si è invulnerabili.
 @export_range(0.02, 2.0, 0.01, "or_greater") var giocatore_durata_scatto := 0.16
-## Secondi per ricaricare una carica di scatto.
-@export_range(0.05, 10.0, 0.01, "or_greater") var giocatore_ricarica_scatto := 0.55
-## Cariche di scatto disponibili a inizio serie.
-@export_range(1, 10, 1, "or_greater") var giocatore_cariche_scatto := 1
+## Cariche di scatto disponibili a inizio serie. Lo scatto non si ricarica
+## col tempo: ogni mappa comincia con tutte le cariche e durante la mappa
+## tornano solo colpendo nemici o quando un nemico muore.
+@export_range(1, 10, 1, "or_greater") var giocatore_cariche_scatto := 3
+## Cariche restituite da ogni nemico (o boss) colpito dallo scatto.
+@export_range(0, 10, 1, "or_greater") var giocatore_cariche_per_colpo := 1
+## Cariche restituite da ogni nemico che muore, chiunque l'abbia ucciso
+## (scatto, onda d'urto, alleati). Si sommano a quelle del colpo.
+@export_range(0, 10, 1, "or_greater") var giocatore_cariche_per_uccisione := 1
+## Rete di sicurezza: dopo questi secondi senza cariche ne torna una, cosí
+## non si resta bloccati senza poter colpire (per esempio contro il boss,
+## che non si può addomesticare). 0 la disattiva: le cariche tornano
+## soltanto colpendo o uccidendo.
+@export_range(0.0, 60.0, 0.5, "or_greater", "suffix:s") var giocatore_riserva_scatto := 5.0
 ## Secondi di invulnerabilità dopo aver subito un colpo.
 @export_range(0.0, 5.0, 0.05, "or_greater") var giocatore_invulnerabilità := 0.8
 ## Quanto un colpo subito ti spinge indietro, in pixel.
@@ -264,8 +274,8 @@ static func use(config: BalanceConfig) -> void:
 ## Danno inflitto dagli alleati in combattimento in più.
 @export_range(0, 500, 1, "or_greater", "suffix:%") var istinto_di_branco_danno := 30.0
 @export_subgroup("Scatto Fulmine", "scatto_fulmine_")
-## Riduzione del tempo di ricarica dello scatto.
-@export_range(0, 95, 1, "suffix:%") var scatto_fulmine_riduzione := 20.0
+## Cariche in più restituite da ogni nemico colpito dallo scatto.
+@export_range(1, 10, 1, "or_greater") var scatto_fulmine_cariche := 1
 @export_subgroup("Scatto Fantasma", "scatto_fantasma_")
 ## Secondi di invulnerabilità in più dopo lo scatto.
 @export_range(0.0, 5.0, 0.01, "or_greater") var scatto_fantasma_invulnerabilità := 0.15

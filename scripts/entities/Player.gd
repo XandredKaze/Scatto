@@ -7,6 +7,10 @@ extends Area2D
 # - nessun alleato: entrambi i pulsanti eseguono lo SCATTO, l'attacco base.
 #   Durante lo scatto il giocatore è invulnerabile e infligge danno a ogni
 #   nemico attraversato (una sola volta per scatto).
+#   Lo scatto non si ricarica col tempo: ogni scatto consuma una carica e
+#   le cariche tornano solo colpendo un nemico con lo scatto o quando un
+#   nemico muore (vedi restore_dash_charges). A ogni mappa nuova si
+#   riparte con tutte le cariche.
 # - almeno un alleato: lo scatto non è più disponibile su nessun pulsante.
 #   Ogni alleato vivo occupa un pulsante con il proprio attacco speciale;
 #   il pulsante eventualmente rimasto libero resta inattivo finché non
@@ -39,8 +43,18 @@ static var DASH_SPEED: float:
 	get: return BalanceConfig.current().giocatore_velocità_scatto
 static var DASH_DURATION: float:
 	get: return BalanceConfig.current().giocatore_durata_scatto
-static var BASE_DASH_COOLDOWN: float:
-	get: return BalanceConfig.current().giocatore_ricarica_scatto
+# Cariche restituite da ogni nemico colpito dallo scatto e da ogni nemico
+# che muore, comunque sia morto.
+static var CHARGES_PER_HIT: int:
+	get: return BalanceConfig.current().giocatore_cariche_per_colpo
+static var CHARGES_PER_KILL: int:
+	get: return BalanceConfig.current().giocatore_cariche_per_uccisione
+# Rete di sicurezza contro lo stallo: rimasti senza cariche (e senza altri
+# modi di colpire) non si potrebbe più ferire nessuno, per esempio davanti
+# al boss, che non si può addomesticare. Dopo questi secondi a zero cariche
+# ne torna una. 0 la disattiva.
+static var EMERGENCY_CHARGE_DELAY: float:
+	get: return BalanceConfig.current().giocatore_riserva_scatto
 static var HIT_IFRAME: float:
 	get: return BalanceConfig.current().giocatore_invulnerabilità
 static var KNOCKBACK: float:
@@ -58,10 +72,10 @@ var radius := 14.0
 var speed_mult := 1.0
 var dash_damage_bonus := 0.0
 var dash_distance_mult := 1.0
-var dash_cooldown_mult := 1.0
+var extra_charges_per_hit := 0
 var max_dash_charges := 1
 var dash_charges := 1
-var charge_regen_timer := 0.0
+var empty_charges_timer := 0.0
 var extra_iframes := 0.0
 var has_contrattacco := false
 var has_furia := false
@@ -138,10 +152,10 @@ func reset_stats() -> void:
 	speed_mult = 1.0
 	dash_damage_bonus = 0.0
 	dash_distance_mult = 1.0
-	dash_cooldown_mult = 1.0
+	extra_charges_per_hit = 0
 	max_dash_charges = BalanceConfig.current().giocatore_cariche_scatto
 	dash_charges = max_dash_charges
-	charge_regen_timer = 0.0
+	empty_charges_timer = 0.0
 	extra_iframes = 0.0
 	has_contrattacco = false
 	has_furia = false
@@ -174,7 +188,7 @@ func snapshot_stats() -> Dictionary:
 		"speed_mult": speed_mult,
 		"dash_damage_bonus": dash_damage_bonus,
 		"dash_distance_mult": dash_distance_mult,
-		"dash_cooldown_mult": dash_cooldown_mult,
+		"extra_charges_per_hit": extra_charges_per_hit,
 		"max_dash_charges": max_dash_charges,
 		"extra_iframes": extra_iframes,
 		"has_contrattacco": has_contrattacco,
@@ -199,10 +213,10 @@ func restore_stats(snapshot: Dictionary) -> void:
 	speed_mult = snapshot.speed_mult
 	dash_damage_bonus = snapshot.dash_damage_bonus
 	dash_distance_mult = snapshot.dash_distance_mult
-	dash_cooldown_mult = snapshot.dash_cooldown_mult
+	extra_charges_per_hit = snapshot.extra_charges_per_hit
 	max_dash_charges = snapshot.max_dash_charges
 	dash_charges = snapshot.max_dash_charges
-	charge_regen_timer = 0.0
+	empty_charges_timer = 0.0
 	extra_iframes = snapshot.extra_iframes
 	has_contrattacco = snapshot.has_contrattacco
 	has_furia = snapshot.has_furia
@@ -230,8 +244,23 @@ func restore_stats(snapshot: Dictionary) -> void:
 	frozen = false
 	alive = true
 
-func dash_cooldown() -> float:
-	return BASE_DASH_COOLDOWN * dash_cooldown_mult
+# Restituisce `amount` cariche di scatto, senza superare il massimo.
+func restore_dash_charges(amount: int) -> void:
+	if amount <= 0:
+		return
+	dash_charges = min(max_dash_charges, dash_charges + amount)
+	empty_charges_timer = 0.0
+
+func refill_dash_charges() -> void:
+	dash_charges = max_dash_charges
+	empty_charges_timer = 0.0
+
+# Frazione (0-1) di attesa già trascorsa verso la carica di riserva: la HUD
+# la mostra riempiendo il pallino vuoto. 0 se la riserva non è in corso.
+func emergency_charge_progress() -> float:
+	if dash_charges > 0 or EMERGENCY_CHARGE_DELAY <= 0.0:
+		return 0.0
+	return clamp(empty_charges_timer / EMERGENCY_CHARGE_DELAY, 0.0, 1.0)
 
 func tame_cooldown() -> float:
 	return TAME_COOLDOWN * tame_cooldown_mult
@@ -384,11 +413,15 @@ func _update_timers(delta: float) -> void:
 	for ability_id in special_attack_cooldowns.keys():
 		if special_attack_cooldowns[ability_id] > 0.0:
 			special_attack_cooldowns[ability_id] -= delta
-	if dash_charges < max_dash_charges:
-		charge_regen_timer += delta
-		if charge_regen_timer >= dash_cooldown():
-			dash_charges += 1
-			charge_regen_timer = 0.0
+	# Nessuna ricarica a tempo: solo la riserva, e solo a zero cariche e
+	# finché lo scatto esiste (con gli alleati al seguito si combatte con
+	# i loro attacchi, non serve).
+	if dash_charges <= 0 and EMERGENCY_CHARGE_DELAY > 0.0 and has_dash() and not is_dashing:
+		empty_charges_timer += delta
+		if empty_charges_timer >= EMERGENCY_CHARGE_DELAY:
+			restore_dash_charges(1)
+	else:
+		empty_charges_timer = 0.0
 
 func _apply_movement(move_delta: Vector2) -> void:
 	if maze != null:
@@ -419,10 +452,14 @@ func _resolve_combat() -> void:
 			var knock: Vector2 = area.global_position - global_position
 			if knock.length() > 0.001:
 				area.global_position += knock.normalized() * KNOCKBACK
+			# Colpire restituisce cariche; se il colpo uccide, la carica per
+			# la morte del nemico arriva a parte da Run (_on_enemy_defeated),
+			# come per ogni altro nemico che muore.
+			restore_dash_charges(CHARGES_PER_HIT + extra_charges_per_hit)
 			dash_hit.emit(area, dmg)
 			if not area.alive:
 				if has_contrattacco:
-					dash_charges = min(max_dash_charges, dash_charges + 1)
+					refill_dash_charges()
 				enemy_defeated.emit(area)
 	else:
 		for area in overlaps:

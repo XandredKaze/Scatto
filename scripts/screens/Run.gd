@@ -289,6 +289,9 @@ func _generate_room(n: int) -> void:
 	player.arena_bounds = Rect2()
 	player.global_position = maze.cell_center(spawn_cell.x, spawn_cell.y)
 	player.hit_enemies_this_dash.clear()
+	# Ogni mappa (e la sala del boss) si affronta con tutte le cariche:
+	# restare a secco nella precedente non deve pesare sulla successiva.
+	player.refill_dash_charges()
 	_configure_camera_limits(maze.total_bounds())
 
 	var excluded_cells: Array = [spawn_cell]
@@ -431,6 +434,10 @@ func _on_enemy_defeated(entity) -> void:
 	blood_decals.splatter(entity.global_position, 2.0 if is_boss else 1.0)
 	var entity_id: String = entity.enemy_id if entity is Enemy else entity.boss_id
 	var first_bestiary := SaveManager.unlock_enemy(entity_id)
+	# Ogni nemico che muore restituisce cariche di scatto, chiunque l'abbia
+	# ucciso (scatto, onda d'urto, alleati): è l'unico modo, insieme al
+	# colpire, per riaverle.
+	player.restore_dash_charges(Player.CHARGES_PER_KILL)
 
 	if entity is Enemy and entity.is_golden:
 		SaveManager.record_golden_defeated()
@@ -786,6 +793,9 @@ func _start_boss_room() -> void:
 	player.arena_bounds = arena_rect
 	player.global_position = Vector2(BOSS_ARENA_SIZE.x / 2.0, BOSS_ARENA_SIZE.y - WALL_MARGIN - 60.0)
 	player.hit_enemies_this_dash.clear()
+	# Ogni mappa (e la sala del boss) si affronta con tutte le cariche:
+	# restare a secco nella precedente non deve pesare sulla successiva.
+	player.refill_dash_charges()
 	_configure_camera_limits(arena_rect)
 
 	_reposition_allies_open(arena_rect, player.global_position)

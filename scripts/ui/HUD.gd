@@ -203,7 +203,7 @@ func _process(delta: float) -> void:
 	# alleati al seguito la riga sparisce del tutto invece di mostrare
 	# pallini per un attacco non più disponibile.
 	dash_pips.visible = player.has_dash()
-	_sync_dash_pips(player.max_dash_charges, player.dash_charges)
+	_sync_dash_pips(player.max_dash_charges, player.dash_charges, player.emergency_charge_progress())
 	_update_powerup_tray(player)
 	ally_label.text = "Alleati: %d / %d" % [run.allies.size(), Run.MAX_ALLIES]
 	tame_pip.color = Palette.UI_READY if player.can_tame() else Palette.UI_IDLE
@@ -279,7 +279,10 @@ func _build_tray_icon(entry: Dictionary, count: int) -> Control:
 
 	return wrap
 
-func _sync_dash_pips(max_charges: int, charges: int) -> void:
+# `reserve_progress` (0-1) è l'attesa verso la carica di riserva quando le
+# cariche sono finite: il primo pallino si accende pian piano, senza mai
+# arrivare al colore pieno finché la carica non è davvero tornata.
+func _sync_dash_pips(max_charges: int, charges: int, reserve_progress := 0.0) -> void:
 	while dash_pips.get_child_count() < max_charges:
 		var pip := ColorRect.new()
 		pip.custom_minimum_size = Vector2(18, 18)
@@ -291,3 +294,6 @@ func _sync_dash_pips(max_charges: int, charges: int) -> void:
 	for i in range(dash_pips.get_child_count()):
 		var pip: ColorRect = dash_pips.get_child(i)
 		pip.color = Palette.UI_READY if i < charges else Palette.UI_IDLE
+	if charges <= 0 and reserve_progress > 0.0 and dash_pips.get_child_count() > 0:
+		var first: ColorRect = dash_pips.get_child(0)
+		first.color = Palette.UI_IDLE.lerp(Palette.UI_READY, reserve_progress * 0.6)

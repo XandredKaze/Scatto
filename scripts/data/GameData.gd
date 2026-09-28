@@ -154,7 +154,7 @@ static func _build_powerups(c: BalanceConfig) -> Array:
 		"richiamo_rapido": {"riduzione": _num(c.richiamo_rapido_riduzione)},
 		"pelle_coriacea": {"vita": _num(c.pelle_coriacea_vita)},
 		"istinto_di_branco": {"danno": _num(c.istinto_di_branco_danno)},
-		"scatto_fulmine": {"riduzione": _num(c.scatto_fulmine_riduzione)},
+		"scatto_fulmine": {"cariche_testo": "Ogni nemico colpito dallo scatto restituisce una carica in più." if c.scatto_fulmine_cariche == 1 else "Ogni nemico colpito dallo scatto restituisce %d cariche in più." % c.scatto_fulmine_cariche},
 		"scatto_fantasma": {"secondi": _num(c.scatto_fantasma_invulnerabilità)},
 		"doppio_scatto": {"cariche_testo": "Aggiunge una carica di scatto." if c.doppio_scatto_cariche == 1 else "Aggiunge %d cariche di scatto." % c.doppio_scatto_cariche},
 		"furia": {"massimo": _num(c.furia_danno)},
@@ -311,10 +311,10 @@ const _POWERUP_BASE := [
 	{"id": "richiamo_rapido", "name": "Richiamo Rapido", "rarity": "common", "icon": "cycle", "desc": "-{riduzione}% tempo di recupero dell'addomesticamento."},
 	{"id": "pelle_coriacea", "name": "Pelle Coriacea", "rarity": "common", "icon": "shield", "desc": "+{vita}% vita massima degli alleati."},
 	{"id": "istinto_di_branco", "name": "Istinto di Branco", "rarity": "common", "icon": "fang", "desc": "+{danno}% danno inflitto dagli alleati in combattimento."},
-	{"id": "scatto_fulmine", "name": "Scatto Fulmine", "rarity": "rare", "icon": "bolt", "needs_dash": true, "desc": "-{riduzione}% tempo di recupero dello scatto."},
+	{"id": "scatto_fulmine", "name": "Scatto Fulmine", "rarity": "rare", "icon": "bolt", "needs_dash": true, "desc": "{cariche_testo}"},
 	{"id": "scatto_fantasma", "name": "Scatto Fantasma", "rarity": "rare", "icon": "ghost", "needs_dash": true, "desc": "+{secondi}s di invulnerabilità dopo lo scatto."},
 	{"id": "doppio_scatto", "name": "Doppio Scatto", "rarity": "rare", "icon": "double", "needs_dash": true, "desc": "{cariche_testo}"},
-	{"id": "contrattacco", "name": "Contrattacco", "rarity": "rare", "icon": "cycle", "needs_dash": true, "desc": "Un'uccisione con lo scatto restituisce subito una carica di scatto."},
+	{"id": "contrattacco", "name": "Contrattacco", "rarity": "rare", "icon": "cycle", "needs_dash": true, "desc": "Un'uccisione con lo scatto ricarica tutte le cariche di scatto."},
 	{"id": "furia", "name": "Furia", "rarity": "rare", "icon": "flame", "needs_dash": true, "desc": "Più sei ferito, più danno infligge il tuo scatto (fino a +{massimo}%)."},
 	{"id": "eco_selvaggia", "name": "Eco Selvaggia", "rarity": "rare", "icon": "bolt", "desc": "-{riduzione}% tempo di recupero degli attacchi speciali degli alleati."},
 	{"id": "vincolo_vitale", "name": "Vincolo Vitale", "rarity": "rare", "icon": "heart", "desc": "Quando un alleato cade recuperi {cura} vita e l'addomesticamento torna subito pronto."},
@@ -431,7 +431,7 @@ static func apply_powerup(id: String, player: Node) -> void:
 			player.max_hp += c.cuore_di_ferro_vita
 			player.hp += c.cuore_di_ferro_vita
 		"scatto_fulmine":
-			player.dash_cooldown_mult *= 1.0 - c.scatto_fulmine_riduzione / 100.0
+			player.extra_charges_per_hit += c.scatto_fulmine_cariche
 		"scatto_fantasma":
 			player.extra_iframes += c.scatto_fantasma_invulnerabilità
 		"doppio_scatto":
