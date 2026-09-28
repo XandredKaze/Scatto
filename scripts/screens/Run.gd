@@ -21,8 +21,11 @@ signal return_to_hub_requested
 # non resta un solo nemico ostile in piedi (sconfitto o diventato alleato).
 # La ricompensa si riceve attraversando quella porta, non alla caduta
 # dell'ultimo nemico: il premio sta oltre la soglia.
-const MAZE_COLS := 22
-const MAZE_ROWS := 16
+# Dimensioni della mappa, in celle: in BalanceConfig (gruppo "Mappe").
+static var MAZE_COLS: int:
+	get: return BalanceConfig.current().mappe_colonne
+static var MAZE_ROWS: int:
+	get: return BalanceConfig.current().mappe_righe
 # Una cella è anche la larghezza di un corridoio: 150 px meno i muri
 # lasciano un passaggio comodo anche al Corazzato, senza farne un salone.
 const CELL_SIZE := 150.0
@@ -32,34 +35,55 @@ const WALL_THICKNESS := 34.0
 # giocatore invece di mostrare l'intera sala in un colpo solo.
 const BOSS_ARENA_SIZE := Vector2(1920, 1080)
 const WALL_MARGIN := 48.0
-const SHOCKWAVE_RADIUS := 70.0
-const SHOCKWAVE_RATIO := 0.4
+
+# Tutti i valori qui sotto stanno in BalanceConfig (res://bilanciamento.tres),
+# modificabile dall'editor: qui restano solo i nomi con cui il codice li usa.
+
+# Onda d'urto della Benedizione del Custode (raggio, e danno in rapporto a
+# quello dello scatto).
+static var SHOCKWAVE_RADIUS: float:
+	get: return BalanceConfig.current().potenziamento_benedizione_raggio
+static var SHOCKWAVE_RATIO: float:
+	get: return BalanceConfig.current().potenziamento_benedizione_danno / 100.0
 # Addomesticamento: rende alleato un nemico comune nelle vicinanze (non
 # dorato). Gli alleati restano con te finché non muoiono o non finisci/
-# riavvii la run (persistono invece tra una stanza e l'altra, e tra le
+# riavvii la run (persistono invece tra una mappa e l'altra, e tra le
 # run consecutive di una stessa serie).
-const MAX_ALLIES := 2
-const TAME_RANGE := 180.0
+static var MAX_ALLIES: int:
+	get: return BalanceConfig.current().alleati_massimo
+static var TAME_RANGE: float:
+	get: return BalanceConfig.current().alleati_raggio
 # Attacchi speciali concessi dagli alleati (vedi GameData.ALLY_SPECIAL_ATTACKS
-# e Player.granted_ability_ids/special_attack_requested). Il danno qui e il
-# tempo di recupero in GameData vanno letti insieme: sono le due metà del
-# ruolo di ogni attacco (corpo a corpo che picchia duro di rado, dardo
-# debole quasi a raffica, onda d'urto bilanciata ma su tutti i nemici
-# vicini). Con alleati al seguito questi attacchi sostituiscono del tutto
-# lo scatto, quindi il loro danno al secondo deve reggere il confronto con
-# quello dell'attacco base, non essere un extra occasionale.
-const LUNGE_OFFSET := 40.0
-const LUNGE_RADIUS := 50.0
-const LUNGE_DAMAGE := 45.0
-const DART_SPEED := 420.0
-const DART_DAMAGE := 13.0
-const SLAM_RADIUS := 90.0
-const SLAM_DAMAGE := 28.0
-const SWARM_COUNT := 6
-const SWARM_SPEED := 300.0
-const SWARM_DAMAGE := 12.0
+# e Player.granted_ability_ids/special_attack_requested). Danno qui e tempo
+# di recupero in GameData vanno letti insieme: sono le due metà del ruolo
+# di ogni attacco (corpo a corpo che picchia duro di rado, dardo debole
+# quasi a raffica, onda d'urto bilanciata ma su tutti i nemici vicini).
+# Con alleati al seguito questi attacchi sostituiscono del tutto lo scatto,
+# quindi il loro danno al secondo deve reggere il confronto con quello
+# dell'attacco base, non essere un extra occasionale.
+static var LUNGE_OFFSET: float:
+	get: return BalanceConfig.current().speciale_morso_portata
+static var LUNGE_RADIUS: float:
+	get: return BalanceConfig.current().speciale_morso_raggio
+static var LUNGE_DAMAGE: float:
+	get: return BalanceConfig.current().speciale_morso_danno
+static var DART_SPEED: float:
+	get: return BalanceConfig.current().speciale_dardo_velocità
+static var DART_DAMAGE: float:
+	get: return BalanceConfig.current().speciale_dardo_danno
+static var SLAM_RADIUS: float:
+	get: return BalanceConfig.current().speciale_colpo_raggio
+static var SLAM_DAMAGE: float:
+	get: return BalanceConfig.current().speciale_colpo_danno
+static var SWARM_COUNT: int:
+	get: return BalanceConfig.current().speciale_raffica_proiettili
+static var SWARM_SPEED: float:
+	get: return BalanceConfig.current().speciale_raffica_velocità
+static var SWARM_DAMAGE: float:
+	get: return BalanceConfig.current().speciale_raffica_danno
 # Vita restituita dal potenziamento "Vincolo Vitale" alla caduta di un alleato.
-const VINCOLO_VITALE_HEAL := 30.0
+static var VINCOLO_VITALE_HEAL: float:
+	get: return BalanceConfig.current().potenziamento_vincolo_vitale_cura
 # Sottofondo musicale, in riproduzione solo durante una run: il lettore è
 # figlio di questo nodo, quindi tornando all'Hub (dove Run viene liberato)
 # la musica si interrompe da sola, senza doverla fermare a mano. Il brano
@@ -204,7 +228,7 @@ func begin_new_streak() -> void:
 
 func _continue_streak() -> void:
 	streak_run_index += 1
-	player.heal(player.max_hp * 0.2)
+	player.heal(player.max_hp * BalanceConfig.current().serie_cura_fra_run / 100.0)
 	player.alive = true
 	_start_run_common()
 
@@ -346,7 +370,8 @@ func _build_room_spawns(room_num: int, maze: MazeGrid, excluded_cells: Array) ->
 		if not data.has("min_room") or room_num >= int(data.min_room):
 			available.append(data)
 
-	var enemy_count: int = min(3 + int(room_num * 0.8), 8)
+	var balance: BalanceConfig = BalanceConfig.current()
+	var enemy_count: int = min(balance.mappe_nemici_base + int(room_num * balance.mappe_nemici_per_mappa), balance.mappe_nemici_massimi)
 	var picks: Array = []
 	while picks.size() < enemy_count:
 		var t: Dictionary = available[rng.randi_range(0, available.size() - 1)]
@@ -472,7 +497,7 @@ func _deliver_room_reward() -> void:
 	reward_delivered = true
 	_clear_container(projectile_container)
 	player.freeze()
-	var choices := _roll_powerup_choices(3)
+	var choices := _roll_powerup_choices(BalanceConfig.current().ricompense_scelte)
 	powerup_choice_screen.show()
 	powerup_choice_screen.show_choices(choices, room_number)
 
@@ -722,7 +747,7 @@ func _advance_after_room_clear() -> void:
 
 func _start_boss_room() -> void:
 	room_number = 6
-	var special := streak_run_index >= 3
+	var special := streak_run_index >= BalanceConfig.current().serie_run_boss_corrotto
 	var archetype: String = GameData.BOSS_ARCHETYPES[rng.randi_range(0, GameData.BOSS_ARCHETYPES.size() - 1)]
 	var boss_id: String = (archetype + "_corrotto") if special else archetype
 	var data: Dictionary = GameData.BOSSES[boss_id]

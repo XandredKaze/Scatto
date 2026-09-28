@@ -25,17 +25,22 @@ extends RefCounted
 # celle collegate (pathfinding AStar2D). Nessun nodo della scena: è puro
 # dato/logica, cosí è testabile senza avviare l'albero di gioco.
 
-# Lato di una sala, in celle.
-const MIN_ROOM_CELLS := 3
-const MAX_ROOM_CELLS := 6
+# Lato di una sala, in celle: in BalanceConfig (gruppo "Mappe"). Il
+# massimo non scende mai sotto il minimo, qualunque cosa si imposti.
+static var MIN_ROOM_CELLS: int:
+	get: return BalanceConfig.current().mappe_sala_minima
+static var MAX_ROOM_CELLS: int:
+	get: return max(MIN_ROOM_CELLS, BalanceConfig.current().mappe_sala_massima)
 # Lato minimo di una zona della suddivisione: una sala minima più una
 # cella di vuoto per parte. È questo margine a tenere le sale separate.
-const MIN_ZONE_CELLS := 5
+static var MIN_ZONE_CELLS: int:
+	get: return MIN_ROOM_CELLS + 2
 # Una zona ancora divisibile ma già piccola può restare intera: la sua
 # sala avrà molto vuoto attorno, e la mappa risulta meno regolare.
 const ZONE_STOP_CHANCE := 0.25
 # Corridoi oltre a quelli indispensabili, per chiudere qualche anello.
-const EXTRA_CORRIDORS := 2
+static var EXTRA_CORRIDORS: int:
+	get: return BalanceConfig.current().mappe_corridoi_extra
 const EXTRA_CORRIDOR_CHANCE := 0.6
 
 const VOID_CELL := -1

@@ -29,16 +29,26 @@ signal special_attack_requested(ability_id: String, origin: Vector2, dir: Vector
 signal hurt(pos: Vector2)
 signal died
 
-const BASE_SPEED := 220.0
-const BASE_DASH_DAMAGE := 22.0
-const DASH_SPEED := 900.0
-const DASH_DURATION := 0.16
-const BASE_DASH_COOLDOWN := 0.55
-const HIT_IFRAME := 0.8
-const KNOCKBACK := 20.0
-const TAME_COOLDOWN := 14.0
+# Valori di base del giocatore: stanno in BalanceConfig (gruppo
+# "Giocatore" di res://bilanciamento.tres), modificabili dall'editor.
+static var BASE_SPEED: float:
+	get: return BalanceConfig.current().giocatore_velocità
+static var BASE_DASH_DAMAGE: float:
+	get: return BalanceConfig.current().giocatore_danno_scatto
+static var DASH_SPEED: float:
+	get: return BalanceConfig.current().giocatore_velocità_scatto
+static var DASH_DURATION: float:
+	get: return BalanceConfig.current().giocatore_durata_scatto
+static var BASE_DASH_COOLDOWN: float:
+	get: return BalanceConfig.current().giocatore_ricarica_scatto
+static var HIT_IFRAME: float:
+	get: return BalanceConfig.current().giocatore_invulnerabilità_dopo_colpo
+static var KNOCKBACK: float:
+	get: return BalanceConfig.current().giocatore_respinta
+static var TAME_COOLDOWN: float:
+	get: return BalanceConfig.current().alleati_ricarica
 # I due soli pulsanti d'attacco del giocatore (E/R1 e Q/L1): un pulsante
-# per alleato vivo (fino a MAX_ALLIES = 2), cosí ogni attacco speciale
+# per alleato vivo (fino a due), cosí ogni attacco speciale
 # concesso resta utilizzabile in modo indipendente. Un pulsante senza
 # alleato esegue lo scatto, ma solo finché non si ha alcun alleato
 # (vedi has_dash()).
@@ -129,8 +139,8 @@ func reset_stats() -> void:
 	dash_damage_bonus = 0.0
 	dash_distance_mult = 1.0
 	dash_cooldown_mult = 1.0
-	max_dash_charges = 1
-	dash_charges = 1
+	max_dash_charges = BalanceConfig.current().giocatore_cariche_scatto
+	dash_charges = max_dash_charges
 	charge_regen_timer = 0.0
 	extra_iframes = 0.0
 	has_contrattacco = false
@@ -146,8 +156,8 @@ func reset_stats() -> void:
 	has_richiamo_primordiale = false
 	always_empowered = false
 	keeps_dash_with_allies = false
-	max_hp = 100.0
-	hp = 100.0
+	max_hp = BalanceConfig.current().giocatore_vita
+	hp = max_hp
 	facing = Vector2.UP
 	is_dashing = false
 	dash_timer = 0.0
@@ -254,7 +264,7 @@ func dash_damage() -> float:
 	var dmg := BASE_DASH_DAMAGE + dash_damage_bonus
 	if has_furia:
 		var missing_ratio: float = clamp(1.0 - hp / max_hp, 0.0, 1.0)
-		dmg *= 1.0 + missing_ratio * 0.5
+		dmg *= 1.0 + missing_ratio * BalanceConfig.current().potenziamento_furia_danno_massimo / 100.0
 	return dmg
 
 func is_invulnerable() -> bool:

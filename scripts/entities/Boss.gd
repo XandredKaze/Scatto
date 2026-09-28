@@ -79,7 +79,9 @@ func _physics_process(delta: float) -> void:
 	var to_target: Vector2 = target.global_position - global_position
 	if to_target.length() > 1.0:
 		heading = heading.lerp(to_target.normalized(), 0.12).normalized()
-	var aggression: float = 1.0 + (1.0 - hp_ratio()) * 0.6
+	# Ritmo degli attacchi: in BalanceConfig, gruppo "Boss".
+	var balance: BalanceConfig = BalanceConfig.current()
+	var aggression: float = 1.0 + (1.0 - hp_ratio()) * balance.boss_aggressività / 100.0
 	match mode:
 		"chase":
 			var dir: Vector2 = target.global_position - global_position
@@ -93,7 +95,7 @@ func _physics_process(delta: float) -> void:
 			if telegraph_timer <= 0.0:
 				_execute_attack(target)
 		"charge":
-			global_position += charge_vector * speed * 3.2 * delta
+			global_position += charge_vector * speed * balance.boss_velocità_carica * delta
 			mode_timer -= delta
 			if mode_timer <= 0.0:
 				_end_attack()
@@ -101,7 +103,7 @@ func _physics_process(delta: float) -> void:
 			mode_timer -= delta
 			if mode_timer <= 0.0:
 				mode = "chase"
-				mode_timer = max(0.6, 1.8 / aggression)
+				mode_timer = max(balance.boss_pausa_minima, balance.boss_pausa / aggression)
 	_clamp_to_arena()
 
 func _clamp_to_arena() -> void:
@@ -113,7 +115,7 @@ func _clamp_to_arena() -> void:
 func _begin_attack(target: Node) -> void:
 	pending_attack = attack_pool[randi() % attack_pool.size()]
 	mode = "telegraph"
-	telegraph_timer = 0.5
+	telegraph_timer = BalanceConfig.current().boss_avviso
 	var dir: Vector2 = target.global_position - global_position
 	charge_vector = dir.normalized() if dir.length() > 0.001 else Vector2.DOWN
 
@@ -121,7 +123,7 @@ func _execute_attack(target: Node) -> void:
 	match pending_attack:
 		"charge":
 			mode = "charge"
-			mode_timer = 0.4
+			mode_timer = BalanceConfig.current().boss_durata_carica
 		"burst":
 			_fire_ring(10, 220.0, damage * 0.6)
 			_end_attack()
@@ -170,7 +172,7 @@ func _fire_aimed_fan(target: Node, count: int, spread_step: float, speed_val: fl
 
 func _end_attack() -> void:
 	mode = "recover"
-	mode_timer = 0.5
+	mode_timer = BalanceConfig.current().boss_recupero
 
 func _draw() -> void:
 	# Il bagliore proprio del boss fa da profilo luminoso.

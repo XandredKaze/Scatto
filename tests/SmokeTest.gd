@@ -20,6 +20,7 @@ func run_and_quit() -> void:
 	_test_maze_grid()
 	await _test_maze_integration()
 	await _test_exit_gate_blocks_until_cleared()
+	await _test_balance_config_drives_game()
 	await _test_maze_dash_no_tunneling()
 	await _test_maze_enemy_closes_final_gap()
 	await _test_all_boss_moves()
@@ -2499,6 +2500,72 @@ func _defeat_current_boss() -> String:
 	boss.take_damage(99999.0)
 	run._on_enemy_defeated(boss)
 	return boss_id
+
+# --- Bilanciamento modificabile dall'editor ---------------------------------
+
+func _test_balance_config_drives_game() -> void:
+	print("--- Test: i valori di res://bilanciamento.tres comandano davvero il gioco ---")
+	# Il file su disco deve esistere e caricarsi come configurazione: è
+	# quello che il designer apre nell'Inspector.
+	var on_disk = load(BalanceConfig.PATH)
+	_assert(on_disk is BalanceConfig, "res://bilanciamento.tres dovrebbe esistere ed essere una BalanceConfig")
+
+	# Una configurazione di prova con valori diversi da quelli di partenza:
+	# ognuno deve arrivare dove serve. Se un domani un valore si scollega
+	# dal gioco (una costante rimessa a mano, un dato letto da un'altra
+	# parte), cambiarlo nell'editor non farebbe più niente, in silenzio.
+	var cfg := BalanceConfig.new()
+	cfg.giocatore_vita = 250.0
+	cfg.giocatore_velocità = 333.0
+	cfg.giocatore_cariche_scatto = 2
+	cfg.strisciante_vita = 99.0
+	cfg.corazzato_dalla_mappa = 4
+	cfg.sciame_durata_carica = 2.25
+	cfg.custode_vita = 1234.0
+	cfg.speciale_morso_danno = 77.0
+	cfg.speciale_dardo_ricarica = 0.9
+	cfg.potenziamento_lama_rapida_danno = 9.0
+	cfg.potenziamento_passo_veloce_velocità = 40.0
+	cfg.ricompense_scelte = 2
+	cfg.alleati_massimo = 1
+	BalanceConfig.use(cfg)
+
+	_assert(is_equal_approx(GameData.ENEMY_TYPES.strisciante.hp, 99.0), "la vita dello Strisciante non segue la configurazione")
+	_assert(GameData.ENEMY_TYPES.corazzato.min_room == 4, "la mappa di comparsa del Corazzato non segue la configurazione")
+	_assert(String(GameData.ENEMY_TYPES.corazzato.desc).contains("quarta mappa"), "la descrizione del Corazzato non cita la mappa configurata: %s" % GameData.ENEMY_TYPES.corazzato.desc)
+	_assert(is_equal_approx(GameData.BOSSES.custode.hp, 1234.0), "la vita del Custode non segue la configurazione")
+	_assert(is_equal_approx(GameData.ALLY_SPECIAL_ATTACKS.pungiglione.cooldown, 0.9), "la ricarica di Dardo Velenoso non segue la configurazione")
+	_assert(is_equal_approx(Enemy.SWARM_CHARGE_TIME, 2.25), "la durata della carica dello Sciame non segue la configurazione")
+	_assert(is_equal_approx(Run.LUNGE_DAMAGE, 77.0), "il danno di Morso Selvaggio non segue la configurazione")
+	_assert(Run.MAX_ALLIES == 1, "il numero massimo di alleati non segue la configurazione")
+	_assert(is_equal_approx(Player.BASE_SPEED, 333.0), "la velocità del giocatore non segue la configurazione")
+	var blade: Dictionary = GameData.get_powerup("lama_rapida")
+	_assert(String(blade.desc).contains("+9 danno"), "la descrizione di Lama Rapida non cita il valore configurato: %s" % blade.desc)
+	_assert(String(GameData.get_powerup("passo_veloce").desc).contains("+40%"), "la descrizione di Passo Veloce non cita il valore configurato")
+
+	# Dentro una run vera.
+	var bal_run := Run.new()
+	add_child(bal_run)
+	bal_run.begin_new_streak()
+	await get_tree().process_frame
+	_assert(is_equal_approx(bal_run.player.max_hp, 250.0), "la vita iniziale del giocatore non segue la configurazione (%.0f)" % bal_run.player.max_hp)
+	_assert(bal_run.player.max_dash_charges == 2, "le cariche di scatto iniziali non seguono la configurazione")
+	var bonus_before: float = bal_run.player.dash_damage_bonus
+	bal_run.player.apply_powerup("lama_rapida")
+	_assert(is_equal_approx(bal_run.player.dash_damage_bonus - bonus_before, 9.0), "Lama Rapida non applica il danno configurato")
+	var slime := Enemy.new()
+	slime.setup_from_data(GameData.ENEMY_TYPES["strisciante"], false)
+	_assert(is_equal_approx(slime.max_hp, 99.0), "uno Strisciante creato in gioco non ha la vita configurata")
+	slime.free()
+	_assert(bal_run._roll_powerup_choices(BalanceConfig.current().ricompense_scelte).size() == 2, "il numero di potenziamenti proposti non segue la configurazione")
+
+	bal_run.queue_free()
+	await get_tree().process_frame
+
+	# Tornando alla configurazione su disco tutto torna come prima.
+	BalanceConfig.use(null)
+	_assert(is_equal_approx(GameData.ENEMY_TYPES.strisciante.hp, BalanceConfig.current().strisciante_vita), "tornando alla configurazione su disco i dati dei nemici non si rigenerano")
+	print("Bilanciamento: ogni valore provato arriva al gioco, e le descrizioni lo citano: OK")
 
 # Arena aperta per i test degli schemi d'attacco: l'intera estensione della
 # mappa reale, cosí qualsiasi punto di spawn del giocatore ci cade dentro.

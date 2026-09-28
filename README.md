@@ -142,10 +142,25 @@ Serve **Godot 4.3** (o successivo, engine `GL Compatibility`). Apri la cartella 
 godot --path .
 ```
 
+## Bilanciare il gioco dall'editor
+
+Tutti i numeri che decidono il bilanciamento stanno in **`bilanciamento.tres`**, nella cartella principale del progetto. Per modificarli:
+
+1. Apri il progetto in Godot e, nel pannello **FileSystem**, fai clic su `bilanciamento.tres`.
+2. I valori compaiono nell'**Inspector**, divisi per gruppi: *Giocatore*, *Alleati e addomesticamento*, *Attacchi speciali degli alleati*, *Nemici* (con lo Strisciante Dorato), *Boss*, *Potenziamenti*, *Ricompense*, *Mappe*, *Serie di run*. Passando col mouse su un valore compare una spiegazione di cosa fa e in che unità è espresso (pixel, secondi, percentuale…).
+3. Cambia i valori, salva (**Ctrl+S**) e premi Play: valgono subito, senza toccare il codice.
+
+Accanto a ogni valore modificato Godot mostra una **freccia circolare**: cliccandola si torna al valore di partenza. Se il file manca o è rovinato, il gioco usa i valori di partenza.
+
+Le descrizioni che citano un numero si aggiornano da sole: i potenziamenti ("+6 danno da scatto"), il bestiario ("Appare dalla terza mappa") e la schermata del premio mostrano sempre i valori in uso.
+
+Restano nel codice le cose che non sono bilanciamento ma forma del gioco (colori, dimensioni delle creature, i testi) e i dettagli dei singoli attacchi dei boss (quanti proiettili, con che apertura).
+
 ## Struttura del progetto
 
 ```
 project.godot
+bilanciamento.tres            # valori di bilanciamento, da modificare nell'Inspector (vedi sopra)
 scenes/Main.tscn              # unica scena "fisica": tutto il resto è costruito da codice
 assets/audio/mines.mp3        # sottofondo musicale delle run (importato con il loop attivo)
 assets/images/amic_logo.png   # logo della schermata del titolo (sfondo ritagliato)
@@ -154,7 +169,8 @@ scripts/
   core/InputSetup.gd          # azioni di input (tastiera + controller) registrate a codice
   core/MazeGrid.gd            # mappa a sale sparse e corridoi: generazione, sala del premio, collisione, pathfinding
   autoload/SaveManager.gd     # persistenza su user://: tre slot di progressi + impostazioni in comune
-  data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti
+  data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti (parti fisse + numeri da BalanceConfig)
+  data/BalanceConfig.gd       # la risorsa dei valori di bilanciamento (gruppi, limiti e spiegazioni dell'Inspector)
   data/Palette.gd             # linguaggio cromatico unico del gioco + tema dell'interfaccia
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, ExitGate, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)

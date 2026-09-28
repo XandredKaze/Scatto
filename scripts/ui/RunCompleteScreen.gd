@@ -62,6 +62,8 @@ func show_summary(streak_run_index: int, was_special: bool, boss_name: String = 
 	else:
 		title_label.text = "%s sconfitto!" % boss_name
 		var text := "Run %d completata senza tornare all'Hub." % streak_run_index
-		if streak_run_index >= 2:
+		# Dalla run prima di quella col boss corrotto in poi, l'avviso che
+		# il prossimo sarà più temibile.
+		if streak_run_index >= BalanceConfig.current().serie_run_boss_corrotto - 1:
 			text += "\nContinua per affrontare un boss sempre più temibile."
 		summary_label.text = text
