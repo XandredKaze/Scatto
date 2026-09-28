@@ -47,6 +47,8 @@ Le mappe 1-5 sono **sale sparse nel buio, collegate da corridoi**, generate proc
 
 La sala più lontana dallo spawn è la **sala del premio**: vi arriva un solo corridoio, e il suo imbocco è chiuso da una **porta di uscita** con un sigillo cremisi. La porta resta chiusa (e blocca davvero giocatore, nemici, alleati e proiettili) finché nella mappa c'è un nemico ostile in piedi: si apre non appena sono stati tutti sconfitti e/o resi alleati. Aperta, la grata rientra negli stipiti e la soglia si accende di brace, riconoscibile anche da lontano. Nella sala del premio non viene mai generato nessun nemico.
 
+In alto a sinistra c'è la **mini mappa**, che all'inizio di ogni mappa è tutta oscurata e si scopre esplorando: entrando in una sala compare l'intera sala, percorrendo un corridoio compare il tratto calpestato. Dai tratti già scoperti spunta un moncone chiaro verso ogni passaggio non ancora esplorato, cosí si vede da dove si può proseguire senza sapere dove porta. Il giocatore è il puntino cremisi pulsante; la porta della sala del premio compare appena se ne scopre l'imbocco, come una barra cremisi da chiusa e con la grata ritirata negli stipiti da aperta. Ogni mappa nuova riparte oscurata, e nella sala del boss la mini mappa non c'è.
+
 Visivamente le stanze sono una **cripta gotica**: pavimento di lastre di pietra tagliata, fredde e quasi nere, segnate da fughe, crepe e sangue rappreso; muri come blocchi di muratura più scuri del pavimento, con lo spigolo superiore appena illuminato e un'ombra netta proiettata a terra; e, appesi alle pareti lunghe, stendardi cremisi e bracieri che sono le uniche fonti di colore acceso. Il decoro è generato una volta per stanza e la collisione resta quella rettangolare sotto il cofano, cosí il movimento resta preciso e prevedibile.
 
 ### Stile estetico
@@ -177,7 +179,7 @@ scripts/
   entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, ExitGate, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
   core/GameSettings.gd        # impostazioni (audio, video, assegnazione tasti): applicazione e persistenza
-  ui/                         # titolo, scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Vignette, HudSigil
+  ui/                         # titolo, scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Minimap, Vignette, HudSigil
 tests/SmokeTest.gd            # test end-to-end eseguibile in headless (vedi sotto)
 ```
 

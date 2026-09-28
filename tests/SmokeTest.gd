@@ -20,6 +20,7 @@ func run_and_quit() -> void:
 	_test_maze_grid()
 	await _test_maze_integration()
 	await _test_exit_gate_blocks_until_cleared()
+	await _test_minimap_reveals_by_exploration()
 	await _test_balance_config_drives_game()
 	await _test_maze_dash_no_tunneling()
 	await _test_maze_enemy_closes_final_gap()
@@ -2181,6 +2182,76 @@ func _test_exit_gate_blocks_until_cleared() -> void:
 
 	print("Porta di uscita: chiusa fino alla pulizia, premio alla soglia: OK")
 	gate_run.queue_free()
+	await get_tree().process_frame
+
+func _test_minimap_reveals_by_exploration() -> void:
+	print("--- Test: la mini mappa parte oscurata e si scopre entrando nelle sale ---")
+	var mm_run := Run.new()
+	add_child(mm_run)
+	mm_run.begin_new_streak()
+	mm_run.player.max_hp = 99999.0
+	mm_run.player.hp = 99999.0
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var maze: MazeGrid = mm_run.current_maze
+	var mm: Minimap = mm_run.hud.minimap
+	_assert(mm.visible, "la mini mappa dovrebbe essere visibile in una mappa")
+	_assert(mm.maze == maze, "la mini mappa dovrebbe mostrare la mappa in corso")
+	var spawn_room: int = maze.room_at(maze.world_to_cell(mm_run.player.global_position))
+	_assert(spawn_room >= 0, "setup del test: il giocatore dovrebbe partire dentro una sala")
+	_assert(mm.revealed_rooms.size() == 1 and mm.revealed_rooms.has(spawn_room), "all'inizio dovrebbe essere scoperta solo la sala di partenza (%s)" % [mm.revealed_rooms.keys()])
+	_assert(mm.revealed_corridors.is_empty(), "all'inizio nessun corridoio dovrebbe essere scoperto")
+	for cell in maze.room_cells(spawn_room):
+		_assert(mm.is_cell_revealed(cell), "entrando in una sala dovrebbe comparire tutta la sala, non solo la cella calpestata")
+
+	# Un corridoio si scopre dove lo si percorre, senza svelare dove porta.
+	var corridor := Vector2i(-1, -1)
+	for cell in maze.open_cells():
+		if maze.is_corridor_cell(cell):
+			corridor = cell
+			break
+	_assert(corridor.x >= 0, "setup del test: la mappa dovrebbe avere almeno un corridoio")
+	mm_run.player.global_position = maze.cell_center(corridor.x, corridor.y)
+	await get_tree().process_frame
+	_assert(mm.is_cell_revealed(corridor), "il tratto di corridoio percorso dovrebbe comparire sulla mini mappa")
+	_assert(mm.revealed_corridors.size() == 1, "dovrebbe comparire solo il tratto calpestato del corridoio")
+	_assert(mm.revealed_rooms.size() == 1, "percorrere un corridoio non dovrebbe svelare altre sale")
+
+	# Entrando in un'altra sala compare anche quella, per intero.
+	var other_room := -1
+	for i in range(maze.rooms.size()):
+		if i != spawn_room and i != maze.exit_room_index:
+			other_room = i
+			break
+	_assert(other_room >= 0, "setup del test: la mappa dovrebbe avere almeno un'altra sala")
+	var inside: Vector2i = maze.room_cells(other_room)[0]
+	mm_run.player.global_position = maze.cell_center(inside.x, inside.y)
+	await get_tree().process_frame
+	_assert(mm.revealed_rooms.has(other_room), "entrando in una sala nuova dovrebbe comparire sulla mini mappa")
+	for cell in maze.room_cells(other_room):
+		_assert(mm.is_cell_revealed(cell), "la sala appena scoperta dovrebbe comparire per intero")
+	_assert(not mm.revealed_rooms.has(maze.exit_room_index), "la sala del premio non dovrebbe comparire prima di esserci entrati")
+
+	# La porta sulla mini mappa segue quella vera.
+	_assert(not mm.gate_open, "sulla mini mappa la porta dovrebbe risultare chiusa")
+	_kill_all_room_enemies_of(mm_run)
+	await get_tree().process_frame
+	_assert(mm.gate_open, "ripulita la mappa, sulla mini mappa la porta dovrebbe risultare aperta")
+
+	# Mappa nuova: tutto di nuovo oscurato, tranne la sala di partenza.
+	mm_run._generate_room(2)
+	await get_tree().process_frame
+	_assert(mm.maze == mm_run.current_maze and mm.maze != maze, "la mini mappa dovrebbe passare alla mappa nuova")
+	_assert(mm.revealed_rooms.size() == 1 and mm.revealed_corridors.is_empty(), "in una mappa nuova la mini mappa dovrebbe ripartire oscurata")
+
+	# La sala del boss non ha mappa da esplorare.
+	mm_run._start_boss_room()
+	await get_tree().process_frame
+	_assert(not mm.visible, "nella sala del boss la mini mappa dovrebbe sparire")
+
+	print("Mini mappa: oscurata all'inizio, scoperta esplorando: OK")
+	mm_run.queue_free()
 	await get_tree().process_frame
 
 func _test_maze_integration() -> void:

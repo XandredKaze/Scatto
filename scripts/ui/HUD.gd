@@ -20,6 +20,7 @@ var banner_label: Label
 var banner_timer := 0.0
 var powerup_tray: HBoxContainer
 var sigil: HudSigil
+var minimap: Minimap
 var _last_powerup_summary := ""
 var ally_label: Label
 var tame_pip: ColorRect
@@ -48,6 +49,12 @@ func _ready() -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", 6)
 	margin.add_child(vbox)
+
+	# In cima la mini mappa, oscurata finché non si esplora: nella sala del
+	# boss (niente mappa) sparisce e la colonna risale.
+	minimap = Minimap.new()
+	minimap.hide()
+	vbox.add_child(minimap)
 
 	# Targa del sigillo a sinistra, vita e cariche di scatto a destra:
 	# il blocco compatto in alto a sinistra del riferimento estetico.
@@ -187,6 +194,7 @@ func _process(delta: float) -> void:
 	if run == null or run.player == null:
 		return
 	var player = run.player
+	_update_minimap(player)
 	hp_bar.max_value = player.max_hp
 	hp_bar.value = player.hp
 	hp_label.text = "%d / %d PV" % [int(ceil(player.hp)), int(player.max_hp)]
@@ -236,6 +244,17 @@ func _process(delta: float) -> void:
 		boss_bar.value = run.current_boss.hp
 	else:
 		boss_panel.hide()
+
+func _update_minimap(player) -> void:
+	var maze: MazeGrid = run.current_maze
+	if maze == null:
+		minimap.hide()
+		minimap.set_maze(null)
+		return
+	minimap.set_maze(maze)
+	minimap.show()
+	minimap.track_player(player.global_position)
+	minimap.set_gate_open(run.exit_gate != null and is_instance_valid(run.exit_gate) and run.exit_gate.is_open)
 
 func _update_powerup_tray(player) -> void:
 	var counts := {}
