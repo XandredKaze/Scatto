@@ -21,6 +21,17 @@ var banner_timer := 0.0
 var powerup_tray: HBoxContainer
 var sigil: HudSigil
 var minimap: Minimap
+# Riquadro che annuncia il potenziamento trovato in una cassa: nome,
+# rarità e descrizione, per qualche secondo, senza fermare il gioco.
+var found_panel: PanelContainer
+var found_icon: PowerupIcon
+var found_name_label: Label
+var found_rarity_label: Label
+var found_desc_label: Label
+var found_timer := 0.0
+const FOUND_WIDTH := 460.0
+const FOUND_TOP := 110.0
+const FOUND_DURATION := 5.0
 var _last_powerup_summary := ""
 var ally_label: Label
 var keys_label: Label
@@ -29,7 +40,8 @@ var tame_pip: ColorRect
 const SPECIAL_ATTACK_KEYS := ["E", "Q"]
 # Banner di notifica, in alto al centro: largo abbastanza per i messaggi
 # più lunghi (es. "Il varco si è aperto: raggiungi la porta.") ma non
-# tanto da invadere la colonna di informazioni in alto a sinistra.
+# tanto da invadere la colonna di informazioni in alto a sinistra o la
+# mini mappa in alto a destra.
 const BANNER_WIDTH := 720.0
 const BANNER_TOP := 70.0
 var special_attack_labels: Array = []
@@ -51,12 +63,6 @@ func _ready() -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", 6)
 	margin.add_child(vbox)
-
-	# In cima la mini mappa, oscurata finché non si esplora: nella sala del
-	# boss (niente mappa) sparisce e la colonna risale.
-	minimap = Minimap.new()
-	minimap.hide()
-	vbox.add_child(minimap)
 
 	# Targa del sigillo a sinistra, vita e cariche di scatto a destra:
 	# il blocco compatto in alto a sinistra del riferimento estetico.
@@ -178,6 +184,16 @@ func _ready() -> void:
 		force_golden_btn.pressed.connect(func(): run.debug_force_golden = true)
 		vbox.add_child(force_golden_btn)
 
+	# In alto a destra la mini mappa, oscurata finché non si esplora: nella
+	# sala del boss (niente mappa) sparisce. Come il banner, si posiziona a
+	# mano sulla finestra vera (_layout_minimap), perché questo Control
+	# resta 0x0 sotto il CanvasLayer.
+	minimap = Minimap.new()
+	minimap.hide()
+	add_child(minimap)
+
+	_build_found_panel()
+
 	banner_label = Label.new()
 	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_label.size = Vector2(BANNER_WIDTH, 30.0)
@@ -193,6 +209,68 @@ func _ready() -> void:
 	_layout_banner()
 	get_viewport().size_changed.connect(_layout_banner)
 
+func _build_found_panel() -> void:
+	found_panel = PanelContainer.new()
+	found_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	found_panel.custom_minimum_size = Vector2(FOUND_WIDTH, 0)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Palette.with_alpha(Palette.UI_BG, 0.92)
+	style.border_color = Palette.NEON
+	style.set_border_width_all(2)
+	style.set_content_margin_all(12)
+	found_panel.add_theme_stylebox_override("panel", style)
+	found_panel.hide()
+	add_child(found_panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	found_panel.add_child(col)
+
+	var header := Label.new()
+	header.text = "Dalla Cassa del potenziamento virtuale"
+	header.add_theme_color_override("font_color", Palette.NEON)
+	header.add_theme_font_size_override("font_size", 14)
+	col.add_child(header)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 10)
+	col.add_child(title_row)
+	found_icon = PowerupIcon.new()
+	found_icon.custom_minimum_size = Vector2(36, 36)
+	title_row.add_child(found_icon)
+	var names := VBoxContainer.new()
+	names.add_theme_constant_override("separation", 0)
+	title_row.add_child(names)
+	found_name_label = Label.new()
+	found_name_label.add_theme_font_size_override("font_size", 20)
+	names.add_child(found_name_label)
+	found_rarity_label = Label.new()
+	found_rarity_label.add_theme_font_size_override("font_size", 14)
+	names.add_child(found_rarity_label)
+
+	found_desc_label = Label.new()
+	found_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	found_desc_label.custom_minimum_size = Vector2(FOUND_WIDTH - 24.0, 0)
+	col.add_child(found_desc_label)
+
+func show_found_powerup(entry: Dictionary) -> void:
+	found_icon.set_icon(entry.get("icon", "circle"), GameData.rarity_color(entry.rarity))
+	found_name_label.text = entry.name
+	found_rarity_label.text = GameData.rarity_name(entry.rarity)
+	found_rarity_label.add_theme_color_override("font_color", GameData.rarity_color(entry.rarity))
+	found_desc_label.text = entry.desc
+	found_panel.modulate.a = 1.0
+	found_panel.show()
+	found_timer = FOUND_DURATION
+	# La dimensione dipende dal testo: si ridimensiona prima di centrarlo.
+	found_panel.reset_size()
+	_layout_found_panel()
+
+func _layout_found_panel() -> void:
+	var width: float = get_viewport_rect().size.x
+	found_panel.position = Vector2((width - found_panel.size.x) * 0.5, FOUND_TOP)
+
 func _inventory_icon(kind: String) -> Control:
 	var icon := Control.new()
 	icon.custom_minimum_size = Vector2(26, 22)
@@ -200,6 +278,12 @@ func _inventory_icon(kind: String) -> Control:
 	icon.tooltip_text = Pickup.NAMES[kind]
 	icon.draw.connect(func(): Pickup.draw_art(icon, kind, icon.size * 0.5, 0.8, 0.0))
 	return icon
+
+const MINIMAP_MARGIN := Vector2(20.0, 16.0)
+
+func _layout_minimap() -> void:
+	var width: float = get_viewport_rect().size.x
+	minimap.position = Vector2(width - minimap.custom_minimum_size.x - MINIMAP_MARGIN.x, MINIMAP_MARGIN.y)
 
 func _layout_banner() -> void:
 	var width: float = get_viewport_rect().size.x
@@ -217,6 +301,13 @@ func _process(delta: float) -> void:
 		banner_label.modulate.a = clamp(banner_timer / 0.4, 0.0, 1.0)
 		if banner_timer <= 0.0:
 			banner_label.hide()
+
+	if found_timer > 0.0:
+		found_timer -= delta
+		found_panel.modulate.a = clamp(found_timer / 0.5, 0.0, 1.0)
+		_layout_found_panel()
+		if found_timer <= 0.0:
+			found_panel.hide()
 
 	if run == null or run.player == null:
 		return
@@ -284,6 +375,7 @@ func _update_minimap(player) -> void:
 	minimap.show()
 	minimap.pickups = run.pickup_container.get_children()
 	minimap.track_player(player.global_position)
+	_layout_minimap()
 	minimap.set_gate_open(run.exit_gate != null and is_instance_valid(run.exit_gate) and run.exit_gate.is_open)
 
 func _update_powerup_tray(player) -> void:

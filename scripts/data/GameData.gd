@@ -328,6 +328,26 @@ const _POWERUP_BASE := [
 	{"id": "velo_spettrale", "name": "Velo Spettrale", "rarity": "legendary", "icon": "ghost", "desc": "Bottino dello Spettro Corrotto. +{velocita}% velocità di movimento e +{secondi}s di invulnerabilità extra dopo lo scatto.", "dropped_only_by": "spettro_corrotto"},
 ]
 
+static func rarity_name(rarity: String) -> String:
+	match rarity:
+		"legendary":
+			return "Leggendario"
+		"rare":
+			return "Raro"
+		_:
+			return "Comune"
+
+# Descrizione estesa di un potenziamento posseduto (finestra "Visualizza"):
+# l'effetto, quante volte lo si ha e, se agisce solo sullo scatto, quando
+# resta inattivo.
+static func powerup_details(entry: Dictionary, count: int) -> String:
+	var lines: Array = [String(entry.desc)]
+	if count > 1:
+		lines.append("Raccolto %d volte." % count)
+	if entry.get("needs_dash", false):
+		lines.append("Agisce sullo scatto: resta inattivo finché hai alleati al seguito (a meno di Vincolo Spezzato).")
+	return "\n".join(lines)
+
 static func rarity_color(rarity: String) -> Color:
 	match rarity:
 		"legendary":

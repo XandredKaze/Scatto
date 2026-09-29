@@ -143,6 +143,7 @@ var powerup_choice_screen: PowerupChoiceScreen
 var run_complete_screen: RunCompleteScreen
 var game_over_screen: GameOverScreen
 var pause_screen: PauseScreen
+var overview_screen: OverviewScreen
 
 func _ready() -> void:
 	rng.randomize()
@@ -199,6 +200,12 @@ func _build_scene_tree() -> void:
 	hud = HUD.new()
 	hud.run = self
 	ui_layer.add_child(hud)
+
+	# Sopra la HUD, sotto le schermate modali: si apre solo tenendo
+	# premuto "Visualizza" e non ferma il gioco.
+	overview_screen = OverviewScreen.new()
+	overview_screen.run = self
+	ui_layer.add_child(overview_screen)
 
 	powerup_choice_screen = PowerupChoiceScreen.new()
 	powerup_choice_screen.hide()
@@ -424,7 +431,9 @@ func _try_open_chest(chest: Pickup) -> void:
 	player.apply_powerup(id)
 	_refresh_ally_buffs()
 	SaveManager.unlock_powerup(id)
-	hud.show_banner("Cassa aperta: %s!" % rolled[0].name, 3.0)
+	# Il riquadro dice già tutto (nome, rarità, effetto): niente banner in
+	# piú sopra, che ripeterebbe il nome.
+	hud.show_found_powerup(rolled[0])
 
 # --- Porta di uscita -------------------------------------------------------
 

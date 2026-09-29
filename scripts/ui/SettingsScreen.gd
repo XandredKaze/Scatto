@@ -17,7 +17,7 @@ signal closed
 
 const ROW_LABEL_WIDTH := 250
 const ROW_VALUE_WIDTH := 300
-const ROW_HEIGHT := 34
+const ROW_HEIGHT := 30
 
 var close_btn: Button
 var reset_btn: Button
@@ -51,11 +51,20 @@ func _ready() -> void:
 	bg.size = get_viewport_rect().size
 	add_child(bg)
 
+	# Dentro uno ScrollContainer che segue il focus: con tutti i comandi
+	# (e l'eventuale avviso sulla risoluzione) l'elenco può superare
+	# l'altezza della finestra, e i pulsanti in fondo non devono sparire.
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(315, 14)
+	scroll.size = Vector2(680, get_viewport_rect().size.y - 28)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	add_child(scroll)
+
 	var panel := VBoxContainer.new()
-	panel.position = Vector2(315, 14)
 	panel.custom_minimum_size = Vector2(650, 0)
-	panel.add_theme_constant_override("separation", 6)
-	add_child(panel)
+	panel.add_theme_constant_override("separation", 4)
+	scroll.add_child(panel)
 
 	var title := Label.new()
 	title.text = "Impostazioni"

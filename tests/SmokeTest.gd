@@ -22,6 +22,7 @@ func run_and_quit() -> void:
 	await _test_exit_gate_blocks_until_cleared()
 	await _test_minimap_reveals_by_exploration()
 	await _test_room_pickups()
+	await _test_overview_while_held()
 	await _test_balance_config_drives_game()
 	await _test_maze_dash_no_tunneling()
 	await _test_maze_enemy_closes_final_gap()
@@ -2344,6 +2345,12 @@ func _test_room_pickups() -> void:
 	_assert(p.virtual_keys == 1, "aprire la cassa dovrebbe consumare una chiave (%d)" % p.virtual_keys)
 	_assert(p.active_powerups.size() == powerups_before + 1, "la cassa dovrebbe donare un potenziamento")
 	_assert(not pk_run.powerup_choice_screen.visible, "il potenziamento della cassa non si sceglie: nessuna schermata di scelta")
+	# Il potenziamento trovato si vede, con la sua descrizione.
+	var found_id: String = p.active_powerups[p.active_powerups.size() - 1]
+	var found_entry: Dictionary = GameData.get_powerup(found_id)
+	_assert(pk_run.hud.found_panel.visible, "aperta la cassa dovrebbe comparire il riquadro del potenziamento trovato")
+	_assert(pk_run.hud.found_name_label.text == found_entry.name, "il riquadro dovrebbe mostrare il nome del potenziamento trovato (%s)" % pk_run.hud.found_name_label.text)
+	_assert(pk_run.hud.found_desc_label.text == found_entry.desc, "il riquadro dovrebbe mostrare la descrizione del potenziamento trovato")
 	for i in range(3):
 		await get_tree().process_frame
 	_assert(p.virtual_keys == 1 and p.active_powerups.size() == powerups_before + 1, "una cassa già aperta non dovrebbe consumare altre chiavi né donare altro")
@@ -2384,6 +2391,86 @@ func _test_room_pickups() -> void:
 
 	BalanceConfig.use(null)
 	print("Oggetti nelle sale: OK")
+
+func _test_overview_while_held() -> void:
+	print("--- Test: tasto Visualizza (potenziamenti e mappa grande, solo tenendolo premuto) ---")
+	_assert(InputMap.has_action("overview"), "dovrebbe esistere l'azione Visualizza")
+	_assert(_action_has_key("overview", KEY_TAB), "Visualizza dovrebbe stare sul tasto Tab")
+	_assert(_action_has_joypad_button("overview", JOY_BUTTON_BACK), "Visualizza dovrebbe stare sul tasto View/Select del controller")
+	_assert(GameSettings.REBINDABLE.any(func(e): return e.action == "overview"), "Visualizza dovrebbe essere riassegnabile dalle Impostazioni")
+
+	var ov_run := Run.new()
+	add_child(ov_run)
+	ov_run.begin_new_streak()
+	ov_run.player.max_hp = 99999.0
+	ov_run.player.hp = 99999.0
+	ov_run.player.apply_powerup("lama_rapida")
+	ov_run.player.apply_powerup("lama_rapida")
+	ov_run.player.apply_powerup("passo_veloce")
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	# La mini mappa sta in alto a destra.
+	var mm: Minimap = ov_run.hud.minimap
+	var view: Vector2 = ov_run.hud.get_viewport_rect().size
+	var mm_rect := Rect2(mm.position, mm.custom_minimum_size)
+	_assert(mm_rect.position.x > view.x * 0.5 and mm_rect.end.x <= view.x and mm_rect.end.x > view.x - 60.0, "la mini mappa dovrebbe stare sul bordo destro (%s su %s)" % [mm_rect, view])
+	_assert(mm_rect.position.y < 40.0, "la mini mappa dovrebbe stare in alto (%s)" % mm_rect)
+
+	var ov: OverviewScreen = ov_run.overview_screen
+	_assert(not ov.visible, "senza premere nulla la finestra Visualizza dovrebbe restare chiusa")
+	Input.action_press("overview")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(ov.visible, "tenendo premuto Visualizza la finestra dovrebbe aprirsi")
+	_assert(not get_tree().paused, "la finestra Visualizza non dovrebbe mettere in pausa il gioco")
+	_assert(not ov_run.player.frozen, "con la finestra Visualizza aperta il giocatore non dovrebbe essere bloccato")
+
+	# Il gioco continua davvero: il giocatore si muove anche a finestra aperta.
+	Input.action_press("move_right")
+	var start_x: float = ov_run.player.global_position.x
+	for i in range(10):
+		await get_tree().physics_frame
+	Input.action_release("move_right")
+	_assert(ov_run.player.global_position.x > start_x, "a finestra aperta il gioco dovrebbe continuare (il giocatore dovrebbe muoversi)")
+
+	# Un riquadro per potenziamento (i doppioni insieme), con la descrizione estesa.
+	var rows: Array = ov.powerup_list.get_children()
+	_assert(rows.size() == 2, "la finestra dovrebbe elencare i 2 potenziamenti diversi ottenuti (%d)" % rows.size())
+	var lama: Dictionary = GameData.get_powerup("lama_rapida")
+	var lama_row: Control = null
+	for r in rows:
+		if r.get_meta("powerup_id") == "lama_rapida":
+			lama_row = r
+	_assert(lama_row != null, "Lama Rapida dovrebbe comparire nella finestra")
+	var desc_text: String = lama_row.find_child("Desc", true, false).text
+	_assert(desc_text.contains(lama.desc), "la finestra dovrebbe mostrare la descrizione del potenziamento")
+	_assert(desc_text.contains("2 volte"), "la descrizione estesa dovrebbe dire quante volte lo si ha")
+	_assert(desc_text.contains("scatto"), "la descrizione estesa dovrebbe avvisare che agisce solo sullo scatto")
+
+	# La mappa ingrandita mostra proprio ciò che si è scoperto, ma piú grande.
+	_assert(ov.big_map.visible and ov.big_map.maze == ov_run.current_maze, "la finestra dovrebbe mostrare la mappa in corso")
+	_assert(ov.big_map.revealed_rooms == mm.revealed_rooms, "la mappa grande dovrebbe mostrare le stesse sale scoperte della mini mappa")
+	_assert(ov.big_map.custom_minimum_size.x > mm.custom_minimum_size.x * 2.0, "la mappa della finestra dovrebbe essere ingrandita")
+
+	# Rilasciando il tasto si chiude.
+	Input.action_release("overview")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(not ov.visible, "rilasciando Visualizza la finestra dovrebbe chiudersi")
+
+	# Non si apre sopra la pausa.
+	get_tree().paused = true
+	Input.action_press("overview")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(not ov.visible, "a gioco in pausa la finestra Visualizza non dovrebbe aprirsi")
+	Input.action_release("overview")
+	get_tree().paused = false
+
+	print("Visualizza: solo tenendo premuto, senza pausa, con potenziamenti e mappa: OK")
+	ov_run.queue_free()
+	await get_tree().process_frame
 
 func _test_maze_integration() -> void:
 	print("--- Test integrazione labirinto nel gioco reale (Run) ---")

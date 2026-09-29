@@ -1,7 +1,7 @@
 class_name Minimap
 extends Control
 
-# Mini mappa in alto a sinistra della HUD. All'inizio di ogni mappa è
+# Mini mappa in alto a destra della HUD. All'inizio di ogni mappa è
 # tutta oscurata: si scopre esplorando. Entrando in una sala compare
 # l'intera sala; percorrendo un corridoio compare il tratto calpestato.
 # Da ogni tratto già scoperto spunta un moncone verso i passaggi ancora
@@ -29,6 +29,9 @@ var gate_open := false
 # Oggetti ancora a terra nella mappa (Pickup): compaiono come segnalini,
 # ma solo nelle sale già scoperte.
 var pickups: Array = []
+# La mappa ingrandita della finestra "Visualizza" è un'altra Minimap che
+# rispecchia questa (mirror) con uno spazio piú grande.
+var max_grid_size := MAX_GRID_SIZE
 var _cell_px := 8.0
 var _blink := 0.0
 
@@ -78,6 +81,21 @@ func is_cell_revealed(cell: Vector2i) -> bool:
 		return revealed_rooms.has(room)
 	return revealed_corridors.has(cell)
 
+# Copia lo stato di un'altra mini mappa, condividendone le sale scoperte
+# (gli stessi Dictionary, non una copia): la mappa ingrandita mostra cosí
+# esattamente ciò che si è esplorato, senza tenere uno stato proprio.
+func mirror(src: Minimap) -> void:
+	if maze != src.maze:
+		maze = src.maze
+		_update_min_size()
+	revealed_rooms = src.revealed_rooms
+	revealed_corridors = src.revealed_corridors
+	player_cell = src.player_cell
+	player_pos = src.player_pos
+	gate_open = src.gate_open
+	pickups = src.pickups
+	queue_redraw()
+
 func set_gate_open(value: bool) -> void:
 	if value != gate_open:
 		gate_open = value
@@ -92,7 +110,7 @@ func _update_min_size() -> void:
 	if maze == null or maze.cols <= 0 or maze.rows <= 0:
 		custom_minimum_size = Vector2.ZERO
 		return
-	_cell_px = floor(min(MAX_GRID_SIZE.x / maze.cols, MAX_GRID_SIZE.y / maze.rows))
+	_cell_px = floor(min(max_grid_size.x / maze.cols, max_grid_size.y / maze.rows))
 	_cell_px = max(_cell_px, 3.0)
 	custom_minimum_size = Vector2(maze.cols, maze.rows) * _cell_px + Vector2.ONE * PADDING * 2.0
 
@@ -213,7 +231,11 @@ func _draw_pickups() -> void:
 				color = Palette.NEON_DIM if p.opened else Palette.NEON
 			_:
 				color = Palette.NEON
-		if p.kind == Pickup.CHEST:
+		# Sulla mappa ingrandita c'è spazio per l'icona vera dell'oggetto;
+		# su quella piccola basta un segnalino del suo colore.
+		if _cell_px >= 16.0:
+			Pickup.draw_art(self, p.kind, at, _cell_px / 50.0, 0.0, p.opened)
+		elif p.kind == Pickup.CHEST:
 			draw_rect(Rect2(at - Vector2.ONE * (half + 1.0), Vector2.ONE * (half + 1.0) * 2.0), color, false, 1.0)
 		else:
 			draw_rect(Rect2(at - Vector2.ONE * half, Vector2.ONE * half * 2.0), color)
@@ -224,5 +246,6 @@ func _draw_player() -> void:
 	var local: Vector2 = (player_pos - maze.origin) / maze.cell_size
 	var p: Vector2 = Vector2(PADDING, PADDING) + local * _cell_px
 	var pulse: float = 0.5 + 0.5 * sin(_blink * TAU)
-	draw_circle(p, PLAYER_DOT_RADIUS + 1.5, Palette.BONE)
-	draw_circle(p, PLAYER_DOT_RADIUS, Palette.BLOOD_BRIGHT.lerp(Palette.EMBER, pulse))
+	var r: float = max(PLAYER_DOT_RADIUS, _cell_px * 0.3)
+	draw_circle(p, r + 1.5, Palette.BONE)
+	draw_circle(p, r, Palette.BLOOD_BRIGHT.lerp(Palette.EMBER, pulse))

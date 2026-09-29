@@ -43,6 +43,7 @@ const REBINDABLE := [
 	{"action": "special_attack_2", "label": "Attacco 2 (scatto)"},
 	{"action": "tame", "label": "Addomestica"},
 	{"action": "pause", "label": "Pausa"},
+	{"action": "overview", "label": "Visualizza (tieni premuto)"},
 ]
 
 const JOY_BUTTON_NAMES := {
@@ -55,7 +56,7 @@ const JOY_BUTTON_NAMES := {
 	JOY_BUTTON_LEFT_STICK: "L3",
 	JOY_BUTTON_RIGHT_STICK: "R3",
 	JOY_BUTTON_START: "Start / Opzioni",
-	JOY_BUTTON_BACK: "Select / Condividi",
+	JOY_BUTTON_BACK: "Visualizza / Select / Condividi",
 	JOY_BUTTON_DPAD_UP: "D-pad su",
 	JOY_BUTTON_DPAD_DOWN: "D-pad giù",
 	JOY_BUTTON_DPAD_LEFT: "D-pad sinistra",
