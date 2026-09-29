@@ -2349,11 +2349,14 @@ func _test_room_pickups() -> void:
 	_assert(p.virtual_keys == 1 and p.active_powerups.size() == powerups_before + 1, "una cassa già aperta non dovrebbe consumare altre chiavi né donare altro")
 
 	# Le chiavi restano da una mappa all'altra; la mappa nuova ha oggetti nuovi.
-	var old_pickup: Node = pk_run.pickup_container.get_child(0)
+	# Si confronta l'id e non il nodo: a questo punto il nodo è già stato
+	# liberato, e toccare un riferimento a un oggetto liberato manda in
+	# crash le build esportate (release), anche se nell'editor passa.
+	var old_pickup_id: int = pk_run.pickup_container.get_child(0).get_instance_id()
 	pk_run._generate_room(2)
 	await get_tree().process_frame
 	_assert(p.virtual_keys == 1, "le chiavi dovrebbero restare passando alla mappa successiva")
-	_assert(not pk_run.pickup_container.get_children().has(old_pickup), "gli oggetti della mappa precedente non dovrebbero restare")
+	_assert(not pk_run.pickup_container.get_children().any(func(c): return c.get_instance_id() == old_pickup_id), "gli oggetti della mappa precedente non dovrebbero restare")
 	pk_run._start_boss_room()
 	await get_tree().process_frame
 	_assert(pk_run.pickup_container.get_child_count() == 0, "nella sala del boss non dovrebbero esserci oggetti")
