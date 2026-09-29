@@ -17,6 +17,7 @@ func run_and_quit() -> void:
 	await _test_gamepad_input()
 	await _test_controller_menu_navigation()
 	await _test_hub_subpanel_navigation()
+	await _test_hub_room()
 	_test_maze_grid()
 	await _test_maze_integration()
 	await _test_exit_gate_blocks_until_cleared()
@@ -915,35 +916,189 @@ func _test_settings_screen() -> void:
 	SaveManager.settings = previous_settings
 	SaveManager.save_data()
 
+# Mette il giocatore dell'Hub appena sotto (o a destra, per il letto) un
+# mobile, dentro il raggio d'interazione, e lascia passare qualche frame
+# perché il messaggio si accenda.
+func _stand_near(hub: Hub, kind: String) -> void:
+	var f: HubFurniture = hub.furniture_by_kind[kind]
+	if kind == HubFurniture.BED:
+		hub.player.global_position = Vector2(f.footprint.end.x + 30.0, f.footprint.get_center().y)
+	else:
+		hub.player.global_position = Vector2(f.footprint.get_center().x, f.footprint.end.y + 30.0)
+	# Tempo vero, non un numero di frame: in headless i frame sono piú
+	# brevi di 1/60 s e la dissolvenza va misurata in secondi.
+	await get_tree().create_timer(0.4).timeout
+
+func _press_action(action: String) -> void:
+	# Si preme all'inizio di un frame, prima che i nodi lo elaborino: dopo
+	# un timer si riprende a frame già elaborato, e la pressione non
+	# risulterebbe "appena premuta" per nessuno.
+	await get_tree().process_frame
+	Input.action_press(action)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	Input.action_release(action)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+func _test_hub_room() -> void:
+	print("--- Test: l'Hub è una stanza con mobili con cui interagire ---")
+	_assert(InputMap.has_action("interact"), "dovrebbe esistere l'azione Interagisci")
+	_assert(_action_has_key("interact", KEY_E), "Interagisci dovrebbe stare sul tasto E")
+	_assert(_action_has_joypad_button("interact", JOY_BUTTON_A), "Interagisci dovrebbe stare sul tasto A del controller")
+
+	var hub := Hub.new()
+	Palette.apply_theme(hub)
+	add_child(hub)
+	await get_tree().process_frame
+	var kinds: Array = hub.furniture.map(func(f): return f.kind)
+	for kind in [HubFurniture.COMPUTER, HubFurniture.ARCADE, HubFurniture.BED, HubFurniture.VENDING]:
+		_assert(kinds.has(kind), "nella stanza dell'Hub manca: %s" % kind)
+
+	# Ci si muove davvero, ma senza scatto (E qui serve a interagire).
+	var p: Player = hub.player
+	_assert(not p.attacks_enabled, "nell'Hub il giocatore non dovrebbe poter attaccare")
+	var start: Vector2 = p.global_position
+	Input.action_press("move_right")
+	for i in range(10):
+		await get_tree().physics_frame
+	Input.action_release("move_right")
+	_assert(p.global_position.x > start.x + 5.0, "nell'Hub il giocatore dovrebbe potersi muovere")
+	Input.action_press("special_attack")
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	Input.action_release("special_attack")
+	_assert(not p.is_dashing, "nell'Hub il tasto d'attacco non dovrebbe far scattare")
+
+	# I mobili non si attraversano.
+	var arcade: HubFurniture = hub.furniture_by_kind[HubFurniture.ARCADE]
+	p.global_position = Vector2(arcade.footprint.get_center().x, arcade.footprint.end.y + 40.0)
+	Input.action_press("move_up")
+	for i in range(40):
+		await get_tree().physics_frame
+	Input.action_release("move_up")
+	_assert(p.global_position.y >= arcade.footprint.end.y + p.radius - 1.0, "il giocatore non dovrebbe entrare nel cabinato (y %.1f)" % p.global_position.y)
+
+	# Lontano da tutto nessun messaggio; vicino a un mobile solo il suo, in
+	# dissolvenza, con il tasto della tastiera.
+	p.global_position = Hub.PLAYER_SPAWN
+	await get_tree().create_timer(0.4).timeout
+	for kind in hub.prompts.keys():
+		_assert(hub.prompts[kind].modulate.a == 0.0, "lontano dai mobili non dovrebbe esserci nessun messaggio (%s)" % kind)
+	hub._input(_key_event(KEY_W))
+	await _stand_near(hub, HubFurniture.ARCADE)
+	var arcade_prompt: Control = hub.prompts[HubFurniture.ARCADE]
+	_assert(hub.nearby == arcade, "vicino al cabinato il mobile vicino dovrebbe essere il cabinato")
+	_assert(arcade_prompt.modulate.a > 0.9, "vicino al cabinato dovrebbe comparire il suo messaggio (alfa %.2f)" % arcade_prompt.modulate.a)
+	_assert(hub.prompts[HubFurniture.BED].modulate.a == 0.0, "il messaggio del letto non dovrebbe comparire vicino al cabinato")
+	var action_text: String = arcade_prompt.get_node("Action").text
+	_assert(action_text == "Interagisci con E", "con la tastiera il messaggio dovrebbe dire 'Interagisci con E' (%s)" % action_text)
+
+	# Usando il controller il messaggio passa al suo tasto.
+	var pad_event := InputEventJoypadButton.new()
+	pad_event.button_index = JOY_BUTTON_Y
+	pad_event.pressed = true
+	hub._input(pad_event)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	action_text = arcade_prompt.get_node("Action").text
+	_assert(action_text == "Interagisci con A" or action_text == "Interagisci con Croce", "con il controller il messaggio dovrebbe dire 'Interagisci con A' (%s)" % action_text)
+	hub._input(_key_event(KEY_W))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(arcade_prompt.get_node("Action").text == "Interagisci con E", "tornando alla tastiera il messaggio dovrebbe tornare a E")
+
+	# Allontanandosi il messaggio si spegne in dissolvenza, non di colpo.
+	p.global_position = Hub.PLAYER_SPAWN
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(arcade_prompt.modulate.a > 0.0 and arcade_prompt.modulate.a < 1.0, "il messaggio dovrebbe spegnersi in dissolvenza (alfa %.2f)" % arcade_prompt.modulate.a)
+
+	# Cabinato: avvia la run.
+	var runs: Array = []
+	hub.start_run_requested.connect(func(): runs.append(true))
+	await _stand_near(hub, HubFurniture.ARCADE)
+	await _press_action("interact")
+	_assert(runs.size() == 1, "interagendo con il cabinato dovrebbe partire la run")
+
+	# Macchinetta: solo "Work in progress".
+	await _stand_near(hub, HubFurniture.VENDING)
+	await _press_action("interact")
+	_assert(hub.wip_visible(), "la macchinetta dovrebbe mostrare 'Work in progress'")
+	_assert(hub.prompts[HubFurniture.VENDING].get_node("Action").text == "Work in progress", "il messaggio della macchinetta dovrebbe diventare 'Work in progress'")
+	_assert(hub.open_menu == null, "la macchinetta non dovrebbe aprire nessun menu")
+
+	# Computer: menu con Bestiario, Archivio e Tutorial; col menu aperto il
+	# giocatore sta fermo e B/Esc lo chiude.
+	await _stand_near(hub, HubFurniture.COMPUTER)
+	await _press_action("interact")
+	_assert(hub.computer_menu.visible and hub.open_menu == hub.computer_menu, "interagendo con il computer dovrebbe aprirsi il suo menu")
+	var computer_texts: Array = hub.computer_menu.get_meta("buttons").map(func(b): return b.text)
+	for t in ["Bestiario", "Archivio potenziamenti", "Tutorial"]:
+		_assert(computer_texts.has(t), "il computer dovrebbe offrire: %s" % t)
+	_assert(hub.bestiary_btn.has_focus(), "rilasciato il tasto, il focus dovrebbe andare alla prima voce del computer")
+	_assert(p.frozen, "con un menu aperto il giocatore non dovrebbe muoversi")
+	for panel in [hub.archive_panel, hub.bestiary_panel, hub.tutorial_panel]:
+		_assert(panel == null or not panel.visible, "aprire il menu non dovrebbe aprire anche un pannello")
+	await _press_action("ui_cancel")
+	_assert(not hub.computer_menu.visible and hub.open_menu == null, "B/Esc dovrebbe chiudere il menu del computer")
+	await get_tree().process_frame
+	_assert(not p.frozen, "chiuso il menu il giocatore dovrebbe tornare a muoversi")
+
+	# Letto: Impostazioni, Cambia salvataggio, Esci.
+	await _stand_near(hub, HubFurniture.BED)
+	await _press_action("interact")
+	_assert(hub.bed_menu.visible, "interagendo con il letto dovrebbe aprirsi il suo menu")
+	var bed_texts: Array = hub.bed_menu.get_meta("buttons").map(func(b): return b.text)
+	for t in ["Impostazioni", "Cambia salvataggio", "Esci dal gioco"]:
+		_assert(bed_texts.has(t), "il letto dovrebbe offrire: %s" % t)
+	# Col menu aperto nessun messaggio sopra i mobili.
+	await get_tree().create_timer(0.4).timeout
+	_assert(hub.prompts[HubFurniture.BED].modulate.a == 0.0, "con un menu aperto il messaggio del mobile dovrebbe sparire")
+	hub._close_menu()
+
+	print("Hub-stanza (movimento, messaggi, cabinato, computer, letto, macchinetta): OK")
+	hub.queue_free()
+	await get_tree().process_frame
+
+func _key_event(keycode: Key) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.physical_keycode = keycode
+	e.keycode = keycode
+	e.pressed = true
+	return e
+
 func _test_hub_settings_and_quit_entries() -> void:
-	print("--- Test regressione: voci Impostazioni e uscita nell'Hub ---")
+	print("--- Test regressione: Impostazioni e uscita dal letto dell'Hub ---")
 	var hub := Hub.new()
 	add_child(hub)
 	await get_tree().process_frame
 
-	_assert(hub.settings_btn != null and hub.settings_btn.text == "Impostazioni", "l'Hub dovrebbe avere una voce Impostazioni")
-	_assert(hub.quit_btn != null and hub.quit_btn.text == "Esci dal gioco", "l'Hub dovrebbe avere una voce per chiudere il gioco")
+	_assert(hub.settings_btn != null and hub.settings_btn.text == "Impostazioni", "il letto dell'Hub dovrebbe offrire le Impostazioni")
+	_assert(hub.quit_btn != null and hub.quit_btn.text == "Esci dal gioco", "il letto dell'Hub dovrebbe offrire l'uscita dal gioco")
+	_assert(hub.bed_menu.get_meta("buttons").has(hub.settings_btn) and hub.bed_menu.get_meta("buttons").has(hub.slot_btn), "Impostazioni e Cambia salvataggio dovrebbero stare nel menu del letto")
 
-	# Nota: qui non si verifica a pixel che il menu stia nello schermo. In
-	# headless il TextServer riporta altezze del testo circa doppie rispetto
-	# al rendering reale (un Label alto 23px diventa 48px), quindi un
-	# controllo del genere segnalerebbe uno sbordamento inesistente. Il
-	# rientro del menu va verificato su uno screenshot vero.
+	hub.interact_with(hub.furniture_by_kind[HubFurniture.BED])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(hub.bed_menu.visible, "interagendo con il letto dovrebbe aprirsi il suo menu")
+	_assert(hub.settings_btn.has_focus(), "aperto il menu del letto il focus dovrebbe partire dalla prima voce")
+
 	hub._open_settings()
 	await get_tree().process_frame
 	_assert(hub.settings_panel != null and hub.settings_panel.visible, "la voce Impostazioni non ha aperto la schermata")
-	_assert(hub.start_btn.focus_mode == Control.FOCUS_NONE, "con le impostazioni aperte i pulsanti dell'Hub non devono essere selezionabili")
-	_assert(hub.settings_btn.focus_mode == Control.FOCUS_NONE, "anche la voce Impostazioni va disattivata mentre il pannello è aperto")
-	_assert(hub.quit_btn.focus_mode == Control.FOCUS_NONE, "anche la voce di uscita va disattivata mentre il pannello è aperto")
+	_assert(hub.settings_btn.focus_mode == Control.FOCUS_NONE and hub.quit_btn.focus_mode == Control.FOCUS_NONE, "con le impostazioni aperte le voci del letto non devono essere selezionabili")
 	_assert(hub.settings_panel.volume_slider.has_focus(), "all'apertura il focus dovrebbe partire dal primo controllo delle impostazioni")
+	_assert(hub.player.frozen, "con le impostazioni aperte il giocatore non dovrebbe muoversi nella stanza")
 
 	hub.settings_panel.closed.emit()
 	await get_tree().process_frame
 	_assert(not hub.settings_panel.visible, "chiudendo le impostazioni il pannello dovrebbe sparire")
-	_assert(hub.start_btn.focus_mode == Control.FOCUS_ALL, "chiuse le impostazioni i pulsanti dell'Hub tornano selezionabili")
-	_assert(hub.start_btn.has_focus(), "chiuse le impostazioni il focus dovrebbe tornare sull'Hub")
+	_assert(hub.bed_menu.visible, "chiuse le impostazioni si dovrebbe tornare al menu del letto")
+	_assert(hub.settings_btn.focus_mode == Control.FOCUS_ALL, "chiuse le impostazioni le voci del letto tornano selezionabili")
+	_assert(hub.settings_btn.has_focus(), "chiuse le impostazioni il focus dovrebbe tornare sulla voce Impostazioni")
 
-	print("Voci Impostazioni e uscita nell'Hub: OK")
+	print("Impostazioni e uscita dal letto dell'Hub: OK")
 	hub.queue_free()
 	await get_tree().process_frame
 
@@ -1820,10 +1975,15 @@ func _test_controller_menu_navigation() -> void:
 	_assert(_action_has_joypad_button("ui_accept", JOY_BUTTON_A), "ui_accept non ha un binding per il tasto A del controller")
 	_assert(_action_has_joypad_button("ui_cancel", JOY_BUTTON_B), "ui_cancel non ha un binding per il tasto B del controller")
 
+	# Nell'Hub-stanza i menu nascono dai mobili: aperto il computer, il
+	# focus deve partire dalla prima voce, cosí il pad ha da dove navigare.
 	var hub := Hub.new()
 	add_child(hub)
 	await get_tree().process_frame
-	_assert(hub.start_btn.has_focus(), "'Inizia Run' non ha il focus iniziale nell'Hub")
+	hub.interact_with(hub.furniture_by_kind[HubFurniture.COMPUTER])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(hub.bestiary_btn.has_focus(), "aperto il computer dell'Hub la prima voce dovrebbe avere il focus")
 	hub.queue_free()
 	await get_tree().process_frame
 
@@ -1854,7 +2014,10 @@ func _test_hub_subpanel_navigation() -> void:
 	var nav_hub := Hub.new()
 	add_child(nav_hub)
 	await get_tree().process_frame
-	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "setup del test: i pulsanti dell'Hub dovrebbero essere navigabili prima di aprire un pannello")
+	nav_hub.interact_with(nav_hub.furniture_by_kind[HubFurniture.COMPUTER])
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_assert(nav_hub.archive_btn.focus_mode == Control.FOCUS_ALL, "setup del test: le voci del computer dovrebbero essere navigabili prima di aprire un pannello")
 
 	# Aprendo un pannello sopra l'Hub, i suoi pulsanti (nascosti solo
 	# visivamente dallo sfondo opaco del pannello, ma ancora nell'albero)
@@ -1862,8 +2025,7 @@ func _test_hub_subpanel_navigation() -> void:
 	# tastiera/controller.
 	nav_hub._open_archive()
 	await get_tree().process_frame
-	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_NONE, "i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
-	_assert(nav_hub.tutorial_btn.focus_mode == Control.FOCUS_NONE and nav_hub.archive_btn.focus_mode == Control.FOCUS_NONE and nav_hub.bestiary_btn.focus_mode == Control.FOCUS_NONE, "tutti i pulsanti dell'Hub dovrebbero smettere di essere navigabili con l'Archivio aperto")
+	_assert(nav_hub.tutorial_btn.focus_mode == Control.FOCUS_NONE and nav_hub.archive_btn.focus_mode == Control.FOCUS_NONE and nav_hub.bestiary_btn.focus_mode == Control.FOCUS_NONE, "le voci del computer dovrebbero smettere di essere navigabili con l'Archivio aperto")
 	_assert(nav_hub.archive_panel.list_box.get_child_count() > 1, "setup del test: l'archivio dovrebbe elencare almeno due potenziamenti")
 	for row in nav_hub.archive_panel.list_box.get_children():
 		_assert(row.focus_mode == Control.FOCUS_NONE, "una riga dell'archivio non dovrebbe essere selezionabile: solo Chiudi deve poter avere il focus")
@@ -1902,8 +2064,9 @@ func _test_hub_subpanel_navigation() -> void:
 	await get_tree().process_frame
 
 	_assert(not nav_hub.archive_panel.visible, "il tasto B/Cerchio del controller dovrebbe chiudere l'Archivio")
-	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso l'Archivio")
-	_assert(nav_hub.start_btn.has_focus(), "il focus dovrebbe tornare su 'Inizia Run' dopo aver chiuso l'Archivio")
+	_assert(nav_hub.computer_menu.visible, "lo stesso B che chiude l'Archivio non dovrebbe chiudere anche il menu del computer")
+	_assert(nav_hub.archive_btn.focus_mode == Control.FOCUS_ALL, "le voci del computer dovrebbero tornare navigabili dopo aver chiuso l'Archivio")
+	_assert(nav_hub.archive_btn.has_focus(), "il focus dovrebbe tornare sulla voce Archivio dopo averlo chiuso")
 
 	# Stessa verifica, più rapida (chiusura diretta via segnale), per
 	# Bestiario e Tutorial.
@@ -1915,14 +2078,14 @@ func _test_hub_subpanel_navigation() -> void:
 	_assert(nav_hub.bestiary_panel.close_btn.has_focus(), "all'apertura del Bestiario il focus dovrebbe essere su Chiudi")
 	nav_hub.bestiary_panel.closed.emit()
 	await get_tree().process_frame
-	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Bestiario")
+	_assert(nav_hub.bestiary_btn.focus_mode == Control.FOCUS_ALL and nav_hub.bestiary_btn.has_focus(), "chiuso il Bestiario si dovrebbe tornare alla sua voce nel computer")
 
 	nav_hub._open_tutorial()
 	await get_tree().process_frame
 	_assert(nav_hub.tutorial_panel.close_btn.has_focus(), "all'apertura del Tutorial il focus dovrebbe essere su Chiudi")
 	nav_hub.tutorial_panel.closed.emit()
 	await get_tree().process_frame
-	_assert(nav_hub.start_btn.focus_mode == Control.FOCUS_ALL, "i pulsanti dell'Hub dovrebbero tornare navigabili dopo aver chiuso il Tutorial")
+	_assert(nav_hub.tutorial_btn.focus_mode == Control.FOCUS_ALL and nav_hub.tutorial_btn.has_focus(), "chiuso il Tutorial si dovrebbe tornare alla sua voce nel computer")
 
 	print("Scorrimento senza spostare il focus nei sottomenu dell'Hub: OK")
 	nav_hub.queue_free()
@@ -3954,9 +4117,11 @@ func _test_hub_change_slot_entry() -> void:
 	hub.slot_btn.pressed.emit()
 	_assert(requested.size() == 1, "la voce dovrebbe chiedere di tornare alla scelta del salvataggio")
 
-	# Il menu deve restare dentro lo schermo anche con la voce in più.
-	var menu_bottom: float = hub.quit_btn.global_position.y + hub.quit_btn.size.y
-	_assert(menu_bottom > 0.0, "setup del test: il menu dell'Hub dovrebbe avere un'altezza misurabile")
+	# Il menu del letto deve restare dentro lo schermo.
+	hub.interact_with(hub.furniture_by_kind[HubFurniture.BED])
+	await get_tree().process_frame
+	var menu_rect := Rect2(hub.bed_menu.position, hub.bed_menu.size)
+	_assert(menu_rect.size.y > 0.0 and Rect2(Vector2.ZERO, Hub.ROOM_SIZE).encloses(menu_rect), "il menu del letto dovrebbe stare dentro lo schermo (%s)" % menu_rect)
 
 	hub.queue_free()
 	await get_tree().process_frame

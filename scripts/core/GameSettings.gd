@@ -44,6 +44,7 @@ const REBINDABLE := [
 	{"action": "tame", "label": "Addomestica"},
 	{"action": "pause", "label": "Pausa"},
 	{"action": "overview", "label": "Visualizza (tieni premuto)"},
+	{"action": "interact", "label": "Interagisci (Hub)"},
 ]
 
 const JOY_BUTTON_NAMES := {
@@ -226,6 +227,44 @@ static func binding_label(action: String) -> String:
 	if parts.is_empty():
 		return "—"
 	return "  •  ".join(parts)
+
+# Nome breve del tasto di un'azione sulla periferica indicata, per i
+# messaggi a schermo ("Interagisci con E" / "Interagisci con A"). Sul
+# controller usa i simboli PlayStation se il pad collegato lo è.
+const JOY_BUTTON_SHORT := {
+	JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y",
+	JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB",
+	JOY_BUTTON_START: "Start", JOY_BUTTON_BACK: "Visualizza",
+	JOY_BUTTON_LEFT_STICK: "L3", JOY_BUTTON_RIGHT_STICK: "R3",
+	JOY_BUTTON_DPAD_UP: "D-pad su", JOY_BUTTON_DPAD_DOWN: "D-pad giù",
+	JOY_BUTTON_DPAD_LEFT: "D-pad sinistra", JOY_BUTTON_DPAD_RIGHT: "D-pad destra",
+}
+const JOY_BUTTON_SHORT_PLAYSTATION := {
+	JOY_BUTTON_A: "Croce", JOY_BUTTON_B: "Cerchio", JOY_BUTTON_X: "Quadrato", JOY_BUTTON_Y: "Triangolo",
+	JOY_BUTTON_LEFT_SHOULDER: "L1", JOY_BUTTON_RIGHT_SHOULDER: "R1",
+	JOY_BUTTON_START: "Options", JOY_BUTTON_BACK: "Share",
+}
+
+static func action_key_label(action: String, use_joypad: bool, device := 0) -> String:
+	if not InputMap.has_action(action):
+		return "—"
+	for event in InputMap.action_get_events(action):
+		if use_joypad and event is InputEventJoypadButton:
+			var names: Dictionary = JOY_BUTTON_SHORT
+			if is_playstation_pad(device) and JOY_BUTTON_SHORT_PLAYSTATION.has(event.button_index):
+				names = JOY_BUTTON_SHORT_PLAYSTATION
+			return names.get(event.button_index, "Tasto %d" % event.button_index)
+		if not use_joypad and event is InputEventKey:
+			var keycode: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
+			return OS.get_keycode_string(keycode)
+	return "—"
+
+static func is_playstation_pad(device: int) -> bool:
+	var joy_name: String = Input.get_joy_name(device).to_lower()
+	for hint in ["ps3", "ps4", "ps5", "playstation", "dualshock", "dualsense", "sony"]:
+		if joy_name.contains(hint):
+			return true
+	return false
 
 static func _saved_bindings() -> Dictionary:
 	var saved = SaveManager.settings.get("bindings", {})

@@ -18,7 +18,18 @@ Ogni slot si può **svuotare** per ricominciare da capo. Siccome è un'azione di
 
 Le **impostazioni** (volume, risoluzione, assegnazione dei tasti) sono invece **in comune a tutti i salvataggi** e stanno in un file a parte: sono preferenze di chi gioca, non progressi di una partita, e svuotare uno slot non deve costringere a rifarle.
 
-Dall'Hub si torna alla scelta con la voce **Cambia salvataggio**: senza, scelto uno slot lo si potrebbe cambiare solo riavviando il gioco.
+Dall'Hub si torna alla scelta con la voce **Cambia salvataggio** del letto: senza, scelto uno slot lo si potrebbe cambiare solo riavviando il gioco.
+
+### L'Hub: una stanza da esplorare
+
+Scelto il salvataggio non si arriva in un menu ma in una **stanza**, nascosta nella stessa cripta delle run, dove ci si muove come in gioco (senza scatto né addomesticamento). Contro le pareti ci sono quattro mobili; avvicinandosi a uno compare sopra di lui, in dissolvenza, il suo nome e **"Interagisci con [tasto]"**, dove il tasto è quello della periferica che stai usando in quel momento: **E** se stai giocando con la tastiera, **A** se con il controller (Croce su un pad PlayStation). Il messaggio cambia da solo appena passi dall'una all'altra.
+
+- **Computer sul tavolo**: apre un menu con **Bestiario**, **Archivio potenziamenti** e **Tutorial**.
+- **Cabinato arcade**: avvia la run.
+- **Letto**: apre un menu con **Impostazioni**, **Cambia salvataggio** ed **Esci dal gioco**.
+- **Macchinetta degli snack**: per ora risponde solo "Work in progress".
+
+Mentre un menu è aperto il giocatore resta fermo; i menu si navigano da tastiera o controller e si chiudono con **Chiudi** o con B/Esc (chiudendo un pannello si torna al menu da cui lo si era aperto). In fondo alla stanza c'è il riepilogo dello slot: run vinte, serie migliore, morti, dorati sconfitti e gettoni. Il tasto per interagire è riassegnabile dalle Impostazioni.
 
 Chi giocava prima che gli slot esistessero non perde niente: al primo avvio il vecchio salvataggio unico viene travasato nello slot 1, e le sue impostazioni diventano quelle globali.
 
@@ -38,7 +49,7 @@ Chi giocava prima che gli slot esistessero non perde niente: al primo avvio il v
 
   Con un solo alleato il pulsante rimasto libero resta inattivo (non torna a scattare) finché non ne addomestichi un secondo. Con 2 alleati di tipo diverso hai entrambi gli attacchi utilizzabili in modo indipendente su pulsanti diversi; con 2 alleati dello stesso tipo i due condividono un solo pulsante in una versione potenziata (più danno, o un colpo/proiettile aggiuntivo). Se un alleato muore, il suo attacco sparisce (o torna alla versione base, se era potenziato).
 - Il controller è riconosciuto automaticamente (nessuna configurazione richiesta) e può essere usato insieme alla tastiera in qualsiasi momento.
-- **Menu e scelta dei potenziamenti**: navigabili anche da controller con lo stick/D-pad, confermando con il tasto A/Croce e tornando indietro con B/Cerchio. Ogni menu (Hub, scelta del potenziamento, archivio, bestiario, tutorial, fine run) mette a fuoco automaticamente l'opzione predefinita, cosí il pad ha sempre un punto di partenza da cui navigare. Archivio, Bestiario e Tutorial elencano più voci di quante ne stiano a schermo: qui lo stick sinistro/D-pad su/giù scorre direttamente la vista (niente da selezionare riga per riga), mentre B/Cerchio chiude il pannello in qualsiasi momento.
+- **Menu e scelta dei potenziamenti**: navigabili anche da controller con lo stick/D-pad, confermando con il tasto A/Croce e tornando indietro con B/Cerchio. Ogni menu (menu dei mobili dell'Hub, scelta del potenziamento, archivio, bestiario, tutorial, fine run) mette a fuoco automaticamente l'opzione predefinita, cosí il pad ha sempre un punto di partenza da cui navigare. Archivio, Bestiario e Tutorial elencano più voci di quante ne stiano a schermo: qui lo stick sinistro/D-pad su/giù scorre direttamente la vista (niente da selezionare riga per riga), mentre B/Cerchio chiude il pannello in qualsiasi momento.
 - **Visualizza**: tieni premuto `Tab`, oppure il tasto Visualizza/Select/Condividi del controller (quello al centro, a sinistra di Start). Finché lo tieni premuto si apre una finestra con la **mappa ingrandita** (le stesse sale scoperte della mini mappa, con le icone degli oggetti ancora a terra) e l'elenco dei **potenziamenti ottenuti**, ciascuno con rarità e descrizione estesa (quante volte lo hai e, se agisce solo sullo scatto, quando resta inattivo), piú chiavi virtuali e gettoni. **Non mette in pausa**: il gioco continua sotto, quindi consultarla in mezzo a un combattimento ha un prezzo. Rilasciando il tasto si chiude; non si apre sopra la pausa o le altre schermate. È riassegnabile dalle Impostazioni.
 - **Pausa**: `Esc` o il tasto Start/Opzioni del controller, in qualsiasi momento durante una run (tranne sopra un altro menu già aperto, come la scelta del potenziamento). Il menu di pausa offre quattro opzioni, navigabili anch'esse da controller: **Riprendi** (torna esattamente da dove eri), **Riprova la run dall'inizio** (rigioca la stanza 1 di questa run con le statistiche che avevi quando l'hai iniziata, senza i potenziamenti presi nel frattempo), **Impostazioni** (le stesse dell'Hub — volume, video, comandi — senza dover abbandonare la run) e **Torna all'Hub** (abbandona la run e interrompe la serie, come morire).
 
@@ -126,14 +137,14 @@ Lo **Strisciante** (il nemico comune di base) ha una rarissima **variante dorata
 
 ### Archivio e Bestiario
 
-Dall'Hub sono raggiungibili due schermate persistenti (salvate su disco, sopravvivono tra una partita e l'altra):
+Dal computer dell'Hub sono raggiungibili due schermate persistenti (salvate su disco, sopravvivono tra una partita e l'altra):
 
 - **Archivio dei Potenziamenti**: elenca tutti i potenziamenti del gioco; quelli mai raccolti restano "???" finché non li ottieni per la prima volta.
 - **Bestiario**: elenca tutti gli avversari (nemici comuni, la variante dorata e i boss); un nemico resta "???" finché non lo sconfiggi per la prima volta.
 
 ### Impostazioni e uscita
 
-Dall'Hub si raggiungono anche:
+Dal letto dell'Hub si raggiungono anche:
 
 - **Impostazioni**: volume generale, risoluzione della finestra (vengono offerte solo le misure che stanno davvero nello spazio utilizzabile del tuo schermo, e la finestra viene ricentrata a ogni cambio invece di crescere fuori dal bordo), schermo intero e **riassegnazione dei tasti** di tutti i comandi di gioco (movimento, i due pulsanti d'attacco, addomesticamento, pausa). Assegnare un tasto della tastiera non tocca il binding del controller della stessa azione e viceversa, cosí i due dispositivi restano sempre utilizzabili insieme; gli assi analogici dello stick non sono riassegnabili e restano sempre attivi sul movimento. `Esc`/B annullano l'assegnazione in corso, e "Ripristina comandi" riporta tutto ai valori predefiniti. Ogni modifica viene applicata subito e salvata su disco, quindi sopravvive al riavvio. La navigazione qui è incatenata a mano (su/giù seguono l'ordine dell'elenco e dall'ultima voce si torna alla prima), cosí il controller non può mai "perdersi" tra i controlli.
 - **Esci dal gioco**: chiude il software. Non serve salvare nulla a mano: progressi e impostazioni sono già su disco a ogni cambiamento.
@@ -145,7 +156,7 @@ Note:
 
 ### Tutorial
 
-Dall'Hub è raggiungibile anche un **Tutorial** che spiega passo per passo i comandi (movimento, scatto, contatto, potenziamenti) e il comportamento dei nemici comuni. I boss, le loro varianti speciali e la variante dorata non vengono mai menzionati: restano una scoperta della run.
+Dal computer dell'Hub è raggiungibile anche un **Tutorial** che spiega passo per passo i comandi (movimento, scatto, contatto, potenziamenti) e il comportamento dei nemici comuni. I boss, le loro varianti speciali e la variante dorata non vengono mai menzionati: restano una scoperta della run.
 
 ## Aprire il progetto
 
@@ -186,10 +197,10 @@ scripts/
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti (parti fisse + numeri da BalanceConfig)
   data/BalanceConfig.gd       # la risorsa dei valori di bilanciamento (gruppi, limiti e spiegazioni dell'Inspector)
   data/Palette.gd             # linguaggio cromatico unico del gioco + tema dell'interfaccia
-  entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, ExitGate, Pickup, SpecialAttackEffect
+  entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, ExitGate, Pickup, HubFurniture, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
   core/GameSettings.gd        # impostazioni (audio, video, assegnazione tasti): applicazione e persistenza
-  ui/                         # titolo, scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Minimap, OverviewScreen, Vignette, HudSigil
+  ui/                         # titolo, scelta salvataggio, Hub (stanza con i mobili), Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Minimap, OverviewScreen, Vignette, HudSigil
 tests/SmokeTest.gd            # test end-to-end eseguibile in headless (vedi sotto)
 ```
 

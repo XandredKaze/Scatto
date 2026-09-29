@@ -28,6 +28,7 @@ static func ensure_actions() -> void:
 	_ensure_joypad_button_on_action("ui_cancel", JOY_BUTTON_B)
 	_ensure_pause()
 	_ensure_overview()
+	_ensure_interact()
 
 static func _ensure_move_axis(action: String, key1: Key, key2: Key, axis: JoyAxis, axis_value: float, dpad_button: JoyButton) -> void:
 	if InputMap.has_action(action):
@@ -118,6 +119,22 @@ static func _ensure_overview() -> void:
 	var joy_btn := InputEventJoypadButton.new()
 	joy_btn.button_index = JOY_BUTTON_BACK
 	InputMap.action_add_event("overview", joy_btn)
+
+# "Interagisci" con i mobili della stanza dell'Hub: E sulla tastiera, A
+# (Croce) sul controller. Nelle run E resta il primo pulsante d'attacco:
+# le due azioni non sono mai attive insieme.
+static func _ensure_interact() -> void:
+	if InputMap.has_action("interact"):
+		return
+	InputMap.add_action("interact")
+
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_E
+	InputMap.action_add_event("interact", key)
+
+	var joy_btn := InputEventJoypadButton.new()
+	joy_btn.button_index = JOY_BUTTON_A
+	InputMap.action_add_event("interact", joy_btn)
 
 static func _ensure_joypad_button_on_action(action: String, button: JoyButton) -> void:
 	if not InputMap.has_action(action):

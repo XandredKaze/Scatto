@@ -128,6 +128,11 @@ var frozen := false
 
 var arena_bounds: Rect2 = Rect2()
 var maze: MazeGrid = null
+# Nella stanza dell'Hub si cammina e basta: niente scatto né
+# addomesticamento (il tasto E lí serve a interagire con i mobili), e i
+# mobili sono ostacoli rettangolari (`obstacles`) da aggirare.
+var attacks_enabled := true
+var obstacles: Array = []
 var camera: Camera2D
 
 func _ready() -> void:
@@ -381,6 +386,10 @@ func _read_input_and_move(delta: float) -> void:
 	if move.length() > 0.0:
 		facing = move.normalized()
 
+	if not attacks_enabled:
+		_apply_movement(move * BASE_SPEED * current_speed_mult() * delta)
+		return
+
 	if Input.is_action_just_pressed("tame") and can_tame():
 		tame_cooldown_timer = tame_cooldown()
 		tame_requested.emit()
@@ -432,9 +441,26 @@ func _update_timers(delta: float) -> void:
 func _apply_movement(move_delta: Vector2) -> void:
 	if maze != null:
 		position = maze.resolve_move(position, move_delta, radius)
+	elif not obstacles.is_empty():
+		# Un asse alla volta: contro un mobile si scivola lungo il bordo
+		# invece di fermarsi di colpo.
+		var next := position + Vector2(move_delta.x, 0.0)
+		if not _hits_obstacle(next):
+			position = next
+		next = position + Vector2(0.0, move_delta.y)
+		if not _hits_obstacle(next):
+			position = next
+		_clamp_to_arena()
 	else:
 		position += move_delta
 		_clamp_to_arena()
+
+func _hits_obstacle(pos: Vector2) -> bool:
+	for rect in obstacles:
+		var closest := Vector2(clamp(pos.x, rect.position.x, rect.end.x), clamp(pos.y, rect.position.y, rect.end.y))
+		if pos.distance_to(closest) < radius:
+			return true
+	return false
 
 func _clamp_to_arena() -> void:
 	if arena_bounds.size == Vector2.ZERO:
