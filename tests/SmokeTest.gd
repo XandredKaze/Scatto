@@ -1205,7 +1205,7 @@ func _test_dash_traded_for_ally_attacks() -> void:
 	await get_tree().process_frame
 
 func _test_run_music() -> void:
-	print("--- Test regressione: sottofondo musicale solo durante la run, in loop ---")
+	print("--- Test regressione: sottofondo musicale della run e dell'Hub, in loop ---")
 	var music_run := Run.new()
 	add_child(music_run)
 	music_run.begin_new_streak()
@@ -1228,16 +1228,24 @@ func _test_run_music() -> void:
 	music_run.queue_free()
 	await get_tree().process_frame
 
-	# Nell'Hub non deve esserci sottofondo.
-	var quiet_hub := Hub.new()
-	add_child(quiet_hub)
+	# L'Hub ha il proprio sottofondo, in loop dal secondo 22, diverso da
+	# quello della run e legato alla stanza (finisce quando la si lascia).
+	var hub := Hub.new()
+	add_child(hub)
 	await get_tree().process_frame
+	var hub_music: AudioStreamPlayer = hub.music_player
+	_assert(hub_music != null and hub_music.get_parent() == hub, "l'Hub dovrebbe avere un proprio lettore per il sottofondo, figlio della stanza")
+	_assert(hub_music.stream is AudioStreamMP3 and hub_music.stream.resource_path == "res://assets/audio/hub.mp3", "il sottofondo dell'Hub dovrebbe essere assets/audio/hub.mp3")
+	_assert(hub_music.stream.loop, "il sottofondo dell'Hub deve ripartire in loop")
+	_assert(is_equal_approx(hub_music.stream.loop_offset, 22.0), "il loop dell'Hub dovrebbe ripartire dal secondo 22 (%.1f)" % hub_music.stream.loop_offset)
+	_assert(hub_music.stream.loop_offset < hub_music.stream.get_length(), "il punto di ripartenza del loop dell'Hub deve cadere dentro la traccia")
+	_assert(hub_music.playing, "il sottofondo dell'Hub dovrebbe partire entrando nella stanza")
 	var hub_players := 0
-	for c in quiet_hub.get_children():
+	for c in hub.get_children():
 		if c is AudioStreamPlayer:
 			hub_players += 1
-	_assert(hub_players == 0, "l'Hub non dovrebbe avere sottofondo musicale")
-	quiet_hub.queue_free()
+	_assert(hub_players == 1, "nell'Hub dovrebbe suonare un solo brano alla volta (%d)" % hub_players)
+	hub.queue_free()
 	await get_tree().process_frame
 
 	print("Sottofondo musicale della run: OK")

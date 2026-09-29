@@ -27,6 +27,13 @@ const INTERACT_RANGE := 64.0
 const PROMPT_FADE_SPEED := 6.0
 const WIP_DURATION := 2.2
 const INTERACT_ACTION := "interact"
+# Sottofondo della stanza. Il brano è importato con il loop attivo e con
+# loop_offset a 22 s (assets/audio/hub.mp3.import): l'introduzione si
+# sente una volta sola entrando, poi riparte da lí. Il lettore è figlio
+# dell'Hub, quindi avviando una run (Hub liberato) la musica si ferma da
+# sola e lascia il posto a quella della run.
+const MUSIC_PATH := "res://assets/audio/hub.mp3"
+const MUSIC_VOLUME_DB := Run.MUSIC_VOLUME_DB
 
 # Ingombro a terra di ogni mobile: stanno contro le pareti, cosí il centro
 # della stanza resta libero per camminare.
@@ -56,6 +63,7 @@ var open_menu: PanelContainer = null
 # di "Interagisci con…" nel suo messaggio.
 var wip_timer := 0.0
 var stats_label: Label
+var music_player: AudioStreamPlayer
 
 var archive_panel: ArchiveScreen
 var bestiary_panel: BestiaryScreen
@@ -130,6 +138,12 @@ func _ready() -> void:
 	settings_btn = bed_menu.get_meta("buttons")[0]
 	slot_btn = bed_menu.get_meta("buttons")[1]
 	quit_btn = bed_menu.get_meta("buttons")[2]
+
+	music_player = AudioStreamPlayer.new()
+	music_player.stream = load(MUSIC_PATH)
+	music_player.volume_db = MUSIC_VOLUME_DB
+	add_child(music_player)
+	music_player.play()
 
 	_refresh_stats()
 
