@@ -45,6 +45,8 @@ var stats: Dictionary = {
 	"best_streak": 0,
 	"golden_defeated": 0,
 	"special_boss_defeated": 0,
+	# Gettoni raccolti nelle sale: si accumulano da una run all'altra.
+	"tokens": 0,
 }
 
 func _ready() -> void:
@@ -160,6 +162,7 @@ func _reset_progress() -> void:
 		"best_streak": 0,
 		"golden_defeated": 0,
 		"special_boss_defeated": 0,
+		"tokens": 0,
 	}
 
 # Recupera i salvataggi rimasti nella cartella del vecchio nome del
@@ -252,6 +255,13 @@ func record_golden_defeated() -> void:
 func record_special_boss_defeated() -> void:
 	stats.special_boss_defeated += 1
 	save_data()
+
+func add_tokens(amount: int) -> void:
+	stats.tokens = int(stats.get("tokens", 0)) + amount
+	save_data()
+
+func tokens() -> int:
+	return int(stats.get("tokens", 0))
 
 func is_powerup_unlocked(id: String) -> bool:
 	return archive.has(id)

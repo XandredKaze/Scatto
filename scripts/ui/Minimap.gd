@@ -26,6 +26,9 @@ var revealed_corridors := {}
 var player_cell := Vector2i(-1, -1)
 var player_pos := Vector2.ZERO
 var gate_open := false
+# Oggetti ancora a terra nella mappa (Pickup): compaiono come segnalini,
+# ma solo nelle sale già scoperte.
+var pickups: Array = []
 var _cell_px := 8.0
 var _blink := 0.0
 
@@ -134,6 +137,7 @@ func _draw() -> void:
 		draw_rect(rect.grow(-inset), Palette.BONE_DIM if room_index != maze.exit_room_index else Palette.BLOOD, false, 1.0)
 
 	_draw_gate(corridor_w)
+	_draw_pickups()
 	_draw_player()
 
 func _open_neighbors_of(cell: Vector2i) -> Array:
@@ -188,6 +192,31 @@ func _draw_gate(corridor_w: float) -> void:
 		var outer: Vector2 = mid + across * bar_len * 0.5 * side
 		var inner: Vector2 = outer - across * jamb * side
 		draw_rect(Rect2(outer - dir * thick * 0.5, Vector2.ZERO).expand(inner + dir * thick * 0.5), Palette.EMBER)
+
+func _draw_pickups() -> void:
+	var half: float = max(1.5, _cell_px * 0.22)
+	for p in pickups:
+		if not is_instance_valid(p) or not (p is Pickup):
+			continue
+		var cell: Vector2i = maze.world_to_cell(p.global_position)
+		if not is_cell_revealed(cell):
+			continue
+		var local: Vector2 = (p.global_position - maze.origin) / maze.cell_size
+		var at: Vector2 = Vector2(PADDING, PADDING) + local * _cell_px
+		var color: Color
+		match p.kind:
+			Pickup.POTION:
+				color = Palette.BLOOD_BRIGHT
+			Pickup.TOKEN:
+				color = Palette.GOLD
+			Pickup.CHEST:
+				color = Palette.NEON_DIM if p.opened else Palette.NEON
+			_:
+				color = Palette.NEON
+		if p.kind == Pickup.CHEST:
+			draw_rect(Rect2(at - Vector2.ONE * (half + 1.0), Vector2.ONE * (half + 1.0) * 2.0), color, false, 1.0)
+		else:
+			draw_rect(Rect2(at - Vector2.ONE * half, Vector2.ONE * half * 2.0), color)
 
 func _draw_player() -> void:
 	if player_cell.x < 0:

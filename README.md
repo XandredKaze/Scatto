@@ -49,6 +49,15 @@ La sala più lontana dallo spawn è la **sala del premio**: vi arriva un solo co
 
 In alto a sinistra c'è la **mini mappa**, che all'inizio di ogni mappa è tutta oscurata e si scopre esplorando: entrando in una sala compare l'intera sala, percorrendo un corridoio compare il tratto calpestato. Dai tratti già scoperti spunta un moncone chiaro verso ogni passaggio non ancora esplorato, cosí si vede da dove si può proseguire senza sapere dove porta. Il giocatore è il puntino cremisi pulsante; la porta della sala del premio compare appena se ne scopre l'imbocco, come una barra cremisi da chiusa e con la grata ritirata negli stipiti da aperta. Ogni mappa nuova riparte oscurata, e nella sala del boss la mini mappa non c'è.
 
+Al **centro delle sale** possono comparire degli **oggetti**, che si raccolgono passandoci sopra. Ogni sala (tranne quella di partenza, perché vanno trovati esplorando, e quella del premio, che chiude la mappa appena ci si entra) tira a sorte ogni oggetto per conto suo; se ne escono piú d'uno si mettono in fila attorno al centro. Le sale scoperte li mostrano anche sulla mini mappa, finché restano a terra.
+
+- **Pozione di cura** (1 sala su 3): cura il 10% della vita mancante. A vita piena resta a terra, cosí non si spreca.
+- **Gettone** (1 sala su 10): una moneta che si conserva nel salvataggio e si accumula da una run all'altra. Per ora serve solo a contarli (HUD); il suo uso arriverà.
+- **Chiave virtuale** (1 sala su 3): una tessera magnetica. Le chiavi si accumulano e restano per tutta la serie di run, come i potenziamenti.
+- **Cassa del potenziamento virtuale** (1 sala su 10): una cassa cibernetica. Toccandola con almeno una chiave si apre, consuma una chiave e dona **un potenziamento a caso, che non sceglie il giocatore** (pescato come una scelta di fine mappa, con le stesse rarità). Senza chiavi resta sigillata e si può tornare ad aprirla piú tardi nella stessa mappa; aperta resta lí, spenta.
+
+Tutte le probabilità e la percentuale di cura stanno nel gruppo *Oggetti nelle sale* di `bilanciamento.tres`.
+
 Visivamente le stanze sono una **cripta gotica**: pavimento di lastre di pietra tagliata, fredde e quasi nere, segnate da fughe, crepe e sangue rappreso; muri come blocchi di muratura più scuri del pavimento, con lo spigolo superiore appena illuminato e un'ombra netta proiettata a terra; e, appesi alle pareti lunghe, stendardi cremisi e bracieri che sono le uniche fonti di colore acceso. Il decoro è generato una volta per stanza e la collisione resta quella rettangolare sotto il cofano, cosí il movimento resta preciso e prevedibile.
 
 ### Stile estetico
@@ -176,7 +185,7 @@ scripts/
   data/GameData.gd            # dati di nemici, variante dorata, boss e potenziamenti (parti fisse + numeri da BalanceConfig)
   data/BalanceConfig.gd       # la risorsa dei valori di bilanciamento (gruppi, limiti e spiegazioni dell'Inspector)
   data/Palette.gd             # linguaggio cromatico unico del gioco + tema dell'interfaccia
-  entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, ExitGate, SpecialAttackEffect
+  entities/                   # Player, Enemy, Boss, EnemyProjectile, CombatEntity, ArenaVisual, BloodDecals, ExitGate, Pickup, SpecialAttackEffect
   screens/Run.gd              # orchestratore di una run (stanze, boss, serie, salvataggio)
   core/GameSettings.gd        # impostazioni (audio, video, assegnazione tasti): applicazione e persistenza
   ui/                         # titolo, scelta salvataggio, Hub, Archivio, Bestiario, Tutorial, Impostazioni, scelta potenziamento, pausa, fine run, game over, HUD, Minimap, Vignette, HudSigil

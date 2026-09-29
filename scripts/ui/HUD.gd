@@ -23,6 +23,8 @@ var sigil: HudSigil
 var minimap: Minimap
 var _last_powerup_summary := ""
 var ally_label: Label
+var keys_label: Label
+var tokens_label: Label
 var tame_pip: ColorRect
 const SPECIAL_ATTACK_KEYS := ["E", "Q"]
 # Banner di notifica, in alto al centro: largo abbastanza per i messaggi
@@ -121,6 +123,23 @@ func _ready() -> void:
 		special_row.add_child(special_label)
 		special_attack_labels.append(special_label)
 
+	# Chiavi virtuali (valgono per la serie di run) e gettoni (restano nel
+	# salvataggio), con la stessa icona dell'oggetto a terra.
+	var inventory_row := HBoxContainer.new()
+	inventory_row.add_theme_constant_override("separation", 6)
+	vbox.add_child(inventory_row)
+	inventory_row.add_child(_inventory_icon(Pickup.KEY))
+	keys_label = Label.new()
+	keys_label.text = "0"
+	inventory_row.add_child(keys_label)
+	var inventory_gap := Control.new()
+	inventory_gap.custom_minimum_size = Vector2(12, 0)
+	inventory_row.add_child(inventory_gap)
+	inventory_row.add_child(_inventory_icon(Pickup.TOKEN))
+	tokens_label = Label.new()
+	tokens_label.text = "0"
+	inventory_row.add_child(tokens_label)
+
 	var powerup_label := Label.new()
 	powerup_label.text = "Potenziamenti attivi"
 	powerup_label.modulate = Palette.BONE_DIM
@@ -174,6 +193,14 @@ func _ready() -> void:
 	_layout_banner()
 	get_viewport().size_changed.connect(_layout_banner)
 
+func _inventory_icon(kind: String) -> Control:
+	var icon := Control.new()
+	icon.custom_minimum_size = Vector2(26, 22)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.tooltip_text = Pickup.NAMES[kind]
+	icon.draw.connect(func(): Pickup.draw_art(icon, kind, icon.size * 0.5, 0.8, 0.0))
+	return icon
+
 func _layout_banner() -> void:
 	var width: float = get_viewport_rect().size.x
 	banner_label.position = Vector2((width - BANNER_WIDTH) * 0.5, BANNER_TOP)
@@ -214,6 +241,8 @@ func _process(delta: float) -> void:
 	_sync_dash_pips(player.max_dash_charges, player.dash_charges, player.emergency_charge_progress())
 	_update_powerup_tray(player)
 	ally_label.text = "Alleati: %d / %d" % [run.allies.size(), Run.MAX_ALLIES]
+	keys_label.text = "Chiavi virtuali: %d" % player.virtual_keys
+	tokens_label.text = "Gettoni: %d" % SaveManager.tokens()
 	tame_pip.color = Palette.UI_READY if player.can_tame() else Palette.UI_IDLE
 
 	for i in range(SPECIAL_ATTACK_KEYS.size()):
@@ -253,6 +282,7 @@ func _update_minimap(player) -> void:
 		return
 	minimap.set_maze(maze)
 	minimap.show()
+	minimap.pickups = run.pickup_container.get_children()
 	minimap.track_player(player.global_position)
 	minimap.set_gate_open(run.exit_gate != null and is_instance_valid(run.exit_gate) and run.exit_gate.is_open)
 

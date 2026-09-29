@@ -350,6 +350,22 @@ static func use(config: BalanceConfig) -> void:
 @export_range(0, 10, 1) var mappe_corridoi_extra := 2
 
 # =============================================================================
+@export_group("Oggetti nelle sale", "oggetti_")
+## Ogni sala della mappa (tranne quella di partenza e quella del premio)
+## tira a sorte ogni oggetto separatamente: "1 su N" vuol dire che quel
+## tipo di oggetto compare al centro della sala una volta ogni N sale.
+## Pozione di cura: compare in una sala su N.
+@export_range(1, 1000, 1, "or_greater") var oggetti_pozione_una_su := 3
+## Quanta vita cura la pozione, in percentuale della vita che manca.
+@export_range(0, 100, 1, "suffix:%") var oggetti_pozione_cura := 10.0
+## Gettone: compare in una sala su N.
+@export_range(1, 1000, 1, "or_greater") var oggetti_gettone_una_su := 10
+## Cassa del potenziamento virtuale: compare in una sala su N.
+@export_range(1, 1000, 1, "or_greater") var oggetti_cassa_una_su := 10
+## Chiave virtuale: compare in una sala su N.
+@export_range(1, 1000, 1, "or_greater") var oggetti_chiave_una_su := 3
+
+# =============================================================================
 @export_group("Serie di run", "serie_")
 ## Vita recuperata passando a una nuova run senza tornare all'Hub, in
 ## percentuale della vita massima.

@@ -130,6 +130,9 @@ var projectile_container: Node2D
 var effect_container: Node2D
 var arena_visual: ArenaVisual
 var blood_decals: BloodDecals
+# Oggetti al centro delle sale (Pickup): sopra il sangue, sotto chiunque
+# ci passi sopra.
+var pickup_container: Node2D
 var exit_gate: ExitGate = null
 var vignette: Vignette
 var music_player: AudioStreamPlayer
@@ -156,6 +159,9 @@ func _build_scene_tree() -> void:
 	# Il sangue sta sopra il pavimento ma sotto chiunque lo versi.
 	blood_decals = BloodDecals.new()
 	add_child(blood_decals)
+
+	pickup_container = Node2D.new()
+	add_child(pickup_container)
 
 	player_container = Node2D.new()
 	add_child(player_container)
@@ -264,6 +270,7 @@ func _generate_room(n: int) -> void:
 	_clear_hostile_enemies()
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
+	_clear_container(pickup_container)
 	room_cleared = false
 	reward_delivered = false
 	player.unfreeze()
@@ -316,10 +323,108 @@ func _generate_room(n: int) -> void:
 		if spawn.golden:
 			has_golden = true
 
+	_spawn_room_pickups(maze)
+
 	if has_golden:
 		hud.show_banner("Senti una presenza dorata nella stanza...", 2.5)
 	else:
 		hud.show_banner("Stanza %d di 5" % n)
+
+# --- Oggetti nelle sale ------------------------------------------------------
+
+# Ogni oggetto si tira a sorte per conto suo, sala per sala: "1 su N"
+# (bilanciamento.tres, gruppo "Oggetti nelle sale"). Più oggetti nella
+# stessa sala si dispongono in fila attorno al centro.
+func _roll_room_pickups(roll_rng: RandomNumberGenerator) -> Array:
+	var c := BalanceConfig.current()
+	var odds := {
+		Pickup.POTION: c.oggetti_pozione_una_su,
+		Pickup.KEY: c.oggetti_chiave_una_su,
+		Pickup.TOKEN: c.oggetti_gettone_una_su,
+		Pickup.CHEST: c.oggetti_cassa_una_su,
+	}
+	var kinds: Array = []
+	for kind in Pickup.KINDS:
+		if roll_rng.randi_range(1, max(1, int(odds[kind]))) == 1:
+			kinds.append(kind)
+	return kinds
+
+const PICKUP_SPACING := 64.0
+
+# Niente oggetti nella sala di partenza (si trovano esplorando) né in
+# quella del premio (entrarci chiude la mappa: non ci sarebbe modo di
+# raccoglierli).
+func _spawn_room_pickups(maze: MazeGrid) -> void:
+	for i in range(maze.rooms.size()):
+		if i == maze.spawn_room_index or i == maze.exit_room_index:
+			continue
+		var kinds := _roll_room_pickups(rng)
+		if kinds.is_empty():
+			continue
+		var r: Rect2i = maze.rooms[i]
+		var center: Vector2 = maze.origin + (Vector2(r.position) + Vector2(r.size) * 0.5) * maze.cell_size
+		for k in range(kinds.size()):
+			var pickup := Pickup.new()
+			pickup.setup(kinds[k])
+			pickup.position = center + Vector2((float(k) - float(kinds.size() - 1) * 0.5) * PICKUP_SPACING, 0.0)
+			pickup_container.add_child(pickup)
+
+func _check_pickups() -> void:
+	if player == null or not player.alive or player.frozen:
+		return
+	for p in pickup_container.get_children():
+		if not (p is Pickup) or p.is_queued_for_deletion():
+			continue
+		var reach: float = p.touch_radius() + player.radius
+		var dist: float = player.global_position.distance_to(p.global_position)
+		if dist > reach:
+			if dist > reach + 30.0:
+				p.warned = false
+			continue
+		match p.kind:
+			Pickup.POTION:
+				# A vita piena la pozione resta a terra: berla non servirebbe.
+				if player.hp >= player.max_hp:
+					continue
+				var amount: float = (player.max_hp - player.hp) * BalanceConfig.current().oggetti_pozione_cura / 100.0
+				player.heal(amount)
+				hud.show_banner("Pozione di cura: +%d PV" % int(ceil(amount)), 2.0)
+				_take_pickup(p)
+			Pickup.TOKEN:
+				SaveManager.add_tokens(1)
+				hud.show_banner("Gettone raccolto (%d)" % SaveManager.tokens(), 2.0)
+				_take_pickup(p)
+			Pickup.KEY:
+				player.virtual_keys += 1
+				hud.show_banner("Chiave virtuale raccolta (%d)" % player.virtual_keys, 2.0)
+				_take_pickup(p)
+			Pickup.CHEST:
+				_try_open_chest(p)
+
+func _take_pickup(p: Pickup) -> void:
+	pickup_container.remove_child(p)
+	p.queue_free()
+
+func _try_open_chest(chest: Pickup) -> void:
+	if chest.opened:
+		return
+	if player.virtual_keys <= 0:
+		if not chest.warned:
+			chest.warned = true
+			hud.show_banner("La cassa è sigillata: serve una Chiave virtuale.", 2.5)
+		return
+	# Il potenziamento lo sceglie la cassa, non il giocatore: si pesca come
+	# una scelta di fine mappa (stesse rarità, stessi filtri), ma uno solo.
+	var rolled := _roll_powerup_choices(1)
+	if rolled.is_empty():
+		return
+	player.virtual_keys -= 1
+	chest.open_chest()
+	var id: String = rolled[0].id
+	player.apply_powerup(id)
+	_refresh_ally_buffs()
+	SaveManager.unlock_powerup(id)
+	hud.show_banner("Cassa aperta: %s!" % rolled[0].name, 3.0)
 
 # --- Porta di uscita -------------------------------------------------------
 
@@ -366,6 +471,7 @@ func _player_beyond_gate() -> bool:
 	return current_maze.room_at(cell) == current_maze.exit_room_index
 
 func _process(_delta: float) -> void:
+	_check_pickups()
 	if not room_cleared or reward_delivered or current_boss != null:
 		return
 	if _player_beyond_gate():
@@ -775,6 +881,7 @@ func _start_boss_room() -> void:
 	_clear_hostile_enemies()
 	_clear_container(projectile_container)
 	_clear_container(boss_container)
+	_clear_container(pickup_container)
 	room_cleared = false
 	reward_delivered = false
 	player.unfreeze()

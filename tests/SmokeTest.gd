@@ -21,6 +21,7 @@ func run_and_quit() -> void:
 	await _test_maze_integration()
 	await _test_exit_gate_blocks_until_cleared()
 	await _test_minimap_reveals_by_exploration()
+	await _test_room_pickups()
 	await _test_balance_config_drives_game()
 	await _test_maze_dash_no_tunneling()
 	await _test_maze_enemy_closes_final_gap()
@@ -2253,6 +2254,133 @@ func _test_minimap_reveals_by_exploration() -> void:
 	print("Mini mappa: oscurata all'inizio, scoperta esplorando: OK")
 	mm_run.queue_free()
 	await get_tree().process_frame
+
+# Mette il giocatore sopra `p` e lascia passare un frame: la raccolta la
+# fa Run nel suo _process, come in gioco.
+func _step_onto(target_run: Run, p: Node2D) -> void:
+	target_run.player.global_position = p.global_position
+	await get_tree().process_frame
+
+func _pickups_of_kind(target_run: Run, kind: String) -> Array:
+	return target_run.pickup_container.get_children().filter(func(p): return p is Pickup and p.kind == kind)
+
+func _test_room_pickups() -> void:
+	print("--- Test: oggetti al centro delle sale (pozione, gettone, chiave, cassa) ---")
+	# Le probabilità sono quelle richieste: 1 su 3, 1 su 10, 1 su 10, 1 su 3.
+	var defaults := BalanceConfig.new()
+	_assert(defaults.oggetti_pozione_una_su == 3 and defaults.oggetti_chiave_una_su == 3, "pozione e chiave dovrebbero comparire in una sala su 3")
+	_assert(defaults.oggetti_gettone_una_su == 10 and defaults.oggetti_cassa_una_su == 10, "gettone e cassa dovrebbero comparire in una sala su 10")
+	_assert(is_equal_approx(defaults.oggetti_pozione_cura, 10.0), "la pozione dovrebbe curare il 10% della vita mancante")
+
+	# Con ogni probabilità a 1 su 1, ogni sala (tranne partenza e premio)
+	# ha tutti e quattro gli oggetti, attorno al proprio centro.
+	var cfg := BalanceConfig.new()
+	cfg.oggetti_pozione_una_su = 1
+	cfg.oggetti_gettone_una_su = 1
+	cfg.oggetti_cassa_una_su = 1
+	cfg.oggetti_chiave_una_su = 1
+	BalanceConfig.use(cfg)
+	var pk_run := Run.new()
+	add_child(pk_run)
+	pk_run.begin_new_streak()
+	pk_run.player.max_hp = 99999.0
+	pk_run.player.hp = 99999.0
+	await get_tree().process_frame
+	var maze: MazeGrid = pk_run.current_maze
+	var per_room := {}
+	for p in pk_run.pickup_container.get_children():
+		var room: int = maze.room_at(maze.world_to_cell(p.global_position))
+		_assert(room >= 0, "un oggetto dovrebbe stare dentro una sala, non in un corridoio o nel vuoto")
+		_assert(room != maze.spawn_room_index, "nella sala di partenza non dovrebbero esserci oggetti")
+		_assert(room != maze.exit_room_index, "nella sala del premio non dovrebbero esserci oggetti")
+		var r: Rect2i = maze.rooms[room]
+		var center: Vector2 = maze.origin + (Vector2(r.position) + Vector2(r.size) * 0.5) * maze.cell_size
+		_assert(p.global_position.distance_to(center) <= Run.PICKUP_SPACING * 2.0, "gli oggetti dovrebbero stare al centro della sala")
+		per_room[room] = per_room.get(room, []) + [p.kind]
+	_assert(per_room.size() == maze.rooms.size() - 2, "ogni sala esclusa partenza e premio dovrebbe avere i suoi oggetti (%d su %d)" % [per_room.size(), maze.rooms.size() - 2])
+	for room in per_room.keys():
+		_assert(per_room[room].size() == 4, "a probabilità piena una sala dovrebbe avere tutti e quattro gli oggetti: %s" % [per_room[room]])
+
+	# Pozione: cura il 10% della vita mancante; a vita piena resta a terra.
+	var p := pk_run.player
+	p.max_hp = 100.0
+	p.hp = 100.0
+	var potion: Pickup = _pickups_of_kind(pk_run, Pickup.POTION)[0]
+	await _step_onto(pk_run, potion)
+	_assert(is_instance_valid(potion) and potion.get_parent() == pk_run.pickup_container, "a vita piena la pozione dovrebbe restare a terra")
+	p.hp = 40.0
+	await _step_onto(pk_run, potion)
+	_assert(is_equal_approx(p.hp, 46.0), "la pozione dovrebbe curare il 10%% della vita mancante (40 -> 46, ottenuto %.1f)" % p.hp)
+	_assert(not is_instance_valid(potion) or potion.get_parent() == null, "bevuta la pozione dovrebbe sparire")
+	p.max_hp = 99999.0
+	p.hp = 99999.0
+
+	# Gettone: finisce nel salvataggio.
+	var tokens_before := SaveManager.tokens()
+	await _step_onto(pk_run, _pickups_of_kind(pk_run, Pickup.TOKEN)[0])
+	_assert(SaveManager.tokens() == tokens_before + 1, "raccogliere un gettone dovrebbe aggiungerlo al salvataggio")
+
+	# Cassa senza chiavi: resta sigillata e non dona niente.
+	var chests := _pickups_of_kind(pk_run, Pickup.CHEST)
+	var chest: Pickup = chests[0]
+	p.virtual_keys = 0
+	var powerups_before: int = p.active_powerups.size()
+	await _step_onto(pk_run, chest)
+	_assert(not chest.opened, "senza chiavi la cassa dovrebbe restare chiusa")
+	_assert(p.active_powerups.size() == powerups_before, "una cassa chiusa non dovrebbe donare potenziamenti")
+
+	# Chiavi: si accumulano.
+	var keys := _pickups_of_kind(pk_run, Pickup.KEY)
+	_assert(keys.size() >= 2, "setup del test: servono almeno due chiavi")
+	await _step_onto(pk_run, keys[0])
+	await _step_onto(pk_run, keys[1])
+	_assert(p.virtual_keys == 2, "le chiavi virtuali dovrebbero accumularsi (%d)" % p.virtual_keys)
+	_assert(pk_run.hud.keys_label.text.contains("2"), "la HUD dovrebbe mostrare le chiavi possedute")
+
+	# Con una chiave la cassa si apre, consuma la chiave e dona un
+	# potenziamento a caso; aperta non si riapre.
+	await _step_onto(pk_run, chest)
+	_assert(chest.opened, "con una chiave la cassa dovrebbe aprirsi")
+	_assert(p.virtual_keys == 1, "aprire la cassa dovrebbe consumare una chiave (%d)" % p.virtual_keys)
+	_assert(p.active_powerups.size() == powerups_before + 1, "la cassa dovrebbe donare un potenziamento")
+	_assert(not pk_run.powerup_choice_screen.visible, "il potenziamento della cassa non si sceglie: nessuna schermata di scelta")
+	for i in range(3):
+		await get_tree().process_frame
+	_assert(p.virtual_keys == 1 and p.active_powerups.size() == powerups_before + 1, "una cassa già aperta non dovrebbe consumare altre chiavi né donare altro")
+
+	# Le chiavi restano da una mappa all'altra; la mappa nuova ha oggetti nuovi.
+	var old_pickup: Node = pk_run.pickup_container.get_child(0)
+	pk_run._generate_room(2)
+	await get_tree().process_frame
+	_assert(p.virtual_keys == 1, "le chiavi dovrebbero restare passando alla mappa successiva")
+	_assert(not pk_run.pickup_container.get_children().has(old_pickup), "gli oggetti della mappa precedente non dovrebbero restare")
+	pk_run._start_boss_room()
+	await get_tree().process_frame
+	_assert(pk_run.pickup_container.get_child_count() == 0, "nella sala del boss non dovrebbero esserci oggetti")
+	pk_run.begin_new_streak()
+	_assert(pk_run.player.virtual_keys == 0, "una serie nuova dovrebbe ripartire senza chiavi")
+	pk_run.queue_free()
+	await get_tree().process_frame
+
+	# Con le probabilità vere la frequenza è quella attesa, su molte sale.
+	BalanceConfig.use(defaults)
+	var roll_run := Run.new()
+	var roll_rng := RandomNumberGenerator.new()
+	roll_rng.seed = 12345
+	var counts := {Pickup.POTION: 0, Pickup.TOKEN: 0, Pickup.KEY: 0, Pickup.CHEST: 0}
+	var samples := 6000
+	for i in range(samples):
+		for kind in roll_run._roll_room_pickups(roll_rng):
+			counts[kind] += 1
+	roll_run.free()
+	print("Frequenze su %d sale: %s" % [samples, counts])
+	_assert(abs(counts[Pickup.POTION] / float(samples) - 1.0 / 3.0) < 0.03, "la pozione dovrebbe comparire in circa una sala su 3")
+	_assert(abs(counts[Pickup.KEY] / float(samples) - 1.0 / 3.0) < 0.03, "la chiave dovrebbe comparire in circa una sala su 3")
+	_assert(abs(counts[Pickup.TOKEN] / float(samples) - 0.1) < 0.02, "il gettone dovrebbe comparire in circa una sala su 10")
+	_assert(abs(counts[Pickup.CHEST] / float(samples) - 0.1) < 0.02, "la cassa dovrebbe comparire in circa una sala su 10")
+
+	BalanceConfig.use(null)
+	print("Oggetti nelle sale: OK")
 
 func _test_maze_integration() -> void:
 	print("--- Test integrazione labirinto nel gioco reale (Run) ---")

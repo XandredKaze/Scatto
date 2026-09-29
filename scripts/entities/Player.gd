@@ -76,6 +76,9 @@ var extra_charges_per_hit := 0
 var max_dash_charges := 1
 var dash_charges := 1
 var empty_charges_timer := 0.0
+# Chiavi virtuali raccolte: si accumulano e ognuna apre una sola cassa del
+# potenziamento. Valgono per tutta la serie di run, come i potenziamenti.
+var virtual_keys := 0
 var extra_iframes := 0.0
 var has_contrattacco := false
 var has_furia := false
@@ -156,6 +159,7 @@ func reset_stats() -> void:
 	max_dash_charges = BalanceConfig.current().giocatore_cariche_scatto
 	dash_charges = max_dash_charges
 	empty_charges_timer = 0.0
+	virtual_keys = 0
 	extra_iframes = 0.0
 	has_contrattacco = false
 	has_furia = false
@@ -190,6 +194,7 @@ func snapshot_stats() -> Dictionary:
 		"dash_distance_mult": dash_distance_mult,
 		"extra_charges_per_hit": extra_charges_per_hit,
 		"max_dash_charges": max_dash_charges,
+		"virtual_keys": virtual_keys,
 		"extra_iframes": extra_iframes,
 		"has_contrattacco": has_contrattacco,
 		"has_furia": has_furia,
@@ -217,6 +222,7 @@ func restore_stats(snapshot: Dictionary) -> void:
 	max_dash_charges = snapshot.max_dash_charges
 	dash_charges = snapshot.max_dash_charges
 	empty_charges_timer = 0.0
+	virtual_keys = snapshot.get("virtual_keys", 0)
 	extra_iframes = snapshot.extra_iframes
 	has_contrattacco = snapshot.has_contrattacco
 	has_furia = snapshot.has_furia

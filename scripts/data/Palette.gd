@@ -36,6 +36,12 @@ const BONE_DIM := Color8(146, 142, 147)
 const STEEL := Color8(158, 177, 198)
 const STEEL_DIM := Color8(88, 100, 117)
 const GOLD := Color8(216, 170, 80)
+# Luce al neon della tecnologia "virtuale" (chiave e cassa del
+# potenziamento): l'unico colore freddo acceso del gioco, riservato a
+# questi oggetti perché si riconoscano al primo sguardo come estranei
+# alla cripta.
+const NEON := Color8(72, 226, 255)
+const NEON_DIM := Color8(28, 104, 132)
 # Giallo polline: il cuore del Pungiglione e i dardi che spara. È l'unica
 # nota calda del gioco oltre all'oro, e serve proprio a questo: annunciare
 # da lontano da dove arriveranno i colpi.
