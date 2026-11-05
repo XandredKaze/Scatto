@@ -6,31 +6,32 @@
     <RootNamespace>CupheadOnlineCoop</RootNamespace>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>
-    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
+    <!-- copia 0Harmony.dll (da NuGet) nella cartella di output -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 
     <!-- Cartella di installazione di Cuphead. Sovrascrivibile con:
          dotnet build -p:CupheadDir="D:\Giochi\Cuphead" -->
     <CupheadDir Condition="'$(CupheadDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Cuphead</CupheadDir>
     <ManagedDir>$(CupheadDir)\Cuphead_Data\Managed</ManagedDir>
-    <BepInExCoreDir>$(CupheadDir)\BepInEx\core</BepInExCoreDir>
-    <BepInExPluginsDir>$(CupheadDir)\BepInEx\plugins</BepInExPluginsDir>
+
+    <!-- Unity Doorstop: il piccolo loader (winhttp.dll) che carica la mod all'avvio, al posto di BepInEx.
+         x64 o x86 deve corrispondere a Cuphead.exe: dotnet build -p:DoorstopArch=x86 -->
+    <DoorstopArch Condition="'$(DoorstopArch)' == ''">x64</DoorstopArch>
+    <DoorstopVersion>4.3.0</DoorstopVersion>
+    <DoorstopUrl>https://github.com/NeighTools/UnityDoorstop/releases/download/v$(DoorstopVersion)/doorstop_win_release_$(DoorstopVersion).zip</DoorstopUrl>
+    <DoorstopSha256>E23FEC7A6ADFA07BA26A3E209B617584D0319A1145506AE4E1B892C44E86F679</DoorstopSha256>
+    <DoorstopCache>$(MSBuildProjectDirectory)\obj\doorstop</DoorstopCache>
+    <DistDir>$(MSBuildProjectDirectory)\..\dist</DistDir>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Permette di compilare per .NET 3.5 anche senza il targeting pack installato -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Lib.Harmony" Version="2.2.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="BepInEx">
-      <HintPath>$(BepInExCoreDir)\BepInEx.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="0Harmony">
-      <HintPath>$(BepInExCoreDir)\0Harmony.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="UnityEngine">
       <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
       <Private>false</Private>
@@ -44,15 +45,46 @@
       <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule" Condition="Exists('$(ManagedDir)\UnityEngine.InputLegacyModule.dll')">
+      <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Rewired_Core">
       <HintPath>$(ManagedDir)\Rewired_Core.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
-  <!-- Dopo la build copia la DLL direttamente nella cartella plugins di BepInEx, se esiste -->
-  <Target Name="CopyToPlugins" AfterTargets="Build" Condition="Exists('$(BepInExPluginsDir)')">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExPluginsDir)\CupheadOnlineCoop" />
+  <!--
+    Dopo la build prepara la cartella dist\, da copiare così com'è nella cartella di Cuphead:
+      dist\winhttp.dll                              (Doorstop)
+      dist\doorstop_config.ini
+      dist\CupheadOnlineCoop\CupheadOnlineCoop.dll
+      dist\CupheadOnlineCoop\0Harmony.dll
+    Con -p:Install=true la copia anche direttamente in $(CupheadDir).
+  -->
+  <Target Name="PackageDist" AfterTargets="Build">
+    <DownloadFile SourceUrl="$(DoorstopUrl)" DestinationFolder="$(DoorstopCache)" DestinationFileName="doorstop.zip"
+                  Condition="!Exists('$(DoorstopCache)\doorstop.zip')" />
+    <GetFileHash Files="$(DoorstopCache)\doorstop.zip" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="DoorstopActualSha256" />
+    </GetFileHash>
+    <Error Condition="'$(DoorstopActualSha256)' != '$(DoorstopSha256)'"
+           Text="Il file di Doorstop scaricato non corrisponde all'hash atteso. Cancella $(DoorstopCache) e riprova." />
+    <Unzip SourceFiles="$(DoorstopCache)\doorstop.zip" DestinationFolder="$(DoorstopCache)\unzipped" SkipUnchangedFiles="true" />
+
+    <ItemGroup>
+      <DistRoot Include="$(DoorstopCache)\unzipped\$(DoorstopArch)\winhttp.dll;$(MSBuildProjectDirectory)\doorstop_config.ini" />
+      <DistMod Include="$(TargetPath);$(OutDir)0Harmony.dll" />
+    </ItemGroup>
+    <RemoveDir Directories="$(DistDir)" />
+    <Copy SourceFiles="@(DistRoot)" DestinationFolder="$(DistDir)" />
+    <Copy SourceFiles="@(DistMod)" DestinationFolder="$(DistDir)\CupheadOnlineCoop" />
+    <Message Importance="high" Text="Mod pronta in $(DistDir) (Doorstop $(DoorstopArch)): copia il contenuto nella cartella di Cuphead." />
+
+    <Copy Condition="'$(Install)' == 'true'" SourceFiles="@(DistRoot)" DestinationFolder="$(CupheadDir)" />
+    <Copy Condition="'$(Install)' == 'true'" SourceFiles="@(DistMod)" DestinationFolder="$(CupheadDir)\CupheadOnlineCoop" />
+    <Message Condition="'$(Install)' == 'true'" Importance="high" Text="Mod installata in $(CupheadDir)" />
   </Target>
 
 </Project>

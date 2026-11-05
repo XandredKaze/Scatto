@@ -1,7 +1,11 @@
 # Scatto — Cuphead Online Coop (prototipo)
 
-Mod per **BepInEx 5** che aggiunge la co-op **online** a Cuphead: l'host gioca Cuphead (P1),
+Mod che aggiunge la co-op **online** a Cuphead: l'host gioca Cuphead (P1),
 il client gioca Mugman (P2), ognuno dal proprio PC con la propria copia del gioco.
+
+**Non serve BepInEx**: la mod si carica con [Unity Doorstop](https://github.com/NeighTools/UnityDoorstop),
+un singolo file (`winhttp.dll`, 26 KB) che Unity carica all'avvio e che a sua volta carica la mod.
+Per installare si copiano 4 file, per disinstallare si cancellano.
 
 > ⚠️ **Prototipo non ancora provato nel gioco vero.** La logica di rete è testata
 > (vedi "Stato"), ma i punti di aggancio a Cuphead vanno verificati con il gioco installato.
@@ -24,14 +28,26 @@ Per tenere le due partite uguali la mod:
 
 ## Installazione
 
-1. Installa [BepInEx 5](https://github.com/BepInEx/BepInEx/releases) (versione x64 o x86, la stessa
-   architettura di `Cuphead.exe`) nella cartella del gioco. Avvia Cuphead una volta e chiudilo.
-2. Compila la mod (vedi sotto) o copia `CupheadOnlineCoop.dll` in `Cuphead/BepInEx/plugins/CupheadOnlineCoop/`.
-3. Avvia Cuphead una volta: viene creato `BepInEx/config/scatto.cuphead.onlinecoop.cfg`.
+1. Compila la mod (vedi sotto): ottieni la cartella `dist/`.
+2. Copia **il contenuto** di `dist/` nella cartella di Cuphead (quella con `Cuphead.exe`):
+   ```
+   Cuphead/
+   ├── Cuphead.exe
+   ├── winhttp.dll              ← Doorstop
+   ├── doorstop_config.ini
+   └── CupheadOnlineCoop/
+       ├── CupheadOnlineCoop.dll
+       └── 0Harmony.dll         ← libreria per modificare i metodi del gioco
+   ```
+3. Avvia Cuphead una volta: viene creato `CupheadOnlineCoop/CupheadOnlineCoop.ini` (la configurazione).
+   Se non compare, guarda la sezione "Problemi".
+
+**Disinstallare:** cancella `winhttp.dll`, `doorstop_config.ini` e la cartella `CupheadOnlineCoop`.
+Per disattivarla al volo: `enabled=false` in `doorstop_config.ini`.
 
 ## Giocare
 
-Configura il file `.cfg` su entrambi i PC:
+Configura `CupheadOnlineCoop/CupheadOnlineCoop.ini` su entrambi i PC:
 
 | | Host | Client |
 |---|---|---|
@@ -57,19 +73,35 @@ Gli slot si cambiano con `HostSaveSlot` / `ClientSaveSlot`. Tasti: **F8** mostra
 
 ## Compilare
 
-Serve il [.NET SDK](https://dotnet.microsoft.com/download) (6 o più recente) e Cuphead con BepInEx già installato:
+Serve il [.NET SDK](https://dotnet.microsoft.com/download) (6 o più recente) e Cuphead installato
+(la build usa `UnityEngine.dll` e `Rewired_Core.dll` del gioco):
 
 ```bash
 dotnet build CupheadOnlineCoop -c Release -p:CupheadDir="C:\Program Files (x86)\Steam\steamapps\common\Cuphead"
 ```
 
-La DLL viene copiata automaticamente in `BepInEx/plugins/CupheadOnlineCoop/`.
+La build scarica Doorstop 4.3.0 (verificandone l'hash SHA-256) e prepara `dist/`.
+Opzioni:
+- `-p:DoorstopArch=x86` se Cuphead è a 32 bit. Per saperlo: avvia il gioco e guarda in
+  Gestione attività; se accanto a "Cuphead" c'è "(32 bit)", usa x86, altrimenti va bene x64 (predefinito).
+- `-p:Install=true` per copiare direttamente la mod nella cartella del gioco.
+
+## Problemi
+
+- **Non viene creato il file `.ini` / la mod non parte**: quasi sempre l'architettura di `winhttp.dll`
+  è sbagliata. Ricompila con l'altra (`-p:DoorstopArch=x86` o `x64`).
+- **Log**: `CupheadOnlineCoop/CupheadOnlineCoop.log` (e anche il log di Unity, `output_log.txt` / `Player.log`).
+- L'antivirus può segnalare `winhttp.dll` perché si inserisce nel processo del gioco: è normale per i loader di mod
+  (è lo stesso file usato da BepInEx).
 
 ## Struttura
 
 | File | Cosa fa |
 |---|---|
-| `src/Plugin.cs` | Entry point BepInEx, configurazione, HUD |
+| `src/Loader/Entrypoint.cs` | Entry point chiamato da Doorstop all'avvio |
+| `src/Loader/Loader.cs` | Attende che Unity sia pronto, applica le patch, log su file |
+| `src/Loader/ModConfig.cs` | Configurazione `.ini` (con i valori predefiniti commentati) |
+| `src/CoopBehaviour.cs` | Ciclo per frame e HUD |
 | `src/CoopSession.cs` | Lockstep, handshake, epoche, attese e predizione, checksum |
 | `src/Patches/RewiredPatches.cs` | Patch Harmony su `Rewired.Player.GetButton/GetAxis/...` |
 | `src/Inputs/*` | Tabella azioni Rewired, frame di input, buffer per frame |
@@ -80,7 +112,7 @@ La DLL viene copiata automaticamente in `BepInEx/plugins/CupheadOnlineCoop/`.
 ## Stato
 
 Verificato (fuori dal gioco, con librerie finte al posto di Unity/Rewired e host + client veri in rete locale):
-- compila per .NET 3.5;
+- compila per .NET 3.5 e la build produce la cartella `dist/` con Doorstop e Harmony;
 - il salvataggio arriva identico al client, con backup del vecchio file;
 - 400 frame di input, attraverso un cambio di scena, sono **identici su host e client**, senza frame predetti.
 
@@ -97,5 +129,5 @@ Da verificare / fare con il gioco installato:
 - [ ] Pausa e menu delle opzioni (una pausa su un solo PC sfasa le partite).
 - [ ] Riconnessione a partita in corso e risincronizzazione dello stato dopo un desync.
 
-Se mi mandi `Assembly-CSharp.dll` (o il log di BepInEx `BepInEx/LogOutput.log` dopo una prova),
+Se mi mandi `Assembly-CSharp.dll` (o il file `CupheadOnlineCoop/CupheadOnlineCoop.log` dopo una prova),
 posso completare questi punti.
