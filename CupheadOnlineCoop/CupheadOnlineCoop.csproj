@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net35</TargetFramework>
+    <AssemblyName>CupheadOnlineCoop</AssemblyName>
+    <RootNamespace>CupheadOnlineCoop</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>0.1.0</Version>
+
+    <!-- Cartella di installazione di Cuphead. Sovrascrivibile con:
+         dotnet build -p:CupheadDir="D:\Giochi\Cuphead" -->
+    <CupheadDir Condition="'$(CupheadDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Cuphead</CupheadDir>
+    <ManagedDir>$(CupheadDir)\Cuphead_Data\Managed</ManagedDir>
+    <BepInExCoreDir>$(CupheadDir)\BepInEx\core</BepInExCoreDir>
+    <BepInExPluginsDir>$(CupheadDir)\BepInEx\plugins</BepInExPluginsDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Permette di compilare per .NET 3.5 anche senza il targeting pack installato -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCoreDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Dalle versioni 2017.2+ Unity divide il motore in moduli: li aggiungo solo se esistono -->
+    <Reference Include="UnityEngine.CoreModule" Condition="Exists('$(ManagedDir)\UnityEngine.CoreModule.dll')">
+      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule" Condition="Exists('$(ManagedDir)\UnityEngine.IMGUIModule.dll')">
+      <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rewired_Core">
+      <HintPath>$(ManagedDir)\Rewired_Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Dopo la build copia la DLL direttamente nella cartella plugins di BepInEx, se esiste -->
+  <Target Name="CopyToPlugins" AfterTargets="Build" Condition="Exists('$(BepInExPluginsDir)')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExPluginsDir)\CupheadOnlineCoop" />
+  </Target>
+
+</Project>
