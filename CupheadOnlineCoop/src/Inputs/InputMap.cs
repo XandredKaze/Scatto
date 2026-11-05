@@ -98,11 +98,29 @@ namespace CupheadOnlineCoop.Inputs
             {
                 int id = ActionIds[slot];
                 if (p.GetButton(id)) f.Pos |= 1UL << slot;
-                if (p.GetNegativeButton(id)) f.Neg |= 1UL << slot;
+                if (hasNegativeButton && TryGetNegativeButton(p, id)) f.Neg |= 1UL << slot;
                 int ax = AxisIndex[slot];
                 if (ax >= 0) f.Axes[ax] = InputFrame.QuantizeAxis(p.GetAxis(id));
             }
             return f;
+        }
+
+        private static bool hasNegativeButton = true;
+
+        // In un metodo separato: se questa versione di Rewired non ha GetNegativeButton,
+        // l'errore (MissingMethodException) nasce qui e possiamo semplicemente farne a meno.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static bool NegativeButton(Player p, int id) { return p.GetNegativeButton(id); }
+
+        private static bool TryGetNegativeButton(Player p, int id)
+        {
+            try { return NegativeButton(p, id); }
+            catch (System.MissingMethodException)
+            {
+                hasNegativeButton = false;
+                Plugin.Log.LogWarning("Rewired senza GetNegativeButton: uso solo GetButton/GetAxis.");
+                return false;
+            }
         }
 
         public string Describe()
