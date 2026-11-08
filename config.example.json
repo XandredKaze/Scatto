@@ -1,0 +1,74 @@
+{
+  "obs": {
+    "url": "ws://127.0.0.1:4455",
+    "password": "LA_TUA_PASSWORD_OBS_WEBSOCKET"
+  },
+  "wavelink": {
+    "host": "127.0.0.1"
+  },
+  "logLevel": "info",
+
+  "presets": {
+    "live": {
+      "channels": {
+        "Microfono": { "stream": { "muted": false, "level": 100 } },
+        "Musica": { "stream": { "level": 35 } },
+        "Game": { "stream": { "level": 70 } }
+      }
+    },
+    "pausa": {
+      "channels": {
+        "Microfono": { "stream": { "muted": true } },
+        "Musica": { "stream": { "level": 80 } },
+        "Game": { "stream": { "muted": true } }
+      }
+    },
+    "fine": {
+      "channels": {
+        "Microfono": { "*": { "muted": true } }
+      }
+    }
+  },
+
+  "sceneMixes": {
+    "applyOnConnect": true,
+    "scenes": {
+      "Gioco": "live",
+      "Pausa": "pausa",
+      "Inizio": "pausa",
+      "Chat": {
+        "channels": {
+          "Microfono": { "stream": { "muted": false } },
+          "Game": { "stream": { "level": 20 } }
+        }
+      }
+    }
+  },
+
+  "micIndicators": [
+    {
+      "channel": "Microfono",
+      "mix": "stream",
+      "source": "Icona Mic Muto",
+      "showWhen": "muted"
+    }
+  ],
+
+  "levelSync": [
+    {
+      "channel": "Musica",
+      "mix": "stream",
+      "obsInput": "Musica (Wave Link)",
+      "direction": "both",
+      "volume": true,
+      "mute": true
+    }
+  ],
+
+  "events": {
+    "streamStarted": "live",
+    "streamStopped": "fine",
+    "recordingPaused": "pausa",
+    "recordingResumed": "live"
+  }
+}
