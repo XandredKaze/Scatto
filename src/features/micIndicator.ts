@@ -1,5 +1,5 @@
 import { logger } from "../log.js";
-import { channelState, findChannel } from "../util/match.js";
+import { channelState, findChannel, findMix, namesOf } from "../util/match.js";
 import type { Ctx } from "./context.js";
 
 const log = logger("mic");
@@ -45,9 +45,17 @@ export function setupMicIndicators(ctx: Ctx): { refresh: () => Promise<void> } {
     await Promise.all(
       inds.map(async (ind, idx) => {
         const ch = findChannel(channels, ind.channel);
-        if (!ch) return warnOnce(`ch:${idx}`, `canale Wave Link "${ind.channel}" non trovato`);
+        if (!ch) return warnOnce(`ch:${idx}`, `canale Wave Link "${ind.channel}" non trovato. Canali disponibili: ${namesOf(channels)}`);
         const st = channelState(ch, mixes, ind.mix);
-        if (!st) return warnOnce(`mix:${idx}`, `mix "${ind.mix}" non trovato per "${ind.channel}"`);
+        if (!st) {
+          const mix = ind.mix ? findMix(mixes, ind.mix) : undefined;
+          return warnOnce(
+            `mix:${idx}`,
+            mix
+              ? `il canale "${ch.name}" non risulta nel mix "${mix.name}"`
+              : `mix "${ind.mix}" non trovato. Mix disponibili: ${namesOf(mixes)}`,
+          );
+        }
         const visible = ind.showWhen === "muted" ? st.muted : !st.muted;
         if (!force && last.get(idx) === visible) return;
         last.set(idx, visible);

@@ -1,6 +1,6 @@
 import type { Preset } from "../config.js";
 import { logger } from "../log.js";
-import { findChannel, findMix } from "../util/match.js";
+import { findChannel, findMix, namesOf } from "../util/match.js";
 import { pctToMul } from "../util/volume.js";
 import type { Ctx } from "./context.js";
 
@@ -24,7 +24,7 @@ export async function applyPreset(ctx: Ctx, preset: Preset, label: string): Prom
     for (const [chRef, perMix] of Object.entries(preset.channels)) {
       const ch = findChannel(channels, chRef);
       if (!ch) {
-        log.warn(`${label}: canale Wave Link "${chRef}" non trovato (usa "waveobs list" per vedere i nomi)`);
+        log.warn(`${label}: canale Wave Link "${chRef}" non trovato. Canali disponibili: ${namesOf(channels)}`);
         continue;
       }
       for (const [mixRef, patch] of Object.entries(perMix)) {
@@ -35,7 +35,7 @@ export async function applyPreset(ctx: Ctx, preset: Preset, label: string): Prom
         } else {
           const m = findMix(mixes, mixRef);
           if (!m) {
-            log.warn(`${label}: mix "${mixRef}" non trovato`);
+            log.warn(`${label}: mix "${mixRef}" non trovato. Mix disponibili: ${namesOf(mixes)}`);
             continue;
           }
           run(`${ch.name}/${m.name} ${fmt(patch)}`, () => wl.setChannel(ch.id, m.id, patch));
@@ -45,7 +45,7 @@ export async function applyPreset(ctx: Ctx, preset: Preset, label: string): Prom
     for (const [mixRef, patch] of Object.entries(preset.mixes)) {
       const m = findMix(mixes, mixRef);
       if (!m) {
-        log.warn(`${label}: mix "${mixRef}" non trovato`);
+        log.warn(`${label}: mix "${mixRef}" non trovato. Mix disponibili: ${namesOf(mixes)}`);
         continue;
       }
       run(`mix ${m.name} ${fmt(patch)}`, () => wl.setMix(m.id, patch));

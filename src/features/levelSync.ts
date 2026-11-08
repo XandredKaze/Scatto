@@ -1,5 +1,5 @@
 import { logger } from "../log.js";
-import { channelState, effectiveMixId, findChannel } from "../util/match.js";
+import { channelState, effectiveMixId, findChannel, findMix, namesOf } from "../util/match.js";
 import { LEVEL_TOLERANCE, mulToPct, pctToMul } from "../util/volume.js";
 import { type Ctx, whenBothConnected } from "./context.js";
 
@@ -126,6 +126,12 @@ export function setupLevelSync(ctx: Ctx): void {
       } else {
         await pushToObs(rule);
       }
+    }
+    const channels = ctx.wl.channels();
+    const mixes = ctx.wl.mixes();
+    for (const rule of rules) {
+      if (!findChannel(channels, rule.channel)) log.warn(`canale "${rule.channel}" non trovato. Canali disponibili: ${namesOf(channels)}`);
+      else if (rule.mix && !findMix(mixes, rule.mix)) log.warn(`mix "${rule.mix}" non trovato. Mix disponibili: ${namesOf(mixes)}`);
     }
     log.info(`sincronizzazione attiva su ${rules.length} regol${rules.length === 1 ? "a" : "e"}`);
   });

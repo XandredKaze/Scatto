@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "../log.js";
+import { namesOf } from "../util/match.js";
 import { RpcSocket } from "./rpc.js";
 import type { WaveLinkClient, WlAppInfo } from "./types.js";
 import { WaveLinkV2 } from "./v2.js";
@@ -77,6 +78,8 @@ export async function connectWaveLink(opts: { host: string; port?: number }): Pr
       const client = info.protocol === 3 ? new WaveLinkV3(rpc, info) : new WaveLinkV2(rpc, info);
       await client.refresh();
       log.info(`connesso a ${info.name} ${info.version ?? ""} (protocollo ${info.protocol}.x) su porta ${port}`);
+      log.info(`mix: ${namesOf(client.mixes())}`);
+      log.info(`canali: ${namesOf(client.channels())}`);
       return client;
     } catch (err) {
       log.debug(`porta ${port}: ${(err as Error).message}`);

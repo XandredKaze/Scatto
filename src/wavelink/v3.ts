@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { logger } from "../log.js";
 import { RpcError, type RpcSocket } from "./rpc.js";
 import type { MixState, Patch, WaveLinkClient, WlAppInfo, WlChannel, WlMix } from "./types.js";
 
@@ -58,6 +59,8 @@ export class WaveLinkV3 extends EventEmitter implements WaveLinkClient {
       this.rpc.call<{ channels?: RawChannel[] }>("getChannels"),
       this.rpc.call<{ mixes?: RawMix[] }>("getMixes"),
     ]);
+    logger("wavelink").debug("getChannels", JSON.stringify(c));
+    logger("wavelink").debug("getMixes", JSON.stringify(m));
     this.replaceChannels(c?.channels ?? []);
     this.replaceMixes(m?.mixes ?? []);
   }

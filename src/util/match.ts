@@ -46,3 +46,8 @@ export function effectiveMixId(ch: WlChannel, mixes: WlMix[], mixRef?: string): 
   if (ch.level !== undefined || ch.muted !== undefined) return null;
   return findMix(mixes, "stream")?.id ?? Object.keys(ch.mixes)[0];
 }
+
+/** Elenco leggibile dei nomi disponibili, per i messaggi di errore. */
+export function namesOf(items: Array<{ name: string }>): string {
+  return items.length ? items.map((i) => `"${i.name}"`).join(", ") : "(nessuno)";
+}
