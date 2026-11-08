@@ -1,12 +1,12 @@
 {
-  "name": "scatto",
+  "name": "waveobs",
   "version": "0.1.0",
   "description": "Ponte tra Elgato Wave Link e OBS Studio: mix per scena, indicatore mic, sync livelli e azioni su eventi.",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "scatto": "dist/index.js"
+    "waveobs": "dist/index.js"
   },
   "engines": {
     "node": ">=20"
@@ -17,7 +17,9 @@
     "dev": "tsx src/index.ts",
     "list": "tsx src/index.ts list",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node22 --outfile=build/waveobs.cjs --external:bufferutil --external:utf-8-validate",
+    "exe": "node scripts/build-exe.mjs"
   },
   "dependencies": {
     "obs-websocket-js": "^5.0.6",
@@ -27,6 +29,8 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.0",
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"

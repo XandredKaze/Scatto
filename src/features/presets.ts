@@ -24,7 +24,7 @@ export async function applyPreset(ctx: Ctx, preset: Preset, label: string): Prom
     for (const [chRef, perMix] of Object.entries(preset.channels)) {
       const ch = findChannel(channels, chRef);
       if (!ch) {
-        log.warn(`${label}: canale Wave Link "${chRef}" non trovato (usa "scatto list" per vedere i nomi)`);
+        log.warn(`${label}: canale Wave Link "${chRef}" non trovato (usa "waveobs list" per vedere i nomi)`);
         continue;
       }
       for (const [mixRef, patch] of Object.entries(perMix)) {

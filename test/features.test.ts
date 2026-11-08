@@ -12,7 +12,7 @@ describe("config", () => {
     expect(() => parseConfig({ sceneMixes: { scenes: { A: "nope" } } })).toThrow(/preset "nope"/);
   });
   it("accetta un config minimo", () => {
-    expect(parseConfig({}).obs.url).toBe("ws://127.0.0.1:4455");
+    expect(parseConfig({}).obs).toEqual({});
   });
   it("valida il config di esempio", async () => {
     const { readFileSync } = await import("node:fs");

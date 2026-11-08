@@ -1,0 +1,24 @@
+WaveOBS — ponte tra Elgato Wave Link e OBS Studio
+=================================================
+
+Non serve installare niente: è tutto dentro waveobs.exe.
+
+INSTALLAZIONE
+1. Estrai questa cartella in un posto fisso, ad esempio:
+   C:\WaveOBS\
+2. In OBS: Strumenti -> Impostazioni server WebSocket -> spunta "Abilita server WebSocket".
+   (WaveOBS legge la password da solo dalle impostazioni di OBS.)
+3. In OBS: Strumenti -> Script -> pulsante "+" -> scegli waveobs.lua da questa cartella.
+4. Nella finestra dello script premi "Modifica configurazione": si apre config.json.
+   Scrivi i nomi dei tuoi canali Wave Link, delle scene e delle fonti OBS, salva,
+   poi premi "Riavvia WaveOBS".
+
+Da quel momento WaveOBS parte da solo quando apri OBS e si chiude quando lo chiudi.
+
+NOMI ESATTI DI CANALI E SCENE
+Con Wave Link e OBS aperti, apri un Prompt dei comandi in questa cartella e scrivi:
+   waveobs list
+
+PROBLEMI
+Premi "Apri log" nella finestra dello script (file waveobs.log).
+Per un log più dettagliato metti  "logLevel": "debug"  in config.json.

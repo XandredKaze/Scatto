@@ -33,10 +33,11 @@ export const configSchema = z
   .object({
     obs: z
       .object({
-        url: z.string().default("ws://127.0.0.1:4455"),
+        /** Se omessi, vengono letti dalle impostazioni di obs-websocket di OBS. */
+        url: z.string().optional(),
         password: z.string().optional(),
       })
-      .default({ url: "ws://127.0.0.1:4455" }),
+      .default({}),
     wavelink: z
       .object({
         host: z.string().default("127.0.0.1"),

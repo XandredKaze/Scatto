@@ -1,35 +1,59 @@
 {
-  "obs": {
-    "url": "ws://127.0.0.1:4455",
-    "password": "LA_TUA_PASSWORD_OBS_WEBSOCKET"
-  },
+  "obs": {},
   "wavelink": {
     "host": "127.0.0.1"
   },
   "logLevel": "info",
-
   "presets": {
     "live": {
       "channels": {
-        "Microfono": { "stream": { "muted": false, "level": 100 } },
-        "Musica": { "stream": { "level": 35 } },
-        "Game": { "stream": { "level": 70 } }
+        "Microfono": {
+          "stream": {
+            "muted": false,
+            "level": 100
+          }
+        },
+        "Musica": {
+          "stream": {
+            "level": 35
+          }
+        },
+        "Game": {
+          "stream": {
+            "level": 70
+          }
+        }
       }
     },
     "pausa": {
       "channels": {
-        "Microfono": { "stream": { "muted": true } },
-        "Musica": { "stream": { "level": 80 } },
-        "Game": { "stream": { "muted": true } }
+        "Microfono": {
+          "stream": {
+            "muted": true
+          }
+        },
+        "Musica": {
+          "stream": {
+            "level": 80
+          }
+        },
+        "Game": {
+          "stream": {
+            "muted": true
+          }
+        }
       }
     },
     "fine": {
       "channels": {
-        "Microfono": { "*": { "muted": true } }
+        "Microfono": {
+          "*": {
+            "muted": true
+          }
+        }
       }
     }
   },
-
   "sceneMixes": {
     "applyOnConnect": true,
     "scenes": {
@@ -38,13 +62,20 @@
       "Inizio": "pausa",
       "Chat": {
         "channels": {
-          "Microfono": { "stream": { "muted": false } },
-          "Game": { "stream": { "level": 20 } }
+          "Microfono": {
+            "stream": {
+              "muted": false
+            }
+          },
+          "Game": {
+            "stream": {
+              "level": 20
+            }
+          }
         }
       }
     }
   },
-
   "micIndicators": [
     {
       "channel": "Microfono",
@@ -53,7 +84,6 @@
       "showWhen": "muted"
     }
   ],
-
   "levelSync": [
     {
       "channel": "Musica",
@@ -64,7 +94,6 @@
       "mute": true
     }
   ],
-
   "events": {
     "streamStarted": "live",
     "streamStopped": "fine",

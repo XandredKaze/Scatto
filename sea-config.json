@@ -1,0 +1,6 @@
+{
+  "main": "build/waveobs.cjs",
+  "output": "build/sea-prep.blob",
+  "disableExperimentalSEAWarning": true,
+  "useCodeCache": false
+}
